@@ -23,6 +23,8 @@ export interface Resident {
   currentUnit?: string;
   currentRoom?: string;
   status?: "Active" | "Discharged" | "Deceased";
+  payor?: string;
+  allergies?: string[];
   identityAliases?: Alias[];
   createdAt: ISO;
   updatedAt: ISO;

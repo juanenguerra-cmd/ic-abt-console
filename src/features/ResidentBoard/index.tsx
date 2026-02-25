@@ -1,122 +1,446 @@
-import React from "react";
-import { Resident, Unit, IPEvent, ABTCourse } from "../../domain/models";
-import { Shield, Activity, AlertCircle } from "lucide-react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useFacilityData, useDatabase } from "../../app/providers";
+import { Resident, ResidentNote } from "../../domain/models";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 
-interface ResidentBoardProps {
-  units: Unit[];
-  residents: Resident[];
-  activeInfections: IPEvent[];
-  activeABTs: ABTCourse[];
-}
+export const ResidentBoard: React.FC = () => {
+  const { store } = useFacilityData();
+  const { updateDB } = useDatabase();
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterActiveOnly, setFilterActiveOnly] = useState(false);
+  const [filterAbtOnly, setFilterAbtOnly] = useState(false);
+  
+  const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
-export const ResidentBoard: React.FC<ResidentBoardProps> = ({
-  units,
-  residents,
-  activeInfections,
-  activeABTs,
-}) => {
-  // Group residents by unit
-  const residentsByUnit = units.reduce((acc, unit) => {
-    acc[unit.id] = residents.filter((r) => r.currentUnit === unit.id);
-    return acc;
-  }, {} as Record<string, Resident[]>);
+  // Notes Panel State
+  const [noteInput, setNoteInput] = useState("");
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [cursorPos, setCursorPos] = useState(0);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const unassignedResidents = residents.filter((r) => !r.currentUnit);
-
-  const renderResidentCard = (resident: Resident) => {
-    const infections = activeInfections.filter(
-      (i) => i.residentRef.kind === "mrn" && i.residentRef.id === resident.mrn
-    );
-    const abts = activeABTs.filter(
-      (a) => a.residentRef.kind === "mrn" && a.residentRef.id === resident.mrn
-    );
-
-    const hasIsolation = infections.some((i) => i.isolationType);
-    const hasEBP = infections.some((i) => i.ebp);
-    const hasABT = abts.length > 0;
-
-    return (
-      <div
-        key={resident.mrn}
-        className="bg-white border border-neutral-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-      >
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h4 className="text-sm font-semibold text-neutral-900 truncate max-w-[150px]">
-              {resident.displayName}
-            </h4>
-            <p className="text-xs text-neutral-500 font-mono">{resident.mrn}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-medium text-neutral-700">
-              {resident.currentRoom || "No Room"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-1 mt-3">
-          {hasIsolation && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-800 uppercase tracking-wider">
-              <AlertCircle className="w-3 h-3 mr-1" />
-              Isolation
-            </span>
-          )}
-          {hasEBP && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider">
-              <Shield className="w-3 h-3 mr-1" />
-              EBP
-            </span>
-          )}
-          {hasABT && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wider">
-              <Activity className="w-3 h-3 mr-1" />
-              ABT
-            </span>
-          )}
-          {!hasIsolation && !hasEBP && !hasABT && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-neutral-100 text-neutral-500 uppercase tracking-wider">
-              No Active Risks
-            </span>
-          )}
-        </div>
-      </div>
-    );
+  const residents = Object.values(store.residents) as Resident[];
+  const activeInfections = (Object.values(store.infections) as any[]).filter(i => i.status === 'active');
+  const activeABTs = (Object.values(store.abts) as any[]).filter(a => a.status === 'active');
+  const vaxEvents = Object.values(store.vaxEvents) as any[];
+  // Assuming symptom events would be in store, but we don't have them in schema. We'll mock or omit.
+  
+  // Calculate age
+  const getAge = (dob?: string) => {
+    if (!dob) return "?";
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
   };
 
+  // Filter logic
+  const filteredResidents = useMemo(() => {
+    return residents.filter(r => {
+      // Global Search
+      const matchesSearch = 
+        r.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        r.mrn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.currentRoom && r.currentRoom.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      if (!matchesSearch) return false;
+
+      // Toggles
+      if (filterActiveOnly && r.status !== "Active") return false;
+      
+      if (filterAbtOnly) {
+        const hasAbt = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn);
+        if (!hasAbt) return false;
+      }
+
+      return true;
+    });
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, activeABTs]);
+
+  // Group by Unit
+  // The prompt asks for Unit 2, Unit 3, Unit 4. We'll group dynamically based on currentUnit.
+  const units = useMemo(() => {
+    const groups: Record<string, Resident[]> = {};
+    filteredResidents.forEach(r => {
+      const unit = r.currentUnit || "Unassigned";
+      if (!groups[unit]) groups[unit] = [];
+      groups[unit].push(r);
+    });
+    
+    // Sort each unit by room
+    Object.keys(groups).forEach(unit => {
+      groups[unit].sort((a, b) => (a.currentRoom || "").localeCompare(b.currentRoom || ""));
+    });
+    
+    return groups;
+  }, [filteredResidents]);
+
+  // Mention Logic
+  const mentionableResidents = residents
+    .filter(r => r.displayName.toLowerCase().includes(mentionQuery.toLowerCase()) || r.mrn.includes(mentionQuery))
+    .slice(0, 5);
+
+  const handleNoteInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart;
+    setNoteInput(val);
+    setCursorPos(pos);
+
+    const textBeforeCursor = val.slice(0, pos);
+    const lastAt = textBeforeCursor.lastIndexOf("@");
+    
+    if (lastAt !== -1) {
+      const charBeforeAt = lastAt > 0 ? textBeforeCursor[lastAt - 1] : " ";
+      if (/\s/.test(charBeforeAt)) {
+        const query = textBeforeCursor.slice(lastAt + 1);
+        if (!/\s/.test(query)) {
+          setMentionQuery(query);
+          setShowMentions(true);
+          return;
+        }
+      }
+    }
+    setShowMentions(false);
+  };
+
+  const insertMention = (resident: Resident) => {
+    const textBeforeCursor = noteInput.slice(0, cursorPos);
+    const lastAt = textBeforeCursor.lastIndexOf("@");
+    const textAfterCursor = noteInput.slice(cursorPos);
+    
+    const newText = noteInput.slice(0, lastAt) + `@${resident.lastName}, ${resident.firstName || ''} (${resident.currentRoom || 'No Room'}) ` + textAfterCursor;
+    
+    setNoteInput(newText);
+    setShowMentions(false);
+    
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const newCursorPos = lastAt + newText.length - textAfterCursor.length;
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
+  const submitNote = () => {
+    if (!noteInput.trim() || !selectedResidentId) return;
+
+    updateDB((draft) => {
+      const facilityId = draft.data.facilities.activeFacilityId;
+      const noteId = uuidv4();
+      
+      draft.data.facilityData[facilityId].notes[noteId] = {
+        id: noteId,
+        residentRef: { kind: "mrn", id: selectedResidentId },
+        noteType: "general",
+        body: noteInput,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    setNoteInput("");
+  };
+
+  const selectedResidentNotes = useMemo(() => {
+    if (!selectedResidentId) return [];
+    return (Object.values(store.notes) as any[])
+      .filter(n => n.residentRef.kind === "mrn" && n.residentRef.id === selectedResidentId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [store.notes, selectedResidentId]);
+
+  const selectedResident = selectedResidentId ? store.residents[selectedResidentId] : null;
+
   return (
-    <div className="space-y-8">
-      {units.map((unit) => (
-        <section key={unit.id} className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
-            <h3 className="text-lg font-bold text-neutral-800">{unit.name}</h3>
-            <span className="bg-neutral-200 text-neutral-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {residentsByUnit[unit.id]?.length || 0}
-            </span>
+    <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
+      {/* Top Bar */}
+      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-neutral-900">Resident Board</h1>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <input 
+              type="text" 
+              placeholder="Search name, MRN, room..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-64"
+            />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {residentsByUnit[unit.id]?.length > 0 ? (
-              residentsByUnit[unit.id].map(renderResidentCard)
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={filterActiveOnly}
+              onChange={e => setFilterActiveOnly(e.target.checked)}
+              className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Active Only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={filterAbtOnly}
+              onChange={e => setFilterAbtOnly(e.target.checked)}
+              className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            ABT Only
+          </label>
+        </div>
+      </div>
+
+      {/* Main Layout: 4 Columns */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Unit Columns */}
+        <div className="flex-1 flex overflow-x-auto p-4 gap-4">
+          {(Object.entries(units) as [string, Resident[]][]).map(([unitName, unitResidents]) => (
+            <div key={unitName} className="flex flex-col w-80 shrink-0 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
+              <div className="bg-white px-4 py-3 border-b border-neutral-200 flex justify-between items-center shrink-0">
+                <h2 className="font-bold text-neutral-800">{unitName}</h2>
+                <span className="bg-neutral-200 text-neutral-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {unitResidents.length}
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {unitResidents.map(resident => {
+                  const hasAllergies = resident.allergies && resident.allergies.length > 0;
+                  const isActive = resident.status === "Active";
+                  const hasABT = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === resident.mrn);
+                  const hasIP = activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === resident.mrn);
+                  const vaxDue = vaxEvents.some(v => v.residentRef.kind === "mrn" && v.residentRef.id === resident.mrn && (v.status === "due" || v.status === "overdue"));
+                  
+                  const isSelected = selectedResidentId === resident.mrn;
+
+                  return (
+                    <div 
+                      key={resident.mrn}
+                      onClick={() => {
+                        setSelectedResidentId(resident.mrn);
+                        // If already selected, maybe open profile? Or just double click?
+                        // The prompt says "clicking a tile opens the resident profile".
+                        // So we set selected AND open modal.
+                        setShowProfileModal(true);
+                      }}
+                      className={`bg-white border rounded-lg p-3 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                        isSelected ? "border-indigo-500 ring-1 ring-indigo-500" : "border-neutral-200"
+                      }`}
+                    >
+                      {/* Header Row */}
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
+                          {resident.displayName}
+                        </h4>
+                        <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0">
+                          {resident.currentRoom || "N/A"}
+                        </span>
+                      </div>
+                      
+                      {/* Sub-row */}
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
+                        <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
+                      </div>
+
+                      {/* Chip Row */}
+                      <div className="flex flex-wrap gap-1">
+                        {hasAllergies && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 uppercase">
+                            Allergies
+                          </span>
+                        )}
+                        {isActive && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 uppercase">
+                            Active
+                          </span>
+                        )}
+                        {hasABT && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 uppercase">
+                            ABT
+                          </span>
+                        )}
+                        {hasIP && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 uppercase">
+                            IP
+                          </span>
+                        )}
+                        {vaxDue && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 uppercase">
+                            Vax Due
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right Notes Panel */}
+        <div className="w-80 shrink-0 bg-white border-l border-neutral-200 flex flex-col">
+          <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50 shrink-0">
+            <h2 className="font-bold text-neutral-800">
+              {selectedResident ? `Notes: ${selectedResident.displayName}` : "Select a Resident"}
+            </h2>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
+            {!selectedResidentId ? (
+              <div className="text-center text-neutral-400 py-8 text-sm">
+                Click a resident tile to view and add notes.
+              </div>
+            ) : selectedResidentNotes.length === 0 ? (
+              <div className="text-center text-neutral-400 py-8 text-sm">
+                No notes for this resident.
+              </div>
             ) : (
-              <p className="text-sm text-neutral-400 italic col-span-full">
-                No residents assigned to this unit.
-              </p>
+              selectedResidentNotes.map(note => (
+                <div key={note.id} className="bg-white p-3 rounded-lg shadow-sm border border-neutral-200">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-semibold text-neutral-700">Staff</span>
+                    <span className="text-[10px] text-neutral-400">
+                      {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-neutral-800 whitespace-pre-wrap">{note.body}</p>
+                </div>
+              ))
             )}
           </div>
-        </section>
-      ))}
 
-      {unassignedResidents.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
-            <h3 className="text-lg font-bold text-neutral-800">Unassigned</h3>
-            <span className="bg-neutral-200 text-neutral-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {unassignedResidents.length}
-            </span>
+          {/* Composer */}
+          <div className="p-3 bg-white border-t border-neutral-200 relative shrink-0">
+            {showMentions && mentionableResidents.length > 0 && (
+              <div className="absolute bottom-full left-3 mb-2 w-[calc(100%-24px)] bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-10">
+                <ul className="divide-y divide-neutral-100 max-h-48 overflow-y-auto">
+                  {mentionableResidents.map(r => (
+                    <li 
+                      key={r.mrn}
+                      onClick={() => insertMention(r)}
+                      className="px-3 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-2"
+                    >
+                      <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <div className="truncate">
+                        <p className="text-sm font-medium text-neutral-900 truncate">{r.lastName}, {r.firstName}</p>
+                        <p className="text-[10px] text-neutral-500">{r.currentRoom}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            <div className="flex flex-col gap-2">
+              <textarea
+                ref={inputRef}
+                value={noteInput}
+                onChange={handleNoteInput}
+                disabled={!selectedResidentId}
+                placeholder={selectedResidentId ? "Type a note... Use @ to tag others" : "Select a resident first"}
+                className="w-full min-h-[80px] p-2 text-sm border border-neutral-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none disabled:bg-neutral-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={submitNote}
+                disabled={!noteInput.trim() || !selectedResidentId}
+                className="self-end px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <Send className="w-4 h-4" />
+                Save
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {unassignedResidents.map(renderResidentCard)}
+        </div>
+      </div>
+
+      {/* Resident Profile Modal */}
+      {showProfileModal && selectedResident && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
+              <h2 className="text-xl font-bold text-neutral-900">Resident Profile</h2>
+              <button onClick={() => setShowProfileModal(false)} className="text-neutral-500 hover:text-neutral-700">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Demographics */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-neutral-500">Name</p>
+                  <p className="font-medium text-neutral-900">{selectedResident.displayName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">MRN</p>
+                  <p className="font-medium text-neutral-900 font-mono">{selectedResident.mrn}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">DOB / Age</p>
+                  <p className="font-medium text-neutral-900">{selectedResident.dob || "Unknown"} ({getAge(selectedResident.dob)} yrs)</p>
+                </div>
+                <div>
+                  <p className="text-sm text-neutral-500">Location</p>
+                  <p className="font-medium text-neutral-900">{selectedResident.currentUnit} - {selectedResident.currentRoom}</p>
+                </div>
+              </div>
+
+              {/* Allergies */}
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 mb-2 border-b pb-1">Allergies</h3>
+                {selectedResident.allergies && selectedResident.allergies.length > 0 ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {selectedResident.allergies.map((a, i) => (
+                      <span key={i} className="px-2 py-1 bg-red-50 text-red-700 text-xs font-medium rounded border border-red-100">
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500 italic">No known allergies.</p>
+                )}
+              </div>
+
+              {/* Timelines (Mocked for now, would pull from activeABTs etc) */}
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 mb-2 border-b pb-1">Clinical Timelines</h3>
+                <div className="space-y-3">
+                  {activeABTs.filter(a => a.residentRef.kind === "mrn" && a.residentRef.id === selectedResident.mrn).map(abt => (
+                    <div key={abt.id} className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                      <Activity className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-emerald-900">Active ABT: {abt.medication}</p>
+                        <p className="text-xs text-emerald-700">{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {activeInfections.filter(i => i.residentRef.kind === "mrn" && i.residentRef.id === selectedResident.mrn).map(ip => (
+                    <div key={ip.id} className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                      <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-bold text-amber-900">Active Infection: {ip.infectionCategory}</p>
+                        <p className="text-xs text-amber-700">{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* If no active events */}
+                  {!activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === selectedResident.mrn) && 
+                   !activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === selectedResident.mrn) && (
+                    <p className="text-sm text-neutral-500 italic">No active clinical events.</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
-        </section>
+        </div>
       )}
     </div>
   );
