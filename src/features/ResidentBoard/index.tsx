@@ -1,19 +1,21 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus, Trash2, FileText, Settings } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
 import { IpEventModal } from "./IpEventModal";
 import { VaxEventModal } from "./VaxEventModal";
 import { ResidentProfileModal } from "./ResidentProfileModal";
-
+import { SettingsModal } from "./SettingsModal";
+import { Floorplan } from "../Floorplan";
+import { ShiftReport } from "./ShiftReport";
 import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
 
 export const ResidentBoard: React.FC = () => {
-  const { store } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { store, activeFacilityId } = useFacilityData();
+  const { db, updateDB } = useDatabase();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
@@ -23,9 +25,10 @@ export const ResidentBoard: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCensusModal, setShowCensusModal] = useState(false);
   
-  const [view, setView] = useState<'board' | 'report' | 'floorplan'>('board');
+  const [view, setView] = useState<'board' | 'report' | 'floorplan' | 'quarantine'>('board');
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showArchivedNotes, setShowArchivedNotes] = useState(false);
 
   const [printingResidentId, setPrintingResidentId] = useState<string | null>(null);
 
@@ -95,7 +98,8 @@ export const ResidentBoard: React.FC = () => {
   const units = useMemo(() => {
     const groups: Record<string, Resident[]> = {};
     filteredResidents.forEach(r => {
-      const unit = r.currentUnit || "Unassigned";
+      let unit = r.currentUnit || "Unassigned";
+      unit = unit.replace(/\s*\(continued\)\s*/i, '').trim();
       if (!groups[unit]) groups[unit] = [];
       groups[unit].push(r);
     });
@@ -108,12 +112,14 @@ export const ResidentBoard: React.FC = () => {
     return groups;
   }, [filteredResidents]);
 
+  const selectedResident = selectedResidentId ? store.residents[selectedResidentId] : null;
+
   // Mention Logic
   const mentionableResidents = residents
     .filter(r => r.displayName.toLowerCase().includes(mentionQuery.toLowerCase()) || r.mrn.includes(mentionQuery))
     .slice(0, 5);
 
-  const hashtagCategories = store.facilities[store.activeFacilityId]?.hashtagCategories || [];
+  const hashtagCategories = db.data.facilities.byId[activeFacilityId]?.hashtagCategories || [];
 
   const handleNoteInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -225,19 +231,83 @@ export const ResidentBoard: React.FC = () => {
   };
 
   const selectedResidentNotes = useMemo(() => {
-    if (!selectedResidentId) return [];
-    return (Object.values(store.notes) as any[])
+    if (!selectedResidentId) return { active: [], archived: [] };
+    
+    const now = new Date().getTime();
+    const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
+    const oneMonthMs = 30 * 24 * 60 * 60 * 1000;
+
+    const allNotes = (Object.values(store.notes) as any[])
       .filter(n => n.residentRef.kind === "mrn" && n.residentRef.id === selectedResidentId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const active: any[] = [];
+    const archived: any[] = [];
+
+    allNotes.forEach(note => {
+      const noteTime = new Date(note.createdAt).getTime();
+      const age = now - noteTime;
+      
+      if (age > oneMonthMs) {
+        // Auto-delete (skip rendering, could also trigger actual DB deletion here but safer to just hide/filter)
+        return;
+      } else if (age > threeDaysMs) {
+        archived.push(note);
+      } else {
+        active.push(note);
+      }
+    });
+
+    return { active, archived };
   }, [store.notes, selectedResidentId]);
 
   const handleClearQuarantine = () => {
     if (window.confirm("Are you sure you want to clear the entire Quarantine Inbox? This action cannot be undone.")) {
       updateDB(draft => {
-        draft.data.facilityData[store.activeFacilityId].quarantine = {};
+        draft.data.facilityData[activeFacilityId].quarantine = {};
       });
     }
   };
+
+  if (view === 'quarantine') {
+    return (
+      <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
+        <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setView('board')} className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-xl font-bold text-neutral-900">Quarantine Inbox</h1>
+          </div>
+          <button 
+            onClick={handleClearQuarantine}
+            className="px-4 py-2 bg-rose-600 text-white rounded-md hover:bg-rose-700 text-sm font-medium"
+          >
+            Clear All
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.values(store.quarantine).map(qRes => (
+              <div key={qRes.tempId} className="bg-white border rounded-xl p-4 shadow-sm border-rose-200">
+                <h4 className="text-lg font-bold text-neutral-900 mb-1">{qRes.displayName || "Unknown Name"}</h4>
+                <p className="text-sm text-neutral-500 mb-2">DOB: {qRes.dob || "Unknown"} ({qRes.dob ? `${getAge(qRes.dob)} yrs` : ""})</p>
+                <div className="flex gap-2 text-sm">
+                  <span className="bg-neutral-100 px-2 py-1 rounded text-neutral-700 font-medium">Unit: {qRes.unitSnapshot || "N/A"}</span>
+                  <span className="bg-neutral-100 px-2 py-1 rounded text-neutral-700 font-medium">Room: {qRes.roomSnapshot || "N/A"}</span>
+                </div>
+              </div>
+            ))}
+            {Object.keys(store.quarantine).length === 0 && (
+              <div className="col-span-full text-center text-neutral-500 py-12">
+                Quarantine Inbox is empty.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'floorplan') {
     return <Floorplan onBack={() => setView('board')} />;
@@ -271,6 +341,13 @@ export const ResidentBoard: React.FC = () => {
           >
             <Upload className="w-4 h-4" />
             Update Census
+          </button>
+          <button 
+            onClick={() => setView('quarantine')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors"
+          >
+            <Inbox className="w-4 h-4" />
+            Quarantine
           </button>
           <button 
             onClick={() => setView('floorplan')}
@@ -319,32 +396,6 @@ export const ResidentBoard: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Unit Columns */}
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
-          {/* Quarantine Inbox */}
-          <div className="flex flex-col w-80 shrink-0 bg-rose-50 rounded-xl border border-rose-200 overflow-hidden">
-            <div className="bg-white px-4 py-3 border-b border-rose-200 flex justify-between items-center shrink-0">
-              <h2 className="font-bold text-rose-800">Quarantine Inbox</h2>
-              <button 
-                onClick={handleClearQuarantine}
-                className="text-xs font-medium text-rose-600 hover:text-rose-800 bg-rose-100 hover:bg-rose-200 px-2 py-1 rounded"
-              >
-                Clear All
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-3">
-              {Object.values(store.quarantine).map(qRes => (
-                <div key={qRes.tempId} className="bg-white border rounded-lg p-3 shadow-sm border-rose-200">
-                  <h4 className="text-sm font-bold text-neutral-900 truncate">{qRes.displayName || "Unknown Name"}</h4>
-                  <p className="text-xs text-neutral-500">{qRes.dob ? `${getAge(qRes.dob)} yrs` : ""} {qRes.unitSnapshot ? `• ${qRes.unitSnapshot}` : ""}{qRes.roomSnapshot ? `-${qRes.roomSnapshot}` : ""}</p>
-                </div>
-              ))}
-              {Object.keys(store.quarantine).length === 0 && (
-                <div className="text-center text-rose-400 py-8 text-sm italic">
-                  Inbox is empty.
-                </div>
-              )}
-            </div>
-          </div>
-
           {(Object.entries(units) as [string, Resident[]][]).map(([unitName, unitResidents]) => (
             <div key={unitName} className="flex flex-col w-80 shrink-0 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
               <div className="bg-white px-4 py-3 border-b border-neutral-200 flex justify-between items-center shrink-0">
@@ -518,27 +569,61 @@ export const ResidentBoard: React.FC = () => {
               <div className="text-center text-neutral-400 py-8 text-sm">
                 Click a resident tile to view and add notes.
               </div>
-            ) : selectedResidentNotes.length === 0 ? (
+            ) : selectedResidentNotes.active.length === 0 && selectedResidentNotes.archived.length === 0 ? (
               <div className="text-center text-neutral-400 py-8 text-sm">
                 No notes for this resident.
               </div>
             ) : (
-              selectedResidentNotes.map(note => (
-                <div key={note.id} className="bg-white p-3 rounded-lg shadow-sm border border-neutral-200">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-xs font-semibold text-neutral-700">Staff</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-neutral-400">
-                        {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+              <>
+                {selectedResidentNotes.active.map(note => (
+                  <div key={note.id} className="bg-white p-3 rounded-lg shadow-sm border border-neutral-200">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-xs font-semibold text-neutral-700">Staff</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-neutral-400">
+                          {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
+                    <p className="text-sm text-neutral-800 whitespace-pre-wrap">{note.body}</p>
                   </div>
-                  <p className="text-sm text-neutral-800 whitespace-pre-wrap">{note.body}</p>
-                </div>
-              ))
+                ))}
+                
+                {selectedResidentNotes.archived.length > 0 && (
+                  <div className="pt-4 border-t border-neutral-200">
+                    <button 
+                      onClick={() => setShowArchivedNotes(!showArchivedNotes)}
+                      className="w-full py-2 text-xs font-medium text-neutral-500 hover:text-neutral-700 bg-neutral-100 rounded-md transition-colors"
+                    >
+                      {showArchivedNotes ? "Hide Archived Notes" : `Show Archived Notes (${selectedResidentNotes.archived.length})`}
+                    </button>
+                    
+                    {showArchivedNotes && (
+                      <div className="mt-4 space-y-4 opacity-75">
+                        {selectedResidentNotes.archived.map(note => (
+                          <div key={note.id} className="bg-neutral-100 p-3 rounded-lg border border-neutral-200">
+                            <div className="flex justify-between items-start mb-1">
+                              <span className="text-xs font-semibold text-neutral-600">Staff (Archived)</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-neutral-400">
+                                  {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-sm text-neutral-700 whitespace-pre-wrap">{note.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 

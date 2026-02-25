@@ -25,18 +25,18 @@ const DEFAULT_HASHTAGS = [
 
 export const SettingsModal: React.FC<Props> = ({ onClose }) => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { db, updateDB } = useDatabase();
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [newHashtag, setNewHashtag] = useState('');
 
   useEffect(() => {
-    const facility = store.facilities[activeFacilityId];
+    const facility = db.data.facilities.byId[activeFacilityId];
     if (facility && facility.hashtagCategories) {
       setHashtags(facility.hashtagCategories);
     } else {
       setHashtags(DEFAULT_HASHTAGS);
     }
-  }, [store, activeFacilityId]);
+  }, [db.data.facilities.byId, activeFacilityId]);
 
   const addHashtag = () => {
     let tagToAdd = newHashtag.trim();

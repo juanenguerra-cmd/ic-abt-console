@@ -3,6 +3,7 @@ import { X, Save, Plus, Trash2, GripVertical } from 'lucide-react';
 
 interface Props {
   onClose: () => void;
+  onSave: (report: any) => void;
 }
 
 const DATA_SOURCES = ['Notes', 'ABT', 'IP', 'Vax'];

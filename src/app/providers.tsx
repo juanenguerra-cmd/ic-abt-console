@@ -118,7 +118,24 @@ export function AppProviders({ children }: { children: ReactNode }) {
     );
   }
 
-  const store = db.data.facilityData[activeFacilityId];
+  const store = db.data.facilityData[activeFacilityId] || {
+    residents: {},
+    quarantine: {},
+    abts: {},
+    infections: {},
+    vaxEvents: {},
+    notes: {},
+    staff: {},
+    staffVaxEvents: {},
+    fitTestEvents: {},
+    auditSessions: {},
+    outbreaks: {},
+    outbreakCases: {},
+    outbreakExposures: {},
+    outbreakDailyStatuses: {},
+    exportProfiles: {},
+    surveyPackets: {},
+  };
 
   return (
     <DatabaseContext.Provider value={{ db, updateDB, error }}>

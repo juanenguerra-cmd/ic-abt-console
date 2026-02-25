@@ -1,11 +1,12 @@
-import React from 'react';
-import { useFacilityData } from '../../app/providers';
+import React, { useState } from 'react';
+import { useFacilityData, useDatabase } from '../../app/providers';
 import { ResidentNote } from '../../domain/models';
-import { ArrowLeft, Tag } from 'lucide-react';
+import { ArrowLeft, Tag, Printer, Plus } from 'lucide-react';
 
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
+import { ReportBuilderModal } from './ReportBuilderModal';
 import { DailyPrecautionList } from './PrintableForms/DailyPrecautionList';
 
 interface Props {
@@ -14,7 +15,8 @@ interface Props {
 
 export const ShiftReport: React.FC<Props> = ({ onBack }) => {
   const { store, activeFacilityId } = useFacilityData();
-  const facility = store.facilities[activeFacilityId];
+  const { db, updateDB } = useDatabase();
+  const facility = db.data.facilities.byId[activeFacilityId];
   const hashtagCategories = facility?.hashtagCategories || [];
 
   const [startDate, setStartDate] = useState<Date | null>(new Date());
@@ -34,7 +36,7 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
     const resident = residents[note.residentRef.id];
     if (!resident) continue;
 
-    for (const category of HASHTAG_CATEGORIES) {
+    for (const category of hashtagCategories) {
       if (note.body.toLowerCase().includes(category.toLowerCase())) {
         if (!categorizedNotes[category]) {
           categorizedNotes[category] = [];

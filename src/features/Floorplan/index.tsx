@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useFacilityData } from '../../app/providers';
+import { useFacilityData, useDatabase } from '../../app/providers';
 import { floorplanLayout } from './floorplanLayout';
 import { ArrowLeft, User } from 'lucide-react';
 
@@ -12,8 +12,9 @@ const CELL_HEIGHT = 36;
 const GAP = 8;
 
 export const Floorplan: React.FC<Props> = ({ onBack }) => {
-  const { store } = useFacilityData();
-  const facility = store.facilities[store.activeFacilityId];
+  const { store, activeFacilityId } = useFacilityData();
+  const { db } = useDatabase();
+  const facility = db.data.facilities.byId[activeFacilityId];
   const units = facility?.units || [];
   const [selectedUnitId, setSelectedUnitId] = useState(units[0]?.id || '');
 

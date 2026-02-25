@@ -40,9 +40,17 @@ const INFECTION_CATEGORY_OPTIONS = [
   "Other"
 ];
 
-const EBP_ORGANISM_SUGGESTIONS = ["MRSA", "VRE", "ESBL", "CRE", "C. diff"];
 const SOURCE_OPTIONS = ["Urinary", "Respiratory", "Skin/Soft Tissue", "GI", "Bloodstream", "Wound site", "Other"];
 const DEVICE_OPTIONS = ["Urinary Catheter", "Central Line", "Feeding Tube", "Other"];
+
+const EBP_ORGANISM_SUGGESTIONS = ["MRSA", "VRE", "ESBL", "CRE", "C. diff", "Acinetobacter", "Pseudomonas"];
+
+const ISOLATION_CATEGORY_MAP: Record<string, string[]> = {
+  "Contact": ["MRSA", "VRE", "C. diff", "Scabies", "Lice", "Norovirus", "ESBL", "CRE", "Acinetobacter"],
+  "Droplet": ["Influenza", "COVID-19", "RSV", "Meningitis", "Pertussis"],
+  "Airborne": ["Tuberculosis", "Varicella (Chickenpox)", "Measles", "COVID-19"],
+  "Standard": ["Routine surveillance", "Other"]
+};
 
 export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose }) => {
   const { updateDB } = useDatabase();

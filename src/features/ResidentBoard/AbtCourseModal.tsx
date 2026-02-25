@@ -52,7 +52,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
 
   useEffect(() => {
     if (existingAbt?.diagnostics) {
-      const dx = existingAbt.diagnostics;
+      const dx = existingAbt.diagnostics as any;
       setTreatmentType(dx.treatmentType || "");
       setIsDeviceAssociated(dx.isDeviceAssociated || false);
       setDeviceType(dx.deviceType || "");
