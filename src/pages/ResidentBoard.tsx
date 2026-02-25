@@ -39,8 +39,8 @@ export function ResidentBoard() {
   };
 
   const allResidents = [
-    ...Object.values(store.residents),
-    ...Object.values(store.quarantine).map((q) => ({
+    ...(Object.values(store.residents) as Resident[]),
+    ...(Object.values(store.quarantine) as QuarantineResident[]).map((q) => ({
       ...q,
       isQuarantine: true,
     })),
@@ -119,7 +119,7 @@ export function ResidentBoard() {
   );
 }
 
-function UnitCard({ unit, residents }: { unit: Unit; residents: any[] }) {
+const UnitCard: React.FC<{ unit: Unit; residents: any[] }> = ({ unit, residents }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
       <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200 flex justify-between items-center">

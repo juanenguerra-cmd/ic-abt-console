@@ -6,8 +6,8 @@ export function Reports() {
   const { store } = useDB();
 
   const handleExportLineList = () => {
-    const residents = Object.values(store.residents);
-    const infections = Object.values(store.infections);
+    const residents = Object.values(store.residents) as import("../types").Resident[];
+    const infections = Object.values(store.infections) as import("../types").IPEvent[];
     
     // Simple CSV generation
     const headers = ["MRN", "Name", "Unit", "Room", "Infection Status", "Organism"];

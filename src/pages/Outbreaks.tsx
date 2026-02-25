@@ -26,7 +26,7 @@ export function Outbreaks() {
     });
   };
 
-  const outbreaks = Object.values(store.outbreaks);
+  const outbreaks = Object.values(store.outbreaks) as import("../types").Outbreak[];
 
   return (
     <div className="space-y-6">
