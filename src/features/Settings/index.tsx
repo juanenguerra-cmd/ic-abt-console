@@ -1,15 +1,39 @@
 import React, { useState, useEffect } from "react";
-import { useDatabase } from "../../app/providers";
+import { useDatabase, useFacilityData } from "../../app/providers";
 import { restoreFromPrev } from "../../storage/engine";
-import { Database, Download, RefreshCw, AlertTriangle, CheckCircle } from "lucide-react";
+import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save } from "lucide-react";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB } = useDatabase();
+  const { activeFacilityId } = useFacilityData();
   const [dbSize, setDbSize] = useState(0);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  
+  const facility = db.data.facilities.byId[activeFacilityId];
+  const [facilityName, setFacilityName] = useState(facility?.name || "");
+  const [bedCapacity, setBedCapacity] = useState(facility?.bedCapacity?.toString() || "");
+
+  useEffect(() => {
+    if (facility) {
+      setFacilityName(facility.name);
+      setBedCapacity(facility.bedCapacity?.toString() || "");
+    }
+  }, [facility]);
+
+  const handleSaveFacility = () => {
+    updateDB((draft) => {
+      const f = draft.data.facilities.byId[activeFacilityId];
+      if (f) {
+        f.name = facilityName;
+        f.bedCapacity = bedCapacity ? parseInt(bedCapacity, 10) : undefined;
+        f.updatedAt = new Date().toISOString();
+      }
+    });
+    alert("Facility settings saved.");
+  };
 
   useEffect(() => {
     if (db) {
@@ -49,6 +73,45 @@ export const SettingsConsole: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      {/* Facility Settings */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
+          <Building2 className="h-5 w-5 text-indigo-500 mr-2" />
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Facility Settings</h3>
+        </div>
+        <div className="px-4 py-5 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">Facility Name</label>
+              <input 
+                type="text" 
+                value={facilityName}
+                onChange={e => setFacilityName(e.target.value)}
+                className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">Total Bed Capacity</label>
+              <input 
+                type="number" 
+                value={bedCapacity}
+                onChange={e => setBedCapacity(e.target.value)}
+                className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button 
+              onClick={handleSaveFacility}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
+            >
+              <Save className="w-4 h-4" />
+              Save Facility Settings
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex justify-between items-center">
           <div>

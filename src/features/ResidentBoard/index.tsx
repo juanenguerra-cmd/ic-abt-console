@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { CensusParserModal } from "./CensusParserModal";
+import { AbtCourseModal } from "./AbtCourseModal";
 
 export const ResidentBoard: React.FC = () => {
   const { store } = useFacilityData();
@@ -14,6 +16,9 @@ export const ResidentBoard: React.FC = () => {
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showCensusModal, setShowCensusModal] = useState(false);
+  const [showAbtModal, setShowAbtModal] = useState(false);
+  const [editingAbtId, setEditingAbtId] = useState<string | null>(null);
 
   // Notes Panel State
   const [noteInput, setNoteInput] = useState("");
@@ -176,6 +181,14 @@ export const ResidentBoard: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowCensusModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Update Census
+          </button>
+          <div className="h-6 w-px bg-neutral-300 mx-1"></div>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
             <input 
               type="checkbox" 
@@ -390,6 +403,18 @@ export const ResidentBoard: React.FC = () => {
                   <p className="text-sm text-neutral-500">Location</p>
                   <p className="font-medium text-neutral-900">{selectedResident.currentUnit} - {selectedResident.currentRoom}</p>
                 </div>
+                {selectedResident.primaryDiagnosis && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-neutral-500">Primary Diagnosis</p>
+                    <p className="font-medium text-neutral-900">{selectedResident.primaryDiagnosis}</p>
+                  </div>
+                )}
+                {selectedResident.attendingMD && (
+                  <div className="col-span-2">
+                    <p className="text-sm text-neutral-500">Attending MD</p>
+                    <p className="font-medium text-neutral-900">{selectedResident.attendingMD}</p>
+                  </div>
+                )}
               </div>
 
               {/* Allergies */}
@@ -410,10 +435,29 @@ export const ResidentBoard: React.FC = () => {
 
               {/* Timelines (Mocked for now, would pull from activeABTs etc) */}
               <div>
-                <h3 className="text-sm font-bold text-neutral-900 mb-2 border-b pb-1">Clinical Timelines</h3>
+                <div className="flex justify-between items-center mb-2 border-b pb-1">
+                  <h3 className="text-sm font-bold text-neutral-900">Clinical Timelines</h3>
+                  <button 
+                    onClick={() => {
+                      setEditingAbtId(null);
+                      setShowAbtModal(true);
+                    }}
+                    className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded"
+                  >
+                    <Plus className="w-3 h-3" />
+                    Add ABT
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {activeABTs.filter(a => a.residentRef.kind === "mrn" && a.residentRef.id === selectedResident.mrn).map(abt => (
-                    <div key={abt.id} className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <div 
+                      key={abt.id} 
+                      onClick={() => {
+                        setEditingAbtId(abt.id);
+                        setShowAbtModal(true);
+                      }}
+                      className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:shadow-sm transition-shadow"
+                    >
                       <Activity className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-bold text-emerald-900">Active ABT: {abt.medication}</p>
@@ -441,6 +485,23 @@ export const ResidentBoard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Census Parser Modal */}
+      {showCensusModal && (
+        <CensusParserModal onClose={() => setShowCensusModal(false)} />
+      )}
+
+      {/* ABT Course Modal */}
+      {showAbtModal && selectedResidentId && (
+        <AbtCourseModal 
+          residentId={selectedResidentId}
+          existingAbt={editingAbtId ? store.abts[editingAbtId] : undefined}
+          onClose={() => {
+            setShowAbtModal(false);
+            setEditingAbtId(null);
+          }} 
+        />
       )}
     </div>
   );

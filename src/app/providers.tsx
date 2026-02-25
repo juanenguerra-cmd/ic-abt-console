@@ -51,7 +51,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setDb(nextDb);
       setError(null);
     } catch (err) {
-      console.error("Failed to update DB:", err);
+      console.error("DB_SAVE_FAILURE", err);
+      window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
       setError(err instanceof Error ? err.message : "Failed to save database");
     }
   }, [db]);

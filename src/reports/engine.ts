@@ -59,10 +59,14 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
 
       // Redaction Logic
       if (!profile.includePHI) {
-        // Check if fieldPath is a known PHI field or ends with one
-        const isPHI = PHI_FIELDS.some(phi => col.fieldPath.toLowerCase().includes(phi.toLowerCase()));
-        if (isPHI) {
-          return "REDACTED";
+        const pathLower = col.fieldPath.toLowerCase();
+        if (pathLower.includes("mrn") || pathLower.includes("residentref.id")) {
+          const strVal = String(value || "");
+          value = strVal.length > 4 ? `***-${strVal.slice(-4)}` : "***-XXXX";
+        } else if (pathLower.includes("name") || pathLower.includes("displayname") || pathLower.includes("firstname") || pathLower.includes("lastname")) {
+          value = "ANONYMIZED";
+        } else if (pathLower.includes("dob")) {
+          value = "REDACTED";
         }
       }
 

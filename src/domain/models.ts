@@ -24,6 +24,7 @@ export interface Resident {
   currentRoom?: string;
   status?: "Active" | "Discharged" | "Deceased";
   payor?: string;
+  primaryDiagnosis?: string;
   allergies?: string[];
   identityAliases?: Alias[];
   createdAt: ISO;
@@ -284,6 +285,7 @@ export interface Facility {
   dohId?: string;
   address?: string;
   timezone?: string;
+  bedCapacity?: number;
   units: Unit[];
   floorLayouts?: FloorLayout[];
   createdAt: ISO;

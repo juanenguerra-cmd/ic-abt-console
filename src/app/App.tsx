@@ -35,6 +35,8 @@ const DashboardWrapper = () => {
   const outbreakCount = (Object.values(store.outbreaks) as any[]).filter(o => o.status !== 'closed').length;
   const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
+  
+  const capacityRate = facility.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -43,7 +45,14 @@ const DashboardWrapper = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-neutral-500">Census</p>
-              <p className="text-2xl font-bold text-neutral-900">{residentCount}</p>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-neutral-900">{residentCount}</p>
+                {capacityRate && (
+                  <span className="text-xs font-medium text-neutral-500">
+                    ({capacityRate}% capacity)
+                  </span>
+                )}
+              </div>
             </div>
             <div className="p-2 bg-blue-50 rounded-lg">
               <Users className="w-5 h-5 text-blue-600" />
