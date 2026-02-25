@@ -10,12 +10,35 @@ interface Props {
   onClose: () => void;
 }
 
-const ISOLATION_CATEGORY_MAP: Record<string, string[]> = {
-  "Contact": ["MRSA", "VRE", "ESBL", "CRE", "C. diff", "Scabies", "Other"],
-  "Droplet": ["Influenza", "COVID-19", "RSV", "Other"],
-  "Airborne": ["Tuberculosis", "Measles", "Varicella", "Other"],
-  "Contact/Droplet": ["COVID-19", "Other"]
-};
+const INFECTION_CATEGORY_OPTIONS = [
+  "UTI",
+  "Pneumonia",
+  "Skin/Soft Tissue",
+  "GI",
+  "Bloodstream",
+  "Sepsis",
+  "MRSA",
+  "VRE",
+  "C. diff",
+  "Scabies",
+  "Lice",
+  "Norovirus",
+  "Influenza",
+  "COVID-19",
+  "RSV",
+  "Meningitis",
+  "Pertussis",
+  "Tuberculosis",
+  "Varicella (Chickenpox)",
+  "Measles",
+  "CAUTI",
+  "CLABSI",
+  "VAP",
+  "Surgical Site Infection",
+  "Pressure Ulcer",
+  "Routine surveillance",
+  "Other"
+];
 
 const EBP_ORGANISM_SUGGESTIONS = ["MRSA", "VRE", "ESBL", "CRE", "C. diff"];
 const SOURCE_OPTIONS = ["Urinary", "Respiratory", "Skin/Soft Tissue", "GI", "Bloodstream", "Wound site", "Other"];
@@ -327,24 +350,14 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Infection Category</label>
-                {categoryOptions.length > 0 ? (
-                  <select 
-                    value={infectionCategory}
-                    onChange={e => updateIpCategory(e.target.value)}
-                    className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                  >
-                    <option value="">Select Category...</option>
-                    {categoryOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                ) : (
-                  <input 
-                    type="text" 
-                    value={infectionCategory}
-                    onChange={e => updateIpCategory(e.target.value)}
-                    placeholder="e.g., Routine surveillance, Wound infection"
-                    className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                  />
-                )}
+                <select 
+                  value={infectionCategory}
+                  onChange={e => updateIpCategory(e.target.value)}
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                >
+                  <option value="">Select Category...</option>
+                  {INFECTION_CATEGORY_OPTIONS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
               </div>
 
               <div>

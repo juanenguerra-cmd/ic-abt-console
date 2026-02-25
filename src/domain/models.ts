@@ -288,6 +288,8 @@ export interface Facility {
   bedCapacity?: number;
   units: Unit[];
   floorLayouts?: FloorLayout[];
+  hashtagCategories?: string[];
+  customReports?: any[];
   createdAt: ISO;
   updatedAt: ISO;
 }

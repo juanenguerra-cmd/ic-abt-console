@@ -10,6 +10,20 @@ interface Props {
   onClose: () => void;
 }
 
+const VACCINE_OPTIONS = [
+  "Influenza",
+  "COVID-19 (Pfizer)",
+  "COVID-19 (Moderna)",
+  "COVID-19 (Novavax)",
+  "Pneumococcal (PCV20)",
+  "Pneumococcal (PCV15)",
+  "Pneumococcal (PPSV23)",
+  "Tdap",
+  "Zoster (Shingrix)",
+  "RSV",
+  "Other"
+];
+
 export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClose }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId } = useFacilityData();
@@ -157,13 +171,14 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Vaccine Name <span className="text-red-500">*</span></label>
-                <input 
-                  type="text" 
+                <select 
                   value={vaccine}
                   onChange={e => setVaccine(e.target.value)}
-                  placeholder="e.g., Influenza, COVID-19, Pneumococcal"
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
-                />
+                >
+                  <option value="">Select Vaccine...</option>
+                  {VACCINE_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Status</label>

@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus, Trash2, FileText, Settings } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
 import { IpEventModal } from "./IpEventModal";
 import { VaxEventModal } from "./VaxEventModal";
 import { ResidentProfileModal } from "./ResidentProfileModal";
+
+import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
 
 export const ResidentBoard: React.FC = () => {
   const { store } = useFacilityData();
@@ -21,6 +23,12 @@ export const ResidentBoard: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCensusModal, setShowCensusModal] = useState(false);
   
+  const [view, setView] = useState<'board' | 'report' | 'floorplan'>('board');
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  const [printingResidentId, setPrintingResidentId] = useState<string | null>(null);
+
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [editingAbtId, setEditingAbtId] = useState<string | null>(null);
   
@@ -29,6 +37,9 @@ export const ResidentBoard: React.FC = () => {
   
   const [showVaxModal, setShowVaxModal] = useState(false);
   const [editingVaxId, setEditingVaxId] = useState<string | null>(null);
+
+  const [hashtagQuery, setHashtagQuery] = useState("");
+  const [showHashtags, setShowHashtags] = useState(false);
 
   // Notes Panel State
   const [noteInput, setNoteInput] = useState("");
@@ -102,6 +113,8 @@ export const ResidentBoard: React.FC = () => {
     .filter(r => r.displayName.toLowerCase().includes(mentionQuery.toLowerCase()) || r.mrn.includes(mentionQuery))
     .slice(0, 5);
 
+  const hashtagCategories = store.facilities[store.activeFacilityId]?.hashtagCategories || [];
+
   const handleNoteInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     const pos = e.target.selectionStart;
@@ -118,12 +131,31 @@ export const ResidentBoard: React.FC = () => {
         if (query.length < 30 && !query.includes('\n')) {
           setMentionQuery(query);
           setShowMentions(true);
+          setShowHashtags(false);
           return;
         }
       }
     }
+
+    const lastHash = textBeforeCursor.lastIndexOf("#");
+    if (lastHash !== -1) {
+      const charBeforeHash = lastHash > 0 ? textBeforeCursor[lastHash - 1] : " ";
+      if (/\s/.test(charBeforeHash)) {
+        const query = textBeforeCursor.slice(lastHash + 1);
+        if (query.length < 30 && !query.includes('\n')) {
+          setHashtagQuery(query);
+          setShowHashtags(true);
+          setShowMentions(false);
+          return;
+        }
+      }
+    }
+
     setShowMentions(false);
+    setShowHashtags(false);
   };
+
+  const filteredHashtags = hashtagCategories.filter(h => h.toLowerCase().includes(hashtagQuery.toLowerCase())).slice(0, 5);
 
   const insertMention = (resident: Resident) => {
     const textBeforeCursor = noteInput.slice(0, cursorPos);
@@ -139,6 +171,25 @@ export const ResidentBoard: React.FC = () => {
       if (inputRef.current) {
         inputRef.current.focus();
         const newCursorPos = lastAt + newText.length - textAfterCursor.length;
+        inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
+  const insertHashtag = (hashtag: string) => {
+    const textBeforeCursor = noteInput.slice(0, cursorPos);
+    const lastHash = textBeforeCursor.lastIndexOf("#");
+    const textAfterCursor = noteInput.slice(cursorPos);
+    
+    const newText = noteInput.slice(0, lastHash) + `${hashtag} ` + textAfterCursor;
+    
+    setNoteInput(newText);
+    setShowHashtags(false);
+    
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const newCursorPos = lastHash + hashtag.length + 1;
         inputRef.current.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 10);
@@ -164,6 +215,15 @@ export const ResidentBoard: React.FC = () => {
     setNoteInput("");
   };
 
+  const handleDeleteNote = (noteId: string) => {
+    if (window.confirm("Are you sure you want to delete this note? This action cannot be undone.")) {
+      updateDB(draft => {
+        const facilityId = draft.data.facilities.activeFacilityId;
+        delete draft.data.facilityData[facilityId].notes[noteId];
+      });
+    }
+  };
+
   const selectedResidentNotes = useMemo(() => {
     if (!selectedResidentId) return [];
     return (Object.values(store.notes) as any[])
@@ -171,7 +231,21 @@ export const ResidentBoard: React.FC = () => {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [store.notes, selectedResidentId]);
 
-  const selectedResident = selectedResidentId ? store.residents[selectedResidentId] : null;
+  const handleClearQuarantine = () => {
+    if (window.confirm("Are you sure you want to clear the entire Quarantine Inbox? This action cannot be undone.")) {
+      updateDB(draft => {
+        draft.data.facilityData[store.activeFacilityId].quarantine = {};
+      });
+    }
+  };
+
+  if (view === 'floorplan') {
+    return <Floorplan onBack={() => setView('board')} />;
+  }
+
+  if (view === 'report') {
+    return <ShiftReport onBack={() => setView('board')} />;
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
@@ -197,6 +271,27 @@ export const ResidentBoard: React.FC = () => {
           >
             <Upload className="w-4 h-4" />
             Update Census
+          </button>
+          <button 
+            onClick={() => setView('floorplan')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+          >
+            <Map className="w-4 h-4" />
+            Floor Plan
+          </button>
+          <button 
+            onClick={() => setView('report')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Shift Report
+          </button>
+          <button 
+            onClick={() => setShowSettingsModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Settings
           </button>
           <div className="h-6 w-px bg-neutral-300 mx-1"></div>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
@@ -224,6 +319,32 @@ export const ResidentBoard: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Unit Columns */}
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
+          {/* Quarantine Inbox */}
+          <div className="flex flex-col w-80 shrink-0 bg-rose-50 rounded-xl border border-rose-200 overflow-hidden">
+            <div className="bg-white px-4 py-3 border-b border-rose-200 flex justify-between items-center shrink-0">
+              <h2 className="font-bold text-rose-800">Quarantine Inbox</h2>
+              <button 
+                onClick={handleClearQuarantine}
+                className="text-xs font-medium text-rose-600 hover:text-rose-800 bg-rose-100 hover:bg-rose-200 px-2 py-1 rounded"
+              >
+                Clear All
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {Object.values(store.quarantine).map(qRes => (
+                <div key={qRes.tempId} className="bg-white border rounded-lg p-3 shadow-sm border-rose-200">
+                  <h4 className="text-sm font-bold text-neutral-900 truncate">{qRes.displayName || "Unknown Name"}</h4>
+                  <p className="text-xs text-neutral-500">{qRes.dob ? `${getAge(qRes.dob)} yrs` : ""} {qRes.unitSnapshot ? `• ${qRes.unitSnapshot}` : ""}{qRes.roomSnapshot ? `-${qRes.roomSnapshot}` : ""}</p>
+                </div>
+              ))}
+              {Object.keys(store.quarantine).length === 0 && (
+                <div className="text-center text-rose-400 py-8 text-sm italic">
+                  Inbox is empty.
+                </div>
+              )}
+            </div>
+          </div>
+
           {(Object.entries(units) as [string, Resident[]][]).map(([unitName, unitResidents]) => (
             <div key={unitName} className="flex flex-col w-80 shrink-0 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
               <div className="bg-white px-4 py-3 border-b border-neutral-200 flex justify-between items-center shrink-0">
@@ -298,6 +419,16 @@ export const ResidentBoard: React.FC = () => {
                             title="Add Vaccination"
                           >
                             <Syringe className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPrintingResidentId(resident.mrn);
+                            }}
+                            className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                            title="Print New Admission IP Screening Form"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
                           </button>
                           <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
                             {resident.currentRoom || "N/A"}
@@ -396,9 +527,14 @@ export const ResidentBoard: React.FC = () => {
                 <div key={note.id} className="bg-white p-3 rounded-lg shadow-sm border border-neutral-200">
                   <div className="flex justify-between items-start mb-1">
                     <span className="text-xs font-semibold text-neutral-700">Staff</span>
-                    <span className="text-[10px] text-neutral-400">
-                      {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-neutral-400">
+                        {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-neutral-800 whitespace-pre-wrap">{note.body}</p>
                 </div>
@@ -408,6 +544,23 @@ export const ResidentBoard: React.FC = () => {
 
           {/* Composer */}
           <div className="p-3 bg-white border-t border-neutral-200 relative shrink-0">
+            {showHashtags && filteredHashtags.length > 0 && (
+              <div className="absolute bottom-full left-3 mb-2 w-[calc(100%-24px)] bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-10">
+                <ul className="divide-y divide-neutral-100 max-h-48 overflow-y-auto">
+                  {filteredHashtags.map(h => (
+                    <li 
+                      key={h}
+                      onClick={() => insertHashtag(h)}
+                      className="px-3 py-2 hover:bg-indigo-50 cursor-pointer flex items-center gap-2"
+                    >
+                      <Tag className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <p className="text-sm font-medium text-neutral-900 truncate">{h}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {showMentions && mentionableResidents.length > 0 && (
               <div className="absolute bottom-full left-3 mb-2 w-[calc(100%-24px)] bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-10">
                 <ul className="divide-y divide-neutral-100 max-h-48 overflow-y-auto">
@@ -464,8 +617,18 @@ export const ResidentBoard: React.FC = () => {
         />
       )}
 
-      {/* Census Parser Modal */}
-      {showCensusModal && (
+      {printingResidentId && (
+        <NewAdmissionIpScreening 
+          residentId={printingResidentId} 
+          onClose={() => setPrintingResidentId(null)} 
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
+      )}
+
+      {/* Census Parser Modal */}      {showCensusModal && (
         <CensusParserModal onClose={() => setShowCensusModal(false)} />
       )}
 

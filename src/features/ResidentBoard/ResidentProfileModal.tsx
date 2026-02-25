@@ -62,12 +62,18 @@ export const ResidentProfileModal: React.FC<Props> = ({
 
   if (!resident) return null;
 
+  const InfoItem = ({ label, value }: { label: string, value: React.ReactNode }) => (
+    <div>
+      <p className="text-sm text-neutral-500">{label}</p>
+      <p className="font-medium text-neutral-900">{value}</p>
+    </div>
+  );
+
   const activeABTs = (Object.values(store.abts) as any[]).filter(a => a.status === 'active' && a.residentRef.id === residentId);
   const activeInfections = (Object.values(store.infections) as any[]).filter(i => i.status === 'active' && i.residentRef.id === residentId);
   const vaxEvents = (Object.values(store.vaxEvents) as any[]).filter(v => v.residentRef.id === residentId);
 
   const getAge = (dobStr?: string) => {
-    if (!dobStr) return "?";
     const birthDate = new Date(dobStr);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
@@ -183,30 +189,14 @@ export const ResidentProfileModal: React.FC<Props> = ({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-neutral-500">Name</p>
-                  <p className="font-medium text-neutral-900">{resident.displayName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">MRN</p>
-                  <p className="font-medium text-neutral-900 font-mono">{resident.mrn}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">DOB / Age</p>
-                  <p className="font-medium text-neutral-900">{resident.dob || "Unknown"} ({getAge(resident.dob)} yrs)</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">Sex</p>
-                  <p className="font-medium text-neutral-900">{resident.sex || "Unknown"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">Location</p>
-                  <p className="font-medium text-neutral-900">{resident.currentUnit || "Unassigned"} - {resident.currentRoom || "No Room"}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">Status</p>
-                  <p className="font-medium text-neutral-900">{resident.status}</p>
-                </div>
+                <InfoItem label="Name" value={resident.displayName} />
+                <InfoItem label="MRN" value={<span className="font-mono">{resident.mrn}</span>} />
+                <InfoItem label="DOB / Age" value={`${resident.dob || "Unknown"} (${getAge(resident.dob)} yrs)`} />
+                <InfoItem label="Sex" value={resident.sex || "Unknown"} />
+                <InfoItem label="Location" value={`${resident.currentUnit || "Unassigned"} - ${resident.currentRoom || "No Room"}`} />
+                <InfoItem label="Status" value={resident.status} />
+                <InfoItem label="Admission Date" value={resident.admissionDate ? new Date(resident.admissionDate).toLocaleDateString() : "N/A"} />
+                <InfoItem label="Length of Stay" value={resident.admissionDate ? `${Math.floor((new Date().getTime() - new Date(resident.admissionDate).getTime()) / (1000 * 3600 * 24))} days` : "N/A"} />
               </div>
             )}
           </section>
@@ -246,14 +236,8 @@ export const ResidentProfileModal: React.FC<Props> = ({
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-neutral-500">Primary Diagnosis</p>
-                    <p className="font-medium text-neutral-900">{resident.primaryDiagnosis || "None recorded"}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-neutral-500">Attending MD</p>
-                    <p className="font-medium text-neutral-900">{resident.attendingMD || "None recorded"}</p>
-                  </div>
+                  <InfoItem label="Primary Diagnosis" value={resident.primaryDiagnosis || "None recorded"} />
+                  <InfoItem label="Attending MD" value={resident.attendingMD || "None recorded"} />
                 </div>
               </div>
             )}
