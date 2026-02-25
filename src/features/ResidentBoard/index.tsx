@@ -5,6 +5,9 @@ import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Se
 import { v4 as uuidv4 } from "uuid";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
+import { IpEventModal } from "./IpEventModal";
+import { VaxEventModal } from "./VaxEventModal";
+import { ResidentProfileModal } from "./ResidentProfileModal";
 
 export const ResidentBoard: React.FC = () => {
   const { store } = useFacilityData();
@@ -17,8 +20,15 @@ export const ResidentBoard: React.FC = () => {
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCensusModal, setShowCensusModal] = useState(false);
+  
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [editingAbtId, setEditingAbtId] = useState<string | null>(null);
+  
+  const [showIpModal, setShowIpModal] = useState(false);
+  const [editingIpId, setEditingIpId] = useState<string | null>(null);
+  
+  const [showVaxModal, setShowVaxModal] = useState(false);
+  const [editingVaxId, setEditingVaxId] = useState<string | null>(null);
 
   // Notes Panel State
   const [noteInput, setNoteInput] = useState("");
@@ -105,7 +115,7 @@ export const ResidentBoard: React.FC = () => {
       const charBeforeAt = lastAt > 0 ? textBeforeCursor[lastAt - 1] : " ";
       if (/\s/.test(charBeforeAt)) {
         const query = textBeforeCursor.slice(lastAt + 1);
-        if (!/\s/.test(query)) {
+        if (query.length < 30 && !query.includes('\n')) {
           setMentionQuery(query);
           setShowMentions(true);
           return;
@@ -229,6 +239,7 @@ export const ResidentBoard: React.FC = () => {
                   const hasABT = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === resident.mrn);
                   const hasIP = activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === resident.mrn);
                   const vaxDue = vaxEvents.some(v => v.residentRef.kind === "mrn" && v.residentRef.id === resident.mrn && (v.status === "due" || v.status === "overdue"));
+                  const hasSymptom = false; // Mocked for now as SymptomEvent is not in the schema
                   
                   const isSelected = selectedResidentId === resident.mrn;
 
@@ -251,9 +262,47 @@ export const ResidentBoard: React.FC = () => {
                         <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
                           {resident.displayName}
                         </h4>
-                        <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0">
-                          {resident.currentRoom || "N/A"}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedResidentId(resident.mrn);
+                              setEditingAbtId(null);
+                              setShowAbtModal(true);
+                            }}
+                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                            title="Add ABT"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedResidentId(resident.mrn);
+                              setEditingIpId(null);
+                              setShowIpModal(true);
+                            }}
+                            className="p-1 text-amber-600 hover:bg-amber-50 rounded"
+                            title="Add IP Event"
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedResidentId(resident.mrn);
+                              setEditingVaxId(null);
+                              setShowVaxModal(true);
+                            }}
+                            className="p-1 text-purple-600 hover:bg-purple-50 rounded"
+                            title="Add Vaccination"
+                          >
+                            <Syringe className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
+                            {resident.currentRoom || "N/A"}
+                          </span>
+                        </div>
                       </div>
                       
                       {/* Sub-row */}
@@ -263,30 +312,35 @@ export const ResidentBoard: React.FC = () => {
                       </div>
 
                       {/* Chip Row */}
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5 mt-1">
                         {hasAllergies && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500 text-white shadow-sm uppercase tracking-wider">
                             Allergies
                           </span>
                         )}
                         {isActive && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500 text-white shadow-sm uppercase tracking-wider">
                             Active
                           </span>
                         )}
                         {hasABT && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-50 text-emerald-700 uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white shadow-sm uppercase tracking-wider">
                             ABT
                           </span>
                         )}
                         {hasIP && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
                             IP
                           </span>
                         )}
                         {vaxDue && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-50 text-purple-700 uppercase">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500 text-white shadow-sm uppercase tracking-wider">
                             Vax Due
+                          </span>
+                        )}
+                        {hasSymptom && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500 text-white shadow-sm uppercase tracking-wider">
+                            Symptom
                           </span>
                         )}
                       </div>
@@ -300,10 +354,32 @@ export const ResidentBoard: React.FC = () => {
 
         {/* Right Notes Panel */}
         <div className="w-80 shrink-0 bg-white border-l border-neutral-200 flex flex-col">
-          <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50 shrink-0">
-            <h2 className="font-bold text-neutral-800">
-              {selectedResident ? `Notes: ${selectedResident.displayName}` : "Select a Resident"}
+          <div className="px-4 py-3 border-b border-neutral-200 bg-neutral-50 shrink-0 flex flex-col gap-2">
+            <h2 className="font-bold text-neutral-800 truncate">
+              {selectedResident ? selectedResident.displayName : "Select a Resident"}
             </h2>
+            {selectedResident && (
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => { setEditingAbtId(null); setShowAbtModal(true); }}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 py-1.5 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> ABT
+                </button>
+                <button 
+                  onClick={() => { setEditingIpId(null); setShowIpModal(true); }}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 py-1.5 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> IP
+                </button>
+                <button 
+                  onClick={() => { setEditingVaxId(null); setShowVaxModal(true); }}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 py-1.5 rounded transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Vax
+                </button>
+              </div>
+            )}
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
@@ -375,116 +451,17 @@ export const ResidentBoard: React.FC = () => {
       </div>
 
       {/* Resident Profile Modal */}
-      {showProfileModal && selectedResident && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
-              <h2 className="text-xl font-bold text-neutral-900">Resident Profile</h2>
-              <button onClick={() => setShowProfileModal(false)} className="text-neutral-500 hover:text-neutral-700">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {/* Demographics */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-neutral-500">Name</p>
-                  <p className="font-medium text-neutral-900">{selectedResident.displayName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">MRN</p>
-                  <p className="font-medium text-neutral-900 font-mono">{selectedResident.mrn}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">DOB / Age</p>
-                  <p className="font-medium text-neutral-900">{selectedResident.dob || "Unknown"} ({getAge(selectedResident.dob)} yrs)</p>
-                </div>
-                <div>
-                  <p className="text-sm text-neutral-500">Location</p>
-                  <p className="font-medium text-neutral-900">{selectedResident.currentUnit} - {selectedResident.currentRoom}</p>
-                </div>
-                {selectedResident.primaryDiagnosis && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-neutral-500">Primary Diagnosis</p>
-                    <p className="font-medium text-neutral-900">{selectedResident.primaryDiagnosis}</p>
-                  </div>
-                )}
-                {selectedResident.attendingMD && (
-                  <div className="col-span-2">
-                    <p className="text-sm text-neutral-500">Attending MD</p>
-                    <p className="font-medium text-neutral-900">{selectedResident.attendingMD}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Allergies */}
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900 mb-2 border-b pb-1">Allergies</h3>
-                {selectedResident.allergies && selectedResident.allergies.length > 0 ? (
-                  <div className="flex gap-2 flex-wrap">
-                    {selectedResident.allergies.map((a, i) => (
-                      <span key={i} className="px-2 py-1 bg-red-50 text-red-700 text-xs font-medium rounded border border-red-100">
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500 italic">No known allergies.</p>
-                )}
-              </div>
-
-              {/* Timelines (Mocked for now, would pull from activeABTs etc) */}
-              <div>
-                <div className="flex justify-between items-center mb-2 border-b pb-1">
-                  <h3 className="text-sm font-bold text-neutral-900">Clinical Timelines</h3>
-                  <button 
-                    onClick={() => {
-                      setEditingAbtId(null);
-                      setShowAbtModal(true);
-                    }}
-                    className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded"
-                  >
-                    <Plus className="w-3 h-3" />
-                    Add ABT
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {activeABTs.filter(a => a.residentRef.kind === "mrn" && a.residentRef.id === selectedResident.mrn).map(abt => (
-                    <div 
-                      key={abt.id} 
-                      onClick={() => {
-                        setEditingAbtId(abt.id);
-                        setShowAbtModal(true);
-                      }}
-                      className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:shadow-sm transition-shadow"
-                    >
-                      <Activity className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-emerald-900">Active ABT: {abt.medication}</p>
-                        <p className="text-xs text-emerald-700">{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {activeInfections.filter(i => i.residentRef.kind === "mrn" && i.residentRef.id === selectedResident.mrn).map(ip => (
-                    <div key={ip.id} className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                      <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-bold text-amber-900">Active Infection: {ip.infectionCategory}</p>
-                        <p className="text-xs text-amber-700">{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {/* If no active events */}
-                  {!activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === selectedResident.mrn) && 
-                   !activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === selectedResident.mrn) && (
-                    <p className="text-sm text-neutral-500 italic">No active clinical events.</p>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
+      {showProfileModal && selectedResidentId && (
+        <ResidentProfileModal
+          residentId={selectedResidentId}
+          onClose={() => setShowProfileModal(false)}
+          onAddAbt={() => { setEditingAbtId(null); setShowAbtModal(true); }}
+          onAddIp={() => { setEditingIpId(null); setShowIpModal(true); }}
+          onAddVax={() => { setEditingVaxId(null); setShowVaxModal(true); }}
+          onEditAbt={(id) => { setEditingAbtId(id); setShowAbtModal(true); }}
+          onEditIp={(id) => { setEditingIpId(id); setShowIpModal(true); }}
+          onEditVax={(id) => { setEditingVaxId(id); setShowVaxModal(true); }}
+        />
       )}
 
       {/* Census Parser Modal */}
@@ -500,6 +477,30 @@ export const ResidentBoard: React.FC = () => {
           onClose={() => {
             setShowAbtModal(false);
             setEditingAbtId(null);
+          }} 
+        />
+      )}
+
+      {/* IP Event Modal */}
+      {showIpModal && selectedResidentId && (
+        <IpEventModal 
+          residentId={selectedResidentId}
+          existingIp={editingIpId ? store.infections[editingIpId] : undefined}
+          onClose={() => {
+            setShowIpModal(false);
+            setEditingIpId(null);
+          }} 
+        />
+      )}
+
+      {/* Vax Event Modal */}
+      {showVaxModal && selectedResidentId && (
+        <VaxEventModal 
+          residentId={selectedResidentId}
+          existingVax={editingVaxId ? store.vaxEvents[editingVaxId] : undefined}
+          onClose={() => {
+            setShowVaxModal(false);
+            setEditingVaxId(null);
           }} 
         />
       )}
