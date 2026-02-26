@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
+import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
 
 const ReportsConsole: React.FC = () => {
   const [activeTab, setActiveTab] = useState('monthly');
@@ -16,9 +17,15 @@ const ReportsConsole: React.FC = () => {
           </button>
           <button 
             data-testid="soc-tab-button"
-            onClick={() => setActiveTab('soc')}
-            className={`${activeTab === 'soc' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
-            Daily/Weekly SOC
+            onClick={() => setActiveTab('daily')}
+            className={`${activeTab === 'daily' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Daily Report
+          </button>
+          <button 
+            data-testid="weekly-tab-button"
+            onClick={() => setActiveTab('weekly')}
+            className={`${activeTab === 'weekly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Weekly Report
           </button>
           <button 
             data-testid="monthly-analytics-tab-button"
@@ -26,13 +33,668 @@ const ReportsConsole: React.FC = () => {
             className={`${activeTab === 'monthly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Monthly Analytics
           </button>
+          <button 
+            data-testid="ondemand-tab-button"
+            onClick={() => setActiveTab('ondemand')}
+            className={`${activeTab === 'ondemand' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            On Demand
+          </button>
         </nav>
       </div>
 
       <div className="mt-8">
-        {activeTab === 'survey' && <div>Survey Packets Content</div>}
-        {activeTab === 'soc' && <div>Daily/Weekly SOC Content</div>}
+        {activeTab === 'survey' && <SurveyPacketsReport />}
+        {activeTab === 'daily' && <DailyReport />}
+        {activeTab === 'weekly' && <WeeklyReport />}
         {activeTab === 'monthly' && <MonthlyAnalytics />}
+        {activeTab === 'ondemand' && <OnDemandReport />}
+      </div>
+    </div>
+  );
+};
+
+const SurveyPacketsReport: React.FC = () => {
+  const { store } = useFacilityData();
+
+  const activePrecautions = useMemo(() =>
+    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
+      .map(ip => {
+        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+        return { ip, res };
+      }),
+    [store.infections, store.residents, store.quarantine]
+  );
+
+  const activeAbts = useMemo(() =>
+    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active')
+      .map(a => {
+        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
+        return { abt: a, res };
+      }),
+    [store.abts, store.residents, store.quarantine]
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
+          <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List</h3>
+          <p className="text-xs text-red-700 mt-1">Survey-Ready: Isolation Roster</p>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Isolation Type</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {activePrecautions.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-400">No active precautions</td></tr>
+            )}
+            {activePrecautions.map(({ ip, res }) => (
+              <tr key={ip.id}>
+                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{ip.infectionCategory || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{ip.isolationType || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{ip.organism || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
+          <h3 className="text-lg leading-6 font-bold text-amber-900">Active Antibiotic Courses</h3>
+          <p className="text-xs text-amber-700 mt-1">Survey-Ready: ABT Utilization Roster</p>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Culture</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {activeAbts.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-neutral-400">No active antibiotic courses</td></tr>
+            )}
+            {activeAbts.map(({ abt, res }) => (
+              <tr key={abt.id}>
+                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{abt.indication || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{abt.startDate || '—'}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">{abt.cultureCollected ? `Yes${abt.cultureCollectionDate ? ' (' + abt.cultureCollectionDate + ')' : ''}` : 'No'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const DailyReport: React.FC = () => {
+  const { store } = useFacilityData();
+  const today = new Date().toISOString().split('T')[0];
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  const activePrecautions = useMemo(() =>
+    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
+      .map(ip => {
+        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+        return { ip, res };
+      })
+      .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
+    [store.infections, store.residents, store.quarantine]
+  );
+
+  const activeAbts = useMemo(() =>
+    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active')
+      .map(a => {
+        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
+        return { abt: a, res };
+      })
+      .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
+    [store.abts, store.residents, store.quarantine]
+  );
+
+  const recentAdmissions = useMemo(() =>
+    Object.values(store.residents)
+      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo)
+      .map((r: Resident) => {
+        const hasScreening = (Object.values(store.notes) as ResidentNote[]).some(n =>
+          n.residentRef.kind === 'mrn' && n.residentRef.id === r.mrn && n.title?.includes('Admission Screening')
+        );
+        return { res: r, hasScreening };
+      })
+      .sort((a, b) => (a.res.admissionDate || '').localeCompare(b.res.admissionDate || '')),
+    [store.residents, store.notes, threeDaysAgo]
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+        <span className="font-bold text-indigo-900 text-sm">Daily Report</span>
+        <span className="text-indigo-700 text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
+          <h3 className="text-base font-bold text-red-900">Active Precautions Line List ({activePrecautions.length})</h3>
+          <p className="text-xs text-red-700 mt-0.5">Sortable by unit for floor nurses</p>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">EBP</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {activePrecautions.length === 0 && (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active precautions today</td></tr>
+            )}
+            {activePrecautions.map(({ ip, res }) => (
+              <tr key={ip.id}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.isolationType || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.organism || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.ebp ? 'Yes' : 'No'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
+          <h3 className="text-base font-bold text-amber-900">Active Antibiotic Courses ({activeAbts.length})</h3>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Culture</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {activeAbts.length === 0 && (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active antibiotic courses</td></tr>
+            )}
+            {activeAbts.map(({ abt, res }) => (
+              <tr key={abt.id}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.cultureCollected ? 'Yes' : 'No'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-emerald-50">
+          <h3 className="text-base font-bold text-emerald-900">Admission Screening Due (&lt;72h) ({recentAdmissions.filter(r => !r.hasScreening).length})</h3>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Admission Date</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Screening</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {recentAdmissions.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No recent admissions in the last 72 hours</td></tr>
+            )}
+            {recentAdmissions.map(({ res, hasScreening }) => (
+              <tr key={res.mrn}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{res.displayName}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.mrn}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.admissionDate || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.currentRoom || '—'}</td>
+                <td className="px-4 py-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${hasScreening ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {hasScreening ? 'Done' : 'Pending'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const WeeklyReport: React.FC = () => {
+  const { store } = useFacilityData();
+  const sevenDaysAgo = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d; }, []);
+
+  const newInfections = useMemo(() =>
+    (Object.values(store.infections) as IPEvent[])
+      .filter(ip => new Date(ip.createdAt) >= sevenDaysAgo)
+      .map(ip => {
+        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+        return { ip, res };
+      })
+      .sort((a, b) => b.ip.createdAt.localeCompare(a.ip.createdAt)),
+    [store.infections, store.residents, store.quarantine, sevenDaysAgo]
+  );
+
+  const newAbts = useMemo(() =>
+    (Object.values(store.abts) as ABTCourse[])
+      .filter(a => a.startDate && new Date(a.startDate) >= sevenDaysAgo)
+      .map(a => {
+        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
+        return { abt: a, res };
+      })
+      .sort((a, b) => (b.abt.startDate || '').localeCompare(a.abt.startDate || '')),
+    [store.abts, store.residents, store.quarantine, sevenDaysAgo]
+  );
+
+  const vaxActivity = useMemo(() =>
+    (Object.values(store.vaxEvents) as VaxEvent[])
+      .filter(v => new Date(v.createdAt) >= sevenDaysAgo)
+      .map(v => {
+        const res = v.residentRef.kind === 'mrn' ? store.residents[v.residentRef.id] : store.quarantine[v.residentRef.id];
+        return { vax: v, res };
+      })
+      .sort((a, b) => b.vax.createdAt.localeCompare(a.vax.createdAt)),
+    [store.vaxEvents, store.residents, store.quarantine, sevenDaysAgo]
+  );
+
+  const weekStart = sevenDaysAgo.toLocaleDateString();
+  const weekEnd = new Date().toLocaleDateString();
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+        <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
+        <span className="text-indigo-700 text-sm">{weekStart} – {weekEnd}</span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+          <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
+          <div className="text-xs text-neutral-500 mt-1">New Infections (7d)</div>
+        </div>
+        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+          <div className="text-2xl font-bold text-amber-700">{newAbts.length}</div>
+          <div className="text-xs text-neutral-500 mt-1">New ABT Courses (7d)</div>
+        </div>
+        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+          <div className="text-2xl font-bold text-blue-700">{vaxActivity.length}</div>
+          <div className="text-xs text-neutral-500 mt-1">Vax Events (7d)</div>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
+          <h3 className="text-base font-bold text-red-900">New Infections — 7-Day Lookback ({newInfections.length})</h3>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Onset Date</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {newInfections.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-neutral-400">No new infections in the last 7 days</td></tr>
+            )}
+            {newInfections.map(({ ip, res }) => (
+              <tr key={ip.id}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
+                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{ip.status}</span></td>
+                <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
+                <td className="px-4 py-2 text-neutral-500">{new Date(ip.createdAt).toLocaleDateString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
+          <h3 className="text-base font-bold text-amber-900">New Antibiotic Starts — 7-Day Lookback ({newAbts.length})</h3>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {newAbts.length === 0 && (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No new antibiotic courses in the last 7 days</td></tr>
+            )}
+            {newAbts.map(({ abt, res }) => (
+              <tr key={abt.id}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.syndromeCategory || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
+                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${abt.status === 'active' ? 'bg-amber-100 text-amber-800' : abt.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-neutral-100 text-neutral-800'}`}>{abt.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-blue-50">
+          <h3 className="text-base font-bold text-blue-900">Vaccination Activity — 7-Day Lookback ({vaxActivity.length})</h3>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date Given</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Decline Reason</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {vaxActivity.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No vaccination activity in the last 7 days</td></tr>
+            )}
+            {vaxActivity.map(({ vax, res }) => (
+              <tr key={vax.id}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{vax.vaccine}</td>
+                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${vax.status === 'given' ? 'bg-green-100 text-green-800' : vax.status === 'declined' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-800'}`}>{vax.status}</span></td>
+                <td className="px-4 py-2 text-neutral-500">{vax.dateGiven || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{vax.declineReason || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const OnDemandReport: React.FC = () => {
+  const { store } = useFacilityData();
+  const [dataset, setDataset] = useState<'infections' | 'abts' | 'vax' | 'residents'>('infections');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [unitFilter, setUnitFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const units = useMemo(() => {
+    const s = new Set<string>();
+    Object.values(store.residents).forEach((r: Resident) => { if (r.currentUnit?.trim()) s.add(r.currentUnit.trim()); });
+    return Array.from(s).sort();
+  }, [store.residents]);
+
+  const rows = useMemo(() => {
+    const inRange = (dateStr: string | undefined) => {
+      if (!dateStr) return true;
+      const d = new Date(dateStr);
+      if (startDate && d < new Date(startDate)) return false;
+      if (endDate && d > new Date(endDate + 'T23:59:59')) return false;
+      return true;
+    };
+
+    const getRes = (ref: { kind: string; id: string }) =>
+      ref.kind === 'mrn' ? store.residents[ref.id] : store.quarantine[ref.id];
+
+    if (dataset === 'infections') {
+      return (Object.values(store.infections) as IPEvent[])
+        .filter(ip => {
+          if (!inRange(ip.createdAt)) return false;
+          if (statusFilter !== 'all' && ip.status !== statusFilter) return false;
+          const res = getRes(ip.residentRef);
+          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+          return true;
+        })
+        .map(ip => {
+          const res = getRes(ip.residentRef);
+          return [
+            (res as any)?.displayName || '—',
+            (res as any)?.mrn || '—',
+            (res as any)?.currentUnit || ip.locationSnapshot?.unit || '—',
+            (res as any)?.currentRoom || ip.locationSnapshot?.room || '—',
+            ip.infectionCategory || '—',
+            ip.infectionSite || '—',
+            ip.status,
+            ip.isolationType || '—',
+            ip.ebp ? 'Yes' : 'No',
+            ip.organism || '—',
+            new Date(ip.createdAt).toLocaleDateString(),
+          ];
+        });
+    }
+    if (dataset === 'abts') {
+      return (Object.values(store.abts) as ABTCourse[])
+        .filter(a => {
+          if (!inRange(a.startDate || a.createdAt)) return false;
+          if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+          const res = getRes(a.residentRef);
+          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+          return true;
+        })
+        .map(a => {
+          const res = getRes(a.residentRef);
+          return [
+            (res as any)?.displayName || '—',
+            (res as any)?.mrn || '—',
+            (res as any)?.currentUnit || a.locationSnapshot?.unit || '—',
+            (res as any)?.currentRoom || a.locationSnapshot?.room || '—',
+            a.medication,
+            a.indication || '—',
+            a.syndromeCategory || '—',
+            a.status,
+            a.startDate || '—',
+            a.endDate || '—',
+            a.cultureCollected ? 'Yes' : 'No',
+          ];
+        });
+    }
+    if (dataset === 'vax') {
+      return (Object.values(store.vaxEvents) as VaxEvent[])
+        .filter(v => {
+          if (!inRange(v.dateGiven || v.createdAt)) return false;
+          if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+          const res = getRes(v.residentRef);
+          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+          return true;
+        })
+        .map(v => {
+          const res = getRes(v.residentRef);
+          return [
+            (res as any)?.displayName || '—',
+            (res as any)?.mrn || '—',
+            (res as any)?.currentUnit || '—',
+            (res as any)?.currentRoom || '—',
+            v.vaccine,
+            v.status,
+            v.dateGiven || '—',
+            v.declineReason || '—',
+            v.dueDate || '—',
+          ];
+        });
+    }
+    // residents
+    return (Object.values(store.residents) as Resident[])
+      .filter(r => {
+        if (!inRange(r.admissionDate || r.createdAt)) return false;
+        if (unitFilter !== 'all' && r.currentUnit !== unitFilter) return false;
+        return true;
+      })
+      .map(r => [
+        r.displayName,
+        r.mrn,
+        r.currentUnit || '—',
+        r.currentRoom || '—',
+        r.admissionDate || '—',
+        r.attendingMD || '—',
+        r.status || '—',
+      ]);
+  }, [dataset, startDate, endDate, unitFilter, statusFilter, store]);
+
+  const HEADERS: Record<string, string[]> = {
+    infections: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Site', 'Status', 'Isolation', 'EBP', 'Organism', 'Date'],
+    abts: ['Resident', 'MRN', 'Unit', 'Room', 'Medication', 'Indication', 'Syndrome', 'Status', 'Start', 'End', 'Culture'],
+    vax: ['Resident', 'MRN', 'Unit', 'Room', 'Vaccine', 'Status', 'Date Given', 'Decline Reason', 'Due Date'],
+    residents: ['Resident', 'MRN', 'Unit', 'Room', 'Admission Date', 'Attending MD', 'Status'],
+  };
+
+  const STATUS_OPTIONS: Record<string, string[]> = {
+    infections: ['active', 'resolved', 'historical'],
+    abts: ['active', 'completed', 'discontinued'],
+    vax: ['given', 'declined', 'contraindicated', 'due', 'overdue'],
+    residents: [],
+  };
+
+  const handleExportCsv = () => {
+    const headers = HEADERS[dataset];
+    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${dataset}_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow border border-neutral-200 p-6">
+        <h3 className="text-base font-bold text-neutral-900 mb-4">On Demand Report Builder</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Dataset</label>
+            <select value={dataset} onChange={e => { setDataset(e.target.value as any); setStatusFilter('all'); }} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="infections">IP (Infections)</option>
+              <option value="abts">ABT (Antibiotics)</option>
+              <option value="vax">VAX (Vaccinations)</option>
+              <option value="residents">Residents</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Unit</label>
+            <select value={unitFilter} onChange={e => setUnitFilter(e.target.value)} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="all">All Units</option>
+              {units.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Status</label>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="all">All Statuses</option>
+              {STATUS_OPTIONS[dataset].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="block text-xs font-medium text-neutral-600 uppercase">Date Range</label>
+            <div className="flex gap-1 items-center">
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 border border-neutral-300 rounded-md px-2 py-1.5 text-sm" />
+              <span className="text-neutral-400 text-xs">–</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 border border-neutral-300 rounded-md px-2 py-1.5 text-sm" />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-neutral-500">{rows.length} record{rows.length !== 1 ? 's' : ''} found</span>
+          <button onClick={handleExportCsv} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                {HEADERS[dataset].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {rows.length === 0 && (
+                <tr><td colSpan={HEADERS[dataset].length} className="px-4 py-8 text-center text-neutral-400">No records match the selected filters</td></tr>
+              )}
+              {rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((cell, j) => (
+                    <td key={j} className="px-4 py-2 text-neutral-700 whitespace-nowrap">{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

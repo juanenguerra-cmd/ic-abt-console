@@ -27,8 +27,18 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
   // Core Schema Fields
   const [status, setStatus] = useState<ABTCourse["status"]>(existingAbt?.status || "active");
   const [medication, setMedication] = useState(existingAbt?.medication || "");
-  const [route, setRoute] = useState(existingAbt?.route || "");
-  const [frequency, setFrequency] = useState(existingAbt?.frequency || "");
+  const [route, setRoute] = useState(
+    existingAbt?.route && !ROUTE_OPTIONS.includes(existingAbt.route) ? "Other" : (existingAbt?.route || "")
+  );
+  const [routeOther, setRouteOther] = useState(
+    existingAbt?.route && !ROUTE_OPTIONS.includes(existingAbt.route) ? existingAbt.route : ""
+  );
+  const [frequency, setFrequency] = useState(
+    existingAbt?.frequency && !FREQUENCY_OPTIONS.includes(existingAbt.frequency) ? "Other" : (existingAbt?.frequency || "")
+  );
+  const [frequencyOther, setFrequencyOther] = useState(
+    existingAbt?.frequency && !FREQUENCY_OPTIONS.includes(existingAbt.frequency) ? existingAbt.frequency : ""
+  );
   const [indication, setIndication] = useState(existingAbt?.indication || "");
   const [startDate, setStartDate] = useState(existingAbt?.startDate || new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(existingAbt?.endDate || "");
@@ -96,8 +106,8 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
         residentRef,
         status,
         medication: medication.trim(),
-        route: route || undefined,
-        frequency: frequency || undefined,
+        route: (route === "Other" ? routeOther.trim() || "Other" : route) || undefined,
+        frequency: (frequency === "Other" ? frequencyOther.trim() || "Other" : frequency) || undefined,
         indication: indication.trim() || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
@@ -159,6 +169,15 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
                   <option value="">Select...</option>
                   {ROUTE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
+                {route === "Other" && (
+                  <input
+                    type="text"
+                    value={routeOther}
+                    onChange={e => setRouteOther(e.target.value)}
+                    placeholder="Specify route..."
+                    className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Frequency</label>
@@ -166,6 +185,15 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
                   <option value="">Select...</option>
                   {FREQUENCY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
+                {frequency === "Other" && (
+                  <input
+                    type="text"
+                    value={frequencyOther}
+                    onChange={e => setFrequencyOther(e.target.value)}
+                    placeholder="Specify frequency..."
+                    className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Drug Class</label>

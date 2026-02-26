@@ -15,19 +15,33 @@ const AVAILABLE_COLUMNS: ColumnDef[] = [
   { id: 'res_dob', label: 'DOB', fieldPath: 'resident.dob' },
   { id: 'res_unit', label: 'Unit', fieldPath: 'resident.currentUnit' },
   { id: 'res_room', label: 'Room', fieldPath: 'resident.currentRoom' },
+  { id: 'res_admission', label: 'Admission Date', fieldPath: 'resident.admissionDate' },
+  { id: 'res_md', label: 'Attending MD', fieldPath: 'resident.attendingMD' },
   
   { id: 'abt_med', label: 'ABT Medication', fieldPath: 'abt.medication' },
   { id: 'abt_start', label: 'ABT Start Date', fieldPath: 'abt.startDate' },
   { id: 'abt_end', label: 'ABT End Date', fieldPath: 'abt.endDate' },
   { id: 'abt_status', label: 'ABT Status', fieldPath: 'abt.status' },
+  { id: 'abt_indication', label: 'ABT Indication', fieldPath: 'abt.indication' },
+  { id: 'abt_syndrome', label: 'ABT Syndrome Category', fieldPath: 'abt.syndromeCategory' },
+  { id: 'abt_culture', label: 'Culture Collected', fieldPath: 'abt.cultureCollected' },
+  { id: 'abt_culture_date', label: 'Culture Collection Date', fieldPath: 'abt.cultureCollectionDate' },
+  { id: 'abt_prescriber', label: 'Prescriber (Attending MD)', fieldPath: 'resident.attendingMD' },
   
   { id: 'ip_category', label: 'IP Category', fieldPath: 'ip.infectionCategory' },
+  { id: 'ip_site', label: 'IP Infection Site', fieldPath: 'ip.infectionSite' },
   { id: 'ip_status', label: 'IP Status', fieldPath: 'ip.status' },
-  { id: 'ip_date', label: 'IP Date', fieldPath: 'ip.createdAt' },
+  { id: 'ip_date', label: 'IP Onset Date', fieldPath: 'ip.createdAt' },
+  { id: 'ip_isolation', label: 'Isolation Type', fieldPath: 'ip.isolationType' },
+  { id: 'ip_ebp', label: 'EBP', fieldPath: 'ip.ebp' },
+  { id: 'ip_organism', label: 'Organism', fieldPath: 'ip.organism' },
   
   { id: 'vax_name', label: 'Vaccine', fieldPath: 'vax.vaccine' },
   { id: 'vax_status', label: 'Vax Status', fieldPath: 'vax.status' },
-  { id: 'vax_date', label: 'Vax Date', fieldPath: 'vax.dateGiven' },
+  { id: 'vax_date', label: 'Date Given', fieldPath: 'vax.dateGiven' },
+  { id: 'vax_decline', label: 'Decline Reason', fieldPath: 'vax.declineReason' },
+  { id: 'vax_due', label: 'Due Date', fieldPath: 'vax.dueDate' },
+  { id: 'vax_offer_again', label: 'Offer Again Date', fieldPath: 'vax.offerAgainDate' },
 ];
 
 export const ReportBuilder: React.FC = () => {

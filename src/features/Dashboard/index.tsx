@@ -110,6 +110,25 @@ export const Dashboard: React.FC = () => {
   const [showScreeningModal, setShowScreeningModal] = useState(false);
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [showOutbreakModal, setShowOutbreakModal] = useState(false);
+  const [selectedUnit, setSelectedUnit] = useState<string>("all");
+
+  const units = useMemo(() => {
+    const unitSet = new Set<string>();
+    Object.values(store.residents).forEach(r => {
+      if (r.currentUnit?.trim()) unitSet.add(r.currentUnit.trim());
+    });
+    return Array.from(unitSet).sort();
+  }, [store.residents]);
+
+  const filteredLayout = useMemo(() => {
+    if (selectedUnit === "all") return layout;
+    const roomsInUnit = new Set(
+      Object.values(store.residents)
+        .filter(r => r.currentUnit === selectedUnit && r.currentRoom)
+        .map(r => r.currentRoom!)
+    );
+    return { ...layout, rooms: layout.rooms.filter(r => roomsInUnit.has(r.label || "")) };
+  }, [layout, selectedUnit, store.residents]);
 
   // Calculate stats
   const activeResidents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
@@ -204,9 +223,24 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
-          <h2 className="text-lg font-bold text-neutral-900 mb-4">Live Floor Map</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-neutral-900">Live Floor Map</h2>
+            {units.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-neutral-500" />
+                <select
+                  value={selectedUnit}
+                  onChange={e => setSelectedUnit(e.target.value)}
+                  className="border border-neutral-300 rounded-md px-2 py-1 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="all">All Units</option>
+                  {units.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
           <FloorMap 
-            layout={layout} 
+            layout={filteredLayout} 
             roomStatuses={roomStatuses}
           />
         </div>
