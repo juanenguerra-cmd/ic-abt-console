@@ -24,6 +24,7 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
   const [filterType, setFilterType] = useState<'initiated' | 'active'>('initiated');
   const [showReportBuilder, setShowReportBuilder] = useState(false);
   const [showPrecautionList, setShowPrecautionList] = useState(false);
+  const [selectedShift, setSelectedShift] = useState<string>('');
 
   const [customReports, setCustomReports] = useState<any[]>([]);
 
@@ -90,7 +91,17 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
               Active
             </button>
           </div>
-          <button 
+          <select
+            value={selectedShift}
+            onChange={(e) => setSelectedShift(e.target.value)}
+            className="border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+          >
+            <option value="">All Shifts</option>
+            <option value="Day">Day</option>
+            <option value="Evening">Evening</option>
+            <option value="Night">Night</option>
+          </select>
+          <button
             onClick={() => setShowPrecautionList(true)}
             className="px-4 py-2 bg-neutral-600 text-white rounded-md hover:bg-neutral-700 text-sm font-medium flex items-center gap-2"
           >
@@ -146,7 +157,12 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
       </div>
 
       {showPrecautionList && startDate && (
-        <DailyPrecautionList date={startDate} onClose={() => setShowPrecautionList(false)} />
+        <DailyPrecautionList
+          date={startDate}
+          onClose={() => setShowPrecautionList(false)}
+          facilityName={facility?.name}
+          shift={selectedShift || undefined}
+        />
       )}
 
       {showReportBuilder && (
