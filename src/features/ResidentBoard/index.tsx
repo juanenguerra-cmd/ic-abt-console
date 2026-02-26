@@ -403,7 +403,18 @@ export const ResidentBoard: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Unit Columns */}
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
-          {(Object.entries(units) as [string, Resident[]][]).map(([unitName, unitResidents]) => (
+          {(Object.entries(units) as [string, Resident[]][])
+            .sort(([unitNameA], [unitNameB]) => {
+              const order = ['Unit 2', 'Unit 3', 'Unit 4'];
+              const indexA = order.indexOf(unitNameA);
+              const indexB = order.indexOf(unitNameB);
+              
+              if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+              if (indexA !== -1) return -1;
+              if (indexB !== -1) return 1;
+              return unitNameA.localeCompare(unitNameB);
+            })
+            .map(([unitName, unitResidents]) => (
             <div key={unitName} className="flex flex-col w-80 shrink-0 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
               <div className="bg-white px-4 py-3 border-b border-neutral-200 flex justify-between items-center shrink-0">
                 <h2 className="font-bold text-neutral-800">{unitName}</h2>

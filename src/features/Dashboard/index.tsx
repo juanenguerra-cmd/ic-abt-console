@@ -35,6 +35,30 @@ export const Dashboard: React.FC = () => {
     }))
   };
 
+  const roomStatuses = useMemo(() => {
+    const statuses: Record<string, RoomStatus> = {};
+    const activeInfections = Object.values(store.infections).filter(ip => ip.status === 'active');
+    
+    Object.values(store.residents).forEach(res => {
+      if (res.currentRoom) {
+        const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom.replace(/^\d/, ''));
+        if (room) {
+          const infection = activeInfections.find(ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn);
+          if (infection) {
+            if (infection.outbreakId) {
+              statuses[room.roomId] = 'outbreak';
+            } else if (infection.isolationType) {
+              statuses[room.roomId] = 'isolation';
+            } else if (infection.ebp) {
+              statuses[room.roomId] = 'ebp';
+            }
+          }
+        }
+      }
+    });
+    return statuses;
+  }, [store.residents, store.infections, layout.rooms]);
+
   const [showCensusModal, setShowCensusModal] = useState(false);
   const [showPrecautionsModal, setShowPrecautionsModal] = useState(false);
   const [showScreeningModal, setShowScreeningModal] = useState(false);
@@ -137,7 +161,7 @@ export const Dashboard: React.FC = () => {
           <h2 className="text-lg font-bold text-neutral-900 mb-4">Live Floor Map</h2>
           <FloorMap 
             layout={layout} 
-            roomStatuses={{}} // TODO: Wire up real statuses
+            roomStatuses={roomStatuses}
           />
         </div>
       </div>

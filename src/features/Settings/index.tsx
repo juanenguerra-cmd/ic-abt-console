@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { restoreFromPrev } from "../../storage/engine";
-import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar } from "lucide-react";
+import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map } from "lucide-react";
 import { UnifiedDB, ABTCourse, IPEvent, VaxEvent } from "../../domain/models";
 import { v4 as uuidv4 } from 'uuid';
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
+import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
@@ -17,6 +18,7 @@ export const SettingsConsole: React.FC = () => {
   const [restoreConfirm, setRestoreConfirm] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
+  const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
   
   const facility = db.data.facilities.byId[activeFacilityId];
   const [facilityName, setFacilityName] = useState(facility?.name || "");
@@ -189,6 +191,88 @@ export const SettingsConsole: React.FC = () => {
       </div>
 
       <MonthlyMetricsModal isOpen={isMetricsModalOpen} onClose={() => setIsMetricsModalOpen(false)} />
+      <UnitRoomConfigModal isOpen={isUnitRoomConfigModalOpen} onClose={() => setIsUnitRoomConfigModalOpen(false)} />
+
+      {/* Floor Layout Settings */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
+          <Map className="h-5 w-5 text-indigo-500 mr-2" />
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Floor Layout Settings</h3>
+        </div>
+        <div className="px-4 py-5 sm:p-6 space-y-4">
+          <p className="text-sm text-neutral-600">Upload a JSON file containing the floor layout configuration. The layout will be used to render the live floor map on the Dashboard and Resident Board.</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                      try {
+                        const parsed = JSON.parse(e.target?.result as string);
+                        updateDB(draft => {
+                          const f = draft.data.facilities.byId[activeFacilityId];
+                          if (f) {
+                            f.floorLayouts = [parsed];
+                          }
+                        });
+                        alert('Floor layout updated successfully.');
+                      } catch (error) {
+                        alert('Invalid JSON file.');
+                      }
+                    };
+                    reader.readAsText(file);
+                  }
+                };
+                input.click();
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
+            >
+              <Upload className="w-4 h-4" />
+              Upload Layout JSON
+            </button>
+            {facility.floorLayouts && facility.floorLayouts.length > 0 && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to remove the custom floor layout? The default layout will be used instead.')) {
+                    updateDB(draft => {
+                      const f = draft.data.facilities.byId[activeFacilityId];
+                      if (f) {
+                        f.floorLayouts = undefined;
+                      }
+                    });
+                  }
+                }}
+                className="text-sm text-red-600 hover:text-red-800 font-medium"
+              >
+                Remove Custom Layout
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Unit & Room Mapping */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
+          <Building2 className="h-5 w-5 text-indigo-500 mr-2" />
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Unit & Room Mapping Configuration</h3>
+        </div>
+        <div className="px-4 py-5 sm:p-6 space-y-4">
+          <p className="text-sm text-neutral-600">Configure the available units for your facility and map specific room numbers to each unit.</p>
+          <button
+            onClick={() => setIsUnitRoomConfigModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
+          >
+            <Building2 className="w-4 h-4" />
+            Configure Units & Rooms
+          </button>
+        </div>
+      </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex justify-between items-center">

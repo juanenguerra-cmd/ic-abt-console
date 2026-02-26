@@ -64,7 +64,8 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const [status, setStatus] = useState<IPEvent["status"]>(existingIp?.status || "active");
 
   // Extended State (Serialized to Notes)
-  const [protocol, setProtocol] = useState<"standard" | "isolation" | "ebp">("standard");
+  const [protocol, setProtocol] = useState<"standard" | "isolation">("standard");
+  const [isEbp, setIsEbp] = useState<boolean>(existingIp?.ebp || false);
   const [isolationTypes, setIsolationTypes] = useState<string[]>([]);
   const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
   const [onsetDate, setOnsetDate] = useState(new Date().toISOString().split('T')[0]);
@@ -96,15 +97,16 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       if (existingIp.sourceOfInfection) setSourceTags(existingIp.sourceOfInfection.split(",").map(s => s.trim()));
       if (existingIp.outbreakId) setOutbreakId(existingIp.outbreakId);
       
-      if (existingIp.ebp) setProtocol("ebp");
-      else if (existingIp.isolationType) setProtocol("isolation");
+      if (existingIp.ebp) setIsEbp(true);
+      if (existingIp.isolationType) setProtocol("isolation");
+      else setProtocol("standard");
 
       if (existingIp.notes) {
         try {
           const match = existingIp.notes.match(/--- EXTENDED DATA ---\n(.*)/s);
           if (match) {
             const ext = JSON.parse(match[1]);
-            if (ext.protocol) setProtocol(ext.protocol);
+            if (ext.protocol && ext.protocol !== "ebp") setProtocol(ext.protocol);
             if (ext.deviceTypes) setDeviceTypes(ext.deviceTypes);
             if (ext.onsetDate) setOnsetDate(ext.onsetDate);
             if (ext.eventDetectedDate) setEventDetectedDate(ext.eventDetectedDate);
@@ -121,7 +123,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   }, [existingIp]);
 
   // Cascading Logic 1: Protocol Change
-  const updateIpProtocol = (newProtocol: "standard" | "isolation" | "ebp") => {
+  const updateIpProtocol = (newProtocol: "standard" | "isolation") => {
     setProtocol(newProtocol);
     if (newProtocol === "standard") {
       setIsolationTypes([]);
@@ -131,9 +133,6 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       setIsolationTypes(["Contact"]);
       setInfectionCategory("");
       setDeviceTypes([]);
-    } else if (newProtocol === "ebp") {
-      setIsolationTypes(["Device"]);
-      setInfectionCategory("Device-associated");
     }
   };
 
@@ -145,7 +144,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     
     setIsolationTypes(newTypes);
 
-    if (protocol === "ebp" && newTypes.length > 0) {
+    if (isEbp && newTypes.length > 0) {
       const primary = newTypes[0];
       if (primary === "Device") setInfectionCategory("Device-associated");
       else if (primary === "Wound") {
@@ -202,7 +201,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     ? ISOLATION_CATEGORY_MAP[isolationTypes[0]] || []
     : [];
 
-  const organismSuggestions = protocol === "ebp" 
+  const organismSuggestions = isEbp 
     ? EBP_ORGANISM_SUGGESTIONS 
     : (protocol === "isolation" && infectionCategory && ["MRSA", "VRE", "ESBL", "CRE", "C. diff"].includes(infectionCategory) ? [infectionCategory] : []);
 
@@ -241,7 +240,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         infectionSite: infectionSite.trim() || undefined,
         sourceOfInfection: sourceTags.join(", ") || undefined,
         isolationType: isolationTypes.join(", ") || undefined,
-        ebp: protocol === "ebp",
+        ebp: isEbp,
         organism: infectionTags.join(", ") || undefined,
         specimenCollectedDate: specimenCollectedDate || undefined,
         labResultDate: labResultDate || undefined,
@@ -289,8 +288,8 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                     <input type="radio" checked={protocol === "isolation"} onChange={() => updateIpProtocol("isolation")} className="text-amber-600 focus:ring-amber-500" />
                     Isolation (Transmission-based)
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
-                    <input type="radio" checked={protocol === "ebp"} onChange={() => updateIpProtocol("ebp")} className="text-amber-600 focus:ring-amber-500" />
+                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer mt-2 pt-2 border-t border-neutral-200">
+                    <input type="checkbox" checked={isEbp} onChange={(e) => setIsEbp(e.target.checked)} className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500" />
                     Enhanced Barrier Precautions (EBP)
                   </label>
                 </div>
@@ -313,13 +312,13 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           </section>
 
           {/* Dynamic Isolation Types */}
-          {protocol !== "standard" && (
+          {(protocol !== "standard" || isEbp) && (
             <section className="bg-amber-50/50 p-4 rounded-lg border border-amber-100">
               <h3 className="text-sm font-bold text-neutral-900 mb-3">
-                {protocol === "ebp" ? "EBP Indication" : "Isolation Type"}
+                {isEbp ? "EBP Indication" : "Isolation Type"}
               </h3>
               <div className="flex flex-wrap gap-3">
-                {(protocol === "ebp" ? ["Device", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
+                {(isEbp ? ["Device", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
                   <label key={type} className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer bg-white px-3 py-1.5 rounded border border-neutral-200 shadow-sm hover:border-amber-300">
                     <input 
                       type="checkbox" 
@@ -333,7 +332,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
               </div>
 
               {/* Device Type Cascade */}
-              {protocol === "ebp" && isolationTypes.includes("Device") && (
+              {isEbp && isolationTypes.includes("Device") && (
                 <div className="mt-4 pt-4 border-t border-amber-200/50">
                   <label className="block text-sm font-medium text-neutral-700 mb-2">Device Types</label>
                   <div className="flex flex-wrap gap-3">

@@ -18,12 +18,19 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
   const { db } = useDatabase();
   const facility = db.data.facilities.byId[activeFacilityId];
   const units = facility?.units || [];
-  const [selectedUnitId, setSelectedUnitId] = useState(units[0]?.id || '');
+  const [selectedUnitId, setSelectedUnitId] = useState(() => {
+    const unit2 = units.find(u => u.name === 'Unit 2');
+    if (unit2) return unit2.id;
+    return units[0]?.id || '';
+  });
 
   const selectedUnit = units.find(u => u.id === selectedUnitId);
   const unitNumberPrefix = selectedUnit?.name.match(/\d+/)?.[0] || '';
 
   const layout: FloorLayout = useMemo(() => {
+    if (facility.floorLayouts && facility.floorLayouts.length > 0) {
+      return facility.floorLayouts[0];
+    }
     return {
       id: 'default',
       facilityId: activeFacilityId,
@@ -39,34 +46,34 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
         label: r.label.replace('{{num}}', unitNumberPrefix),
       }))
     };
-  }, [activeFacilityId, unitNumberPrefix]);
+  }, [activeFacilityId, unitNumberPrefix, facility.floorLayouts]);
 
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};
     
-    // Find residents in this unit
-    const residentsInUnit = Object.values(store.residents).filter(r => r.currentUnit === selectedUnitId);
-    
     // Check for active IP events for these residents
     const activeInfections = Object.values(store.infections).filter(ip => ip.status === 'active');
     
-    residentsInUnit.forEach(res => {
+    Object.values(store.residents).forEach(res => {
       if (res.currentRoom) {
-        const infection = activeInfections.find(ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn);
-        if (infection) {
-          if (infection.outbreakId) {
-            statuses[res.currentRoom] = 'outbreak';
-          } else if (infection.isolationType) {
-            statuses[res.currentRoom] = 'isolation';
-          } else if (infection.ebp) {
-            statuses[res.currentRoom] = 'ebp';
+        const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom.replace(/^\d/, ''));
+        if (room) {
+          const infection = activeInfections.find(ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn);
+          if (infection) {
+            if (infection.outbreakId) {
+              statuses[room.roomId] = 'outbreak';
+            } else if (infection.isolationType) {
+              statuses[room.roomId] = 'isolation';
+            } else if (infection.ebp) {
+              statuses[room.roomId] = 'ebp';
+            }
           }
         }
       }
     });
     
     return statuses;
-  }, [store.residents, store.infections, selectedUnitId]);
+  }, [store.residents, store.infections, layout.rooms]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
