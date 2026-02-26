@@ -9,6 +9,34 @@ import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
+const parseCsvRow = (row: string): string[] => {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < row.length; i++) {
+    const char = row[i];
+    if (char === '"') {
+      if (inQuotes && row[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values;
+};
+
+const normalizeCsvHeader = (header: string) => header.trim().toLowerCase().replace(/[\s_]+/g, "");
+
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -112,31 +140,60 @@ export const SettingsConsole: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
-      const rows = text.split('\n').slice(1); // Skip header
+      const rows = text.split(/\r?\n/).filter(row => row.trim());
+      if (rows.length < 2) {
+        alert(`No ${type} data rows found.`);
+        return;
+      }
+      const headers = parseCsvRow(rows[0]).map(normalizeCsvHeader);
+      const getCol = (cols: string[], ...keys: string[]) => {
+        for (const key of keys) {
+          const idx = headers.indexOf(normalizeCsvHeader(key));
+          if (idx >= 0) return cols[idx]?.trim() || "";
+        }
+        return "";
+      };
+      let importedCount = 0;
+      let quarantinedCount = 0;
       updateDB(draft => {
-        rows.forEach(row => {
-          const cols = row.split(',');
-          const mrn = cols[0];
+        rows.slice(1).forEach(row => {
+          const cols = parseCsvRow(row);
+          const mrn = getCol(cols, 'mrn');
+          if (!mrn) return;
           if (!draft.data.facilityData[activeFacilityId].residents[mrn]) {
-            console.warn(`Orphaned record found for MRN: ${mrn}. Skipping.`);
+            const now = new Date().toISOString();
+            const qId = `Q:${uuidv4()}`;
+            draft.data.facilityData[activeFacilityId].quarantine[qId] = {
+              tempId: qId,
+              displayName: getCol(cols, 'displayName', 'name') || `MRN ${mrn}`,
+              dob: getCol(cols, 'dob', 'dateOfBirth'),
+              unitSnapshot: getCol(cols, 'currentUnit', 'unit'),
+              roomSnapshot: getCol(cols, 'currentRoom', 'room'),
+              source: 'legacy_import',
+              rawHint: JSON.stringify({ type, row }),
+              createdAt: now,
+              updatedAt: now,
+            };
+            quarantinedCount++;
             return;
           }
           const id = uuidv4();
           const residentRef: { kind: 'mrn'; id: string } = { kind: 'mrn', id: mrn };
           
           if (type === 'ABT') {
-            const newAbt: ABTCourse = { id, residentRef, medication: cols[1], startDate: cols[2], status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+            const newAbt: ABTCourse = { id, residentRef, medication: getCol(cols, 'medication', 'antibiotic'), startDate: getCol(cols, 'startDate', 'start'), status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             draft.data.facilityData[activeFacilityId].abts[id] = newAbt;
           } else if (type === 'IP') {
-            const newIp: IPEvent = { id, residentRef, infectionSite: cols[1], organism: cols[2], status: 'resolved', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+            const newIp: IPEvent = { id, residentRef, infectionSite: getCol(cols, 'infectionSite', 'site'), organism: getCol(cols, 'organism'), status: 'resolved', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             draft.data.facilityData[activeFacilityId].infections[id] = newIp;
           } else if (type === 'VAX') {
-            const newVax: VaxEvent = { id, residentRef, vaccine: cols[1], dateGiven: cols[2], status: 'given', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+            const newVax: VaxEvent = { id, residentRef, vaccine: getCol(cols, 'vaccine'), dateGiven: getCol(cols, 'dateGiven', 'date'), status: 'given', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             draft.data.facilityData[activeFacilityId].vaxEvents[id] = newVax;
           }
+          importedCount++;
         });
       });
-      alert(`${type} data imported successfully.`);
+      alert(`${type} import complete. Imported: ${importedCount}. Sent to Quarantine: ${quarantinedCount}.`);
     };
     reader.readAsText(file);
   };
@@ -344,11 +401,11 @@ export const SettingsConsole: React.FC = () => {
           <h3 className="text-lg leading-6 font-medium text-neutral-900">CSV Data Migration</h3>
         </div>
         <div className="px-4 py-5 sm:p-6 space-y-4">
-          <p className="text-sm text-neutral-600">Import historical data from CSV files. The first column must be 'mrn'.</p>
+          <p className="text-sm text-neutral-600">Import historical data from CSV files. Use the template headers for accurate mapping. Records with MRNs not found in current census will be sent to Quarantine for review/editing.</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <CsvUploader label="ABT History" onFileUpload={(file) => handleCsvImport(file, 'ABT')} templateCsv={`mrn,medication,startDate`}/>
-            <CsvUploader label="IP History" onFileUpload={(file) => handleCsvImport(file, 'IP')} templateCsv={`mrn,infectionSite,organism`} />
-            <CsvUploader label="Vax History" onFileUpload={(file) => handleCsvImport(file, 'VAX')} templateCsv={`mrn,vaccine,dateGiven`} />
+            <CsvUploader label="ABT History" onFileUpload={(file) => handleCsvImport(file, 'ABT')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,medication,startDate\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Ceftriaxone,2026-01-12`}/>
+            <CsvUploader label="IP History" onFileUpload={(file) => handleCsvImport(file, 'IP')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,infectionSite,organism\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Lung,E. coli`} />
+            <CsvUploader label="Vax History" onFileUpload={(file) => handleCsvImport(file, 'VAX')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,vaccine,dateGiven\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Influenza,2025-10-15`} />
           </div>
         </div>
       </div>
