@@ -103,10 +103,10 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
           if (infection) {
             if (infection.outbreakId) {
               statuses[room.roomId] = 'outbreak';
-            } else if (infection.isolationType) {
-              statuses[room.roomId] = 'isolation';
             } else if (infection.ebp) {
               statuses[room.roomId] = 'ebp';
+            } else if (infection.isolationType) {
+              statuses[room.roomId] = 'isolation';
             }
           }
         }

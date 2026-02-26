@@ -93,10 +93,10 @@ export const Dashboard: React.FC = () => {
           if (infection) {
             if (infection.outbreakId) {
               statuses[room.roomId] = 'outbreak';
-            } else if (infection.isolationType) {
-              statuses[room.roomId] = 'isolation';
             } else if (infection.ebp) {
               statuses[room.roomId] = 'ebp';
+            } else if (infection.isolationType) {
+              statuses[room.roomId] = 'isolation';
             }
           }
         }
@@ -133,7 +133,7 @@ export const Dashboard: React.FC = () => {
   // Calculate stats
   const activeResidents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
   const residentCount = activeResidents.length;
-  const activePrecautionsCount = (Object.values(store.infections) as any[]).filter(ip => ip.status === 'active' && ip.isolationType).length;
+  const activePrecautionsCount = (Object.values(store.infections) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
   const outbreakCount = (Object.values(store.outbreaks) as any[]).filter(o => o.status !== 'closed').length;
   const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
