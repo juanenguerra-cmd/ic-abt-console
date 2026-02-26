@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { useFacilityData } from '../../app/providers';
 import { IPEvent, Resident, FloorLayout } from '../../domain/models';
 
@@ -23,31 +23,12 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   onRoomClick,
 }) => {
   const { store } = useFacilityData();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
 
   // Calculate bounding box
   const maxX = Math.max(...layout.rooms.map(r => r.x + r.w), 0);
   const maxY = Math.max(...layout.rooms.map(r => r.y + r.h), 0);
   const canvasWidth = Math.max(maxX + 40, 800);
   const canvasHeight = Math.max(maxY + 40, 400);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        const { width } = entry.contentRect;
-        const scaleX = width / canvasWidth;
-        // Scale down if needed, but don't scale up past 1
-        const newScale = Math.min(scaleX, 1);
-        setScale(newScale);
-      }
-    });
-
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, [canvasWidth]);
 
   const getRoomTooltip = (roomLabel: string) => {
     const residents = (Object.values(store.residents) as Resident[]).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
@@ -67,13 +48,13 @@ export const FloorMap: React.FC<FloorMapProps> = ({
 
   return (
     <div className="w-full flex flex-col">
-      <div ref={containerRef} className="w-full overflow-hidden bg-neutral-100 rounded-xl border border-neutral-200 p-4 flex items-center justify-center min-h-[400px]">
+      <div className="w-full overflow-hidden bg-neutral-100 rounded-xl border border-neutral-200 p-4 flex items-center justify-center min-h-[400px] [container-type:inline-size]">
         <div 
           style={{ 
-            width: `${canvasWidth * scale}px`, 
-            height: `${canvasHeight * scale}px`,
+            width: '100%',
+            maxWidth: `${canvasWidth}px`,
+            aspectRatio: `${canvasWidth} / ${canvasHeight}`,
             position: 'relative',
-            transition: 'width 0.2s, height 0.2s'
           }}
         >
           <div 
@@ -81,7 +62,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
             style={{ 
               width: `${canvasWidth}px`,
               height: `${canvasHeight}px`,
-              transform: `scale(${scale})`,
+              transform: `scale(min(1, calc(100cqw / ${canvasWidth}px)))`,
             }}
           >
             {layout.rooms.map((room) => {

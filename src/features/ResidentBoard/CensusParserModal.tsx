@@ -38,6 +38,18 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
       }
 
       if (trimmed.includes("EMPTY")) {
+        const room = trimmed.split(/\s+/)[0]?.trim();
+        if (room) {
+          parsed.push({
+            room,
+            name: "",
+            mrn: "",
+            dob: "",
+            status: "Empty",
+            payor: "",
+            unit: currentUnit
+          });
+        }
         continue;
       }
 
@@ -213,7 +225,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
           const qId = `Q:${uuidv4()}`;
           facility.quarantine[qId] = {
             tempId: qId as `Q:${string}`,
-            displayName: p.name,
+            displayName: p.name || (p.room ? `Room ${p.room}` : "Unassigned"),
             dob: p.dob,
             unitSnapshot: p.unit,
             roomSnapshot: p.room,
