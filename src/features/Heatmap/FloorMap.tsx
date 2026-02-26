@@ -1,5 +1,6 @@
-import React from "react";
-import { FloorLayout } from "../../domain/models";
+import React from 'react';
+import { useFacilityData } from '../../app/providers';
+import { IPEvent, Resident, FloorLayout } from '../../domain/models';
 
 export type RoomStatus = "normal" | "isolation" | "outbreak" | "ebp";
 
@@ -21,9 +22,22 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   roomStatuses = {},
   onRoomClick,
 }) => {
-  // Calculate bounding box for scaling if needed, 
-  // but for now we'll assume a fixed coordinate system or container.
-  // We'll use a relative container with overflow.
+  const { store } = useFacilityData();
+
+  const getRoomTooltip = (roomNumber: string) => {
+    const resident = (Object.values(store.residents) as Resident[]).find(r => r.currentRoom === roomNumber);
+    if (!resident) return `Room ${roomNumber} (Unoccupied)`;
+
+    const precaution = (Object.values(store.infections) as IPEvent[]).find(ip => 
+      ip.residentRef.kind === 'mrn' && 
+      ip.residentRef.id === resident.mrn && 
+      ip.status === 'active' && 
+      ip.isolationType
+    );
+
+    const precautionText = precaution ? `Precaution: ${precaution.isolationType}` : 'No Precautions';
+    return `${resident.displayName} - ${precautionText}`;
+  };
 
   return (
     <div className="w-full overflow-auto bg-neutral-100 rounded-xl border border-neutral-200 p-8 min-h-[600px]">
@@ -42,7 +56,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
             <div
               key={room.roomId}
               onClick={() => onRoomClick?.(room.roomId)}
-              className={`absolute flex flex-col items-center justify-center border-2 rounded transition-all cursor-pointer shadow-sm ${colorClass}`}
+              className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all cursor-pointer shadow-sm ${colorClass}`}
               style={{
                 left: `${room.x}px`,
                 top: `${room.y}px`,
@@ -67,6 +81,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                   }`}></span>
                 </div>
               )}
+              <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-neutral-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {getRoomTooltip(room.roomId)}
+              </div>
             </div>
           );
         })}

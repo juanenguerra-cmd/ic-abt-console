@@ -11,6 +11,7 @@ import { ResidentProfileModal } from "./ResidentProfileModal";
 import { SettingsModal } from "./SettingsModal";
 import { Floorplan } from "../Floorplan";
 import { ShiftReport } from "./ShiftReport";
+import { QuarantineLinkModal } from "./QuarantineLinkModal";
 import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
 
 export const ResidentBoard: React.FC = () => {
@@ -31,6 +32,7 @@ export const ResidentBoard: React.FC = () => {
   const [showArchivedNotes, setShowArchivedNotes] = useState(false);
 
   const [printingResidentId, setPrintingResidentId] = useState<string | null>(null);
+  const [linkingQuarantineId, setLinkingQuarantineId] = useState<string | null>(null);
 
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [editingAbtId, setEditingAbtId] = useState<string | null>(null);

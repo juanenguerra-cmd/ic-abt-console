@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { QuarantineResident } from "../../domain/models";
-import { UserPlus, Link, AlertTriangle, Check } from "lucide-react";
+import { UserPlus, Link, AlertTriangle, Check, Edit2 } from "lucide-react";
+import { QuarantineEditModal } from "./QuarantineEditModal";
 
 export const QuarantineInbox: React.FC = () => {
   const { store } = useFacilityData();
   const { updateDB } = useDatabase();
   const [selectedQId, setSelectedQId] = useState<string | null>(null);
   const [targetMrn, setTargetMrn] = useState("");
+  const [editingQId, setEditingQId] = useState<string | null>(null);
 
   const quarantineList = (Object.values(store.quarantine) as QuarantineResident[]).filter(q => !q.resolvedToMrn);
 
@@ -99,6 +101,13 @@ export const QuarantineInbox: React.FC = () => {
                   </div>
                   
                   <div className="ml-4 flex-shrink-0 flex items-center gap-3">
+                    <button
+                      onClick={() => setEditingQId(q.tempId)}
+                      className="inline-flex items-center px-3 py-2 border border-neutral-300 shadow-sm text-sm leading-4 font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                    >
+                      <Edit2 className="h-4 w-4 mr-2 text-neutral-400" />
+                      Edit Raw Data
+                    </button>
                     {selectedQId === q.tempId ? (
                       <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
                         <input
@@ -139,6 +148,13 @@ export const QuarantineInbox: React.FC = () => {
           )}
         </ul>
       </div>
+
+      {editingQId && (
+        <QuarantineEditModal
+          quarantineId={editingQId}
+          onClose={() => setEditingQId(null)}
+        />
+      )}
     </div>
   );
 };
