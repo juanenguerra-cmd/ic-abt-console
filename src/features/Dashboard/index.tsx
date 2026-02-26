@@ -21,7 +21,8 @@ export const Dashboard: React.FC = () => {
   const [showOutbreakModal, setShowOutbreakModal] = useState(false);
 
   // Calculate stats
-  const residentCount = Object.keys(store.residents).length;
+  const activeResidents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
+  const residentCount = activeResidents.length;
   const activePrecautionsCount = (Object.values(store.infections) as any[]).filter(ip => ip.status === 'active' && ip.isolationType).length;
   const outbreakCount = (Object.values(store.outbreaks) as any[]).filter(o => o.status !== 'closed').length;
   const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;

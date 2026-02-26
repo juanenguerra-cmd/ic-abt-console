@@ -12,7 +12,7 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const { db } = useDatabase();
   const facility = db.data.facilities.byId[activeFacilityId];
 
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned") as Resident[];
   const residentsByUnit: Record<string, Resident[]> = {};
 
   residents.forEach(r => {

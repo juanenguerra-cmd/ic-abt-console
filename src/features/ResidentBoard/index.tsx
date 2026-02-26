@@ -75,6 +75,11 @@ export const ResidentBoard: React.FC = () => {
   // Filter logic
   const filteredResidents = useMemo(() => {
     return residents.filter(r => {
+      // Exclude unassigned residents since they are not true active census
+      if (!r.currentUnit || r.currentUnit.trim() === "" || r.currentUnit.toLowerCase() === "unassigned") {
+        return false;
+      }
+
       // Global Search
       const matchesSearch = 
         r.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 

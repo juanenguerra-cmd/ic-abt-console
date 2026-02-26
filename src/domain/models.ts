@@ -116,22 +116,26 @@ export interface ResidentNote {
 
 export interface Staff {
   id: string;
+  facilityId: string;
   displayName: string;
-  employeeId?: string;
+  firstName?: string;
+  lastName?: string;
   role?: string;
-  department?: string;
-  createdAt: ISO;
-  updatedAt: ISO;
+  status: "active"|"inactive";
+  hireDate?: string;
+  terminationDate?: string;
 }
 
 export interface StaffVaxEvent {
   id: string;
   staffId: string;
   vaccine: string;
-  status: "given" | "due" | "declined";
+  status: "given"|"due"|"overdue"|"declined"|"scheduled"|"contraindicated";
   dateGiven?: string;
   dueDate?: string;
+  offerDate?: string;
   declineReason?: string;
+  notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
 }
@@ -139,13 +143,12 @@ export interface StaffVaxEvent {
 export interface FitTestEvent {
   id: string;
   staffId: string;
-  fitTestDate: string;
-  respiratorType?: string;
-  model?: string;
-  size?: string;
-  method?: string;
-  result?: string;
-  nextDueDate?: string;
+  date: string;
+  maskType: string;
+  maskSize: string;
+  passed: boolean;
+  nextDueDate: string;
+  notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
 }
