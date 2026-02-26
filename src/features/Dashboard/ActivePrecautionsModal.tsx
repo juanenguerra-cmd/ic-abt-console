@@ -11,7 +11,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
   const [printView, setPrintView] = React.useState(false);
 
-  const activePrecautions = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType);
+  const activePrecautions = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp));
 
   const getResident = (ref: { kind: string, id: string }): Resident | undefined => {
     if (ref.kind === 'mrn') {
@@ -61,7 +61,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                   <tr key={ip.id} className="bg-white border-b hover:bg-neutral-50">
                     <td className="px-6 py-4 font-medium text-neutral-900">{resident?.currentRoom || 'N/A'}</td>
                     <td className="px-6 py-4">{resident?.displayName || 'Unknown'}</td>
-                    <td className="px-6 py-4">{ip.ebp ? 'EBP' : 'Isolation'} - {ip.isolationType}</td>
+                    <td className="px-6 py-4">{ip.ebp ? `EBP${ip.isolationType ? ` - ${ip.isolationType}` : ''}` : `Isolation - ${ip.isolationType}`}</td>
                     <td className="px-6 py-4">{ip.sourceOfInfection || 'N/A'}</td>
                     <td className="px-6 py-4">{calculateDuration(ip.createdAt)}</td>
                   </tr>
