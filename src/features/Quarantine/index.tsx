@@ -10,6 +10,7 @@ export const QuarantineInbox: React.FC = () => {
   const [selectedQId, setSelectedQId] = useState<string | null>(null);
   const [targetMrn, setTargetMrn] = useState("");
   const [editingQId, setEditingQId] = useState<string | null>(null);
+  const [clearSelections, setClearSelections] = useState<Record<string, boolean>>({});
 
   const quarantineList = (Object.values(store.quarantine) as QuarantineResident[]).filter(q => !q.resolvedToMrn);
 
@@ -62,6 +63,26 @@ export const QuarantineInbox: React.FC = () => {
     setTargetMrn("");
   };
 
+  const selectedForClear = quarantineList.filter(q => clearSelections[q.tempId]).map(q => q.tempId);
+
+  const handleClearSelected = () => {
+    if (selectedForClear.length === 0) return;
+    updateDB((draft) => {
+      const facilityId = draft.data.facilities.activeFacilityId;
+      const facilityStore = draft.data.facilityData[facilityId];
+      const now = new Date().toISOString();
+      selectedForClear.forEach((qId) => {
+        const qResident = facilityStore.quarantine[qId];
+        if (!qResident) return;
+        qResident.resolvedToMrn = "__cleared__";
+        qResident.updatedAt = now;
+      });
+    });
+    setSelectedQId(null);
+    setTargetMrn("");
+    setClearSelections({});
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-amber-50 border-l-4 border-amber-400 p-4">
@@ -79,6 +100,18 @@ export const QuarantineInbox: React.FC = () => {
       </div>
 
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        {quarantineList.length > 0 && (
+          <div className="px-6 py-3 border-b border-neutral-200 bg-neutral-50 flex items-center justify-between">
+            <p className="text-xs text-neutral-500">Select records that do not need linking, then clear them from the inbox.</p>
+            <button
+              onClick={handleClearSelected}
+              disabled={selectedForClear.length === 0}
+              className="inline-flex items-center px-3 py-1.5 border border-neutral-300 shadow-sm text-xs font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Clear Selected ({selectedForClear.length})
+            </button>
+          </div>
+        )}
         <ul className="divide-y divide-neutral-200">
           {quarantineList.length === 0 ? (
             <li className="px-6 py-12 text-center text-neutral-500">
@@ -101,6 +134,15 @@ export const QuarantineInbox: React.FC = () => {
                   </div>
                   
                   <div className="ml-4 flex-shrink-0 flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs text-neutral-600">
+                      <input
+                        type="checkbox"
+                        checked={!!clearSelections[q.tempId]}
+                        onChange={(e) => setClearSelections(prev => ({ ...prev, [q.tempId]: e.target.checked }))}
+                        className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      Clear
+                    </label>
                     <button
                       onClick={() => setEditingQId(q.tempId)}
                       className="inline-flex items-center px-3 py-2 border border-neutral-300 shadow-sm text-sm leading-4 font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
