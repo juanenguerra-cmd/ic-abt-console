@@ -73,8 +73,26 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const [precautionStartDate, setPrecautionStartDate] = useState(new Date().toISOString().split('T')[0]);
 
   // Clinical Fields
-  const [infectionCategory, setInfectionCategory] = useState(existingIp?.infectionCategory || "");
-  const [infectionSite, setInfectionSite] = useState(existingIp?.infectionSite || "");
+  const [infectionCategory, setInfectionCategory] = useState(
+    existingIp?.infectionCategory && !INFECTION_CATEGORY_OPTIONS.includes(existingIp.infectionCategory) && existingIp.infectionCategory !== "Other"
+      ? "Other"
+      : (existingIp?.infectionCategory || "")
+  );
+  const [infectionCategoryOther, setInfectionCategoryOther] = useState(
+    existingIp?.infectionCategory && !INFECTION_CATEGORY_OPTIONS.includes(existingIp.infectionCategory)
+      ? existingIp.infectionCategory
+      : ""
+  );
+  const [infectionSite, setInfectionSite] = useState(
+    existingIp?.infectionSite && !INFECTION_SITE_OPTIONS.includes(existingIp.infectionSite) && existingIp.infectionSite !== "Other"
+      ? "Other"
+      : (existingIp?.infectionSite || "")
+  );
+  const [infectionSiteOther, setInfectionSiteOther] = useState(
+    existingIp?.infectionSite && !INFECTION_SITE_OPTIONS.includes(existingIp.infectionSite)
+      ? existingIp.infectionSite
+      : ""
+  );
   const [infectionTags, setInfectionTags] = useState<string[]>([]);
   const [sourceTags, setSourceTags] = useState<string[]>([]);
   
@@ -236,8 +254,8 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         id: ipId,
         residentRef,
         status,
-        infectionCategory: infectionCategory.trim() || undefined,
-        infectionSite: infectionSite.trim() || undefined,
+        infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
+        infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
         sourceOfInfection: sourceTags.join(", ") || undefined,
         isolationType: isolationTypes.join(", ") || undefined,
         ebp: isEbp,
@@ -370,6 +388,15 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   <option value="">Select Category...</option>
                   {INFECTION_CATEGORY_OPTIONS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
+                {infectionCategory === "Other" && (
+                  <input
+                    type="text"
+                    value={infectionCategoryOther}
+                    onChange={e => setInfectionCategoryOther(e.target.value)}
+                    placeholder="Specify category..."
+                    className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                  />
+                )}
               </div>
 
               <div>
@@ -382,6 +409,15 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   <option value="">Select Site...</option>
                   {INFECTION_SITE_OPTIONS.map(site => <option key={site} value={site}>{site}</option>)}
                 </select>
+                {infectionSite === "Other" && (
+                  <input
+                    type="text"
+                    value={infectionSiteOther}
+                    onChange={e => setInfectionSiteOther(e.target.value)}
+                    placeholder="Specify site..."
+                    className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                  />
+                )}
               </div>
 
               <div>
