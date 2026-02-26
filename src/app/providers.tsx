@@ -6,6 +6,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 interface DatabaseContextType {
   db: UnifiedDB;
   updateDB: (updater: (draft: UnifiedDB) => void) => void;
+  setDB: (db: UnifiedDB) => void;
   error: string | null;
 }
 
@@ -56,6 +57,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
       setError(err instanceof Error ? err.message : "Failed to save database");
     }
   }, [db]);
+
+  const setDB = useCallback((newDb: UnifiedDB) => {
+    try {
+      saveDB(newDb);
+      setDb(newDb);
+      setError(null);
+    } catch (err) {
+      console.error("DB_SAVE_FAILURE", err);
+      window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
+      setError(err instanceof Error ? err.message : "Failed to save database");
+    }
+  }, []);
 
   const handleRestore = () => {
     if (restoreFromPrev()) {
@@ -138,7 +151,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   };
 
   return (
-    <DatabaseContext.Provider value={{ db, updateDB, error }}>
+    <DatabaseContext.Provider value={{ db, updateDB, setDB, error }}>
       <FacilityContext.Provider value={{ activeFacilityId, setActiveFacilityId, store }}>
         {children}
       </FacilityContext.Provider>

@@ -11,6 +11,7 @@ import { ResidentChat } from "../features/Notes";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
+import ReportsConsole from '../features/Reports';
 import { 
   LayoutDashboard, 
   Users, 
@@ -33,8 +34,9 @@ const SidebarLink = ({ to, icon: Icon, label, badge }: { to: string, icon: any, 
   return (
     <NavLink 
       to={to}
+      data-testid={`sidebar-link-${label.toLowerCase().replace(/\s+/g, '-')}`}
       className={({ isActive }) => `
-        flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors
+        flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors active:scale-95
         ${isActive 
           ? "bg-neutral-100 text-neutral-900" 
           : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
@@ -58,6 +60,22 @@ const AppShell = () => {
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [showBackupBanner, setShowBackupBanner] = React.useState(false);
+
+  React.useEffect(() => {
+    const lastBackupTimestamp = localStorage.getItem('ltc_last_backup_timestamp');
+    if (lastBackupTimestamp) {
+      const lastBackupDate = new Date(parseInt(lastBackupTimestamp, 10));
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      if (lastBackupDate < sevenDaysAgo) {
+        setShowBackupBanner(true);
+      }
+    } else {
+      // If no backup has ever been made, show the banner
+      setShowBackupBanner(true);
+    }
+  }, []);
 
   const facilities = Object.values(db.data.facilities.byId) as any[];
   const activeFacility = db.data.facilities.byId[activeFacilityId];
@@ -65,11 +83,16 @@ const AppShell = () => {
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col">
+      {showBackupBanner && (
+        <div className="bg-red-600 text-white text-sm text-center py-2 px-4">
+          <strong>Warning:</strong> Your last backup was over 7 days ago. Please go to Settings to create a new backup.
+        </div>
+      )}
       {/* Top Navigation */}
       <header className="bg-white border-b border-neutral-200 h-16 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button 
-            className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md"
+            className="lg:hidden p-2 -ml-2 text-neutral-500 hover:bg-neutral-100 rounded-md active:scale-95"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -85,7 +108,7 @@ const AppShell = () => {
 
         <div className="flex items-center gap-4">
           <div className="relative group">
-            <button className="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 px-3 py-1.5 rounded-md hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all">
+            <button data-testid="facility-switcher-button" className="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 px-3 py-1.5 rounded-md hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all active:scale-95">
               <span>{activeFacility?.name || "Select Facility"}</span>
               <Building2 className="w-4 h-4 text-neutral-400" />
             </button>
@@ -95,6 +118,7 @@ const AppShell = () => {
               {facilities.map(f => (
                 <button
                   key={f.id}
+                  data-testid={`facility-option-${f.id}`}
                   onClick={() => setActiveFacilityId(f.id)}
                   className={`w-full text-left px-4 py-2 text-sm ${
                     activeFacilityId === f.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-neutral-700 hover:bg-neutral-50"
@@ -124,7 +148,7 @@ const AppShell = () => {
             <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
             <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
             <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
-            <SidebarLink to="/reports" icon={FileText} label="Survey Packets" />
+            <SidebarLink to="/reports" icon={FileText} label="Reports" />
             <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />
             <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />
             
@@ -143,7 +167,7 @@ const AppShell = () => {
               <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
               <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
               <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
-              <Route path="/reports" element={<PageTransition><PacketBuilder /></PageTransition>} />
+              <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
               <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
               <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
               <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
