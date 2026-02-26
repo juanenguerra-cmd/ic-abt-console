@@ -7,7 +7,6 @@ import { ActivePrecautionsModal } from './ActivePrecautionsModal';
 import { AdmissionScreeningModal } from './AdmissionScreeningModal';
 import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
-import { floorplanLayout } from '../Floorplan/floorplanLayout';
 import { FloorLayout } from '../../domain/models';
 
 const CELL_WIDTH = 80;
@@ -19,21 +18,68 @@ export const Dashboard: React.FC = () => {
   const { activeFacilityId, store } = useFacilityData();
   const facility = db.data.facilities.byId[activeFacilityId];
   
-  const layout: FloorLayout = facility.floorLayouts?.[0] || {
-    id: 'default',
-    facilityId: activeFacilityId,
-    name: 'Default Layout',
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    rooms: floorplanLayout.map(r => ({
-      roomId: r.id,
-      x: r.x * (CELL_WIDTH + GAP),
-      y: r.y * (CELL_HEIGHT + GAP),
-      w: r.w * CELL_WIDTH + (r.w - 1) * GAP,
-      h: r.h * CELL_HEIGHT + (r.h - 1) * GAP,
-      label: r.label.replace('{{num}}', ''),
-    }))
-  };
+  const layout: FloorLayout = useMemo(() => {
+    if (facility.floorLayouts && facility.floorLayouts.length > 0) {
+      return facility.floorLayouts[0];
+    }
+
+    let roomLabels: string[] = [];
+    try {
+      const storedMapping = localStorage.getItem('ltc_facility_rooms_config');
+      if (storedMapping) {
+        const mapping = JSON.parse(storedMapping);
+        Object.values(mapping).forEach((roomsStr: any) => {
+          const rooms = roomsStr.split(',').map((s: string) => s.trim()).filter(Boolean);
+          roomLabels.push(...rooms);
+        });
+        roomLabels = Array.from(new Set(roomLabels)).sort();
+      }
+    } catch (e) {}
+
+    if (roomLabels.length === 0) {
+      // Fallback to all residents' rooms
+      const uniqueRooms = new Set<string>();
+      Object.values(store.residents).forEach(r => {
+        if (r.currentRoom) uniqueRooms.add(r.currentRoom);
+      });
+      roomLabels = Array.from(uniqueRooms).sort();
+    }
+
+    if (roomLabels.length === 0) {
+      return {
+        id: 'empty',
+        facilityId: activeFacilityId,
+        name: 'Empty Layout',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        rooms: []
+      };
+    }
+
+    // Generate generic grid layout
+    const cols = Math.max(Math.ceil(Math.sqrt(roomLabels.length)), 4);
+    const rooms = roomLabels.map((label, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      return {
+        roomId: `room-${label}`,
+        x: col * (CELL_WIDTH + GAP),
+        y: row * (CELL_HEIGHT + GAP),
+        w: CELL_WIDTH,
+        h: CELL_HEIGHT,
+        label: label,
+      };
+    });
+
+    return {
+      id: 'generic',
+      facilityId: activeFacilityId,
+      name: 'Generic Layout',
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      rooms: rooms
+    };
+  }, [activeFacilityId, facility.floorLayouts, store.residents]);
 
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};

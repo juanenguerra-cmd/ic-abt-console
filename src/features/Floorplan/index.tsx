@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { floorplanLayout } from './floorplanLayout';
 import { ArrowLeft } from 'lucide-react';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { FloorLayout } from '../../domain/models';
@@ -31,22 +30,64 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
     if (facility.floorLayouts && facility.floorLayouts.length > 0) {
       return facility.floorLayouts[0];
     }
+
+    let roomLabels: string[] = [];
+    try {
+      const storedMapping = localStorage.getItem('ltc_facility_rooms_config');
+      if (storedMapping) {
+        const mapping = JSON.parse(storedMapping);
+        if (mapping[selectedUnitId]) {
+          roomLabels = mapping[selectedUnitId].split(',').map((s: string) => s.trim()).filter(Boolean);
+          roomLabels = Array.from(new Set(roomLabels)).sort();
+        }
+      }
+    } catch (e) {}
+
+    if (roomLabels.length === 0) {
+      // Fallback to residents' rooms in this unit
+      const residentsInUnit = Object.values(store.residents).filter(r => r.currentUnit === selectedUnitId);
+      const uniqueRooms = new Set<string>();
+      residentsInUnit.forEach(r => {
+        if (r.currentRoom) uniqueRooms.add(r.currentRoom);
+      });
+      roomLabels = Array.from(uniqueRooms).sort();
+    }
+
+    if (roomLabels.length === 0) {
+      return {
+        id: 'empty',
+        facilityId: activeFacilityId,
+        name: 'Empty Layout',
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        rooms: []
+      };
+    }
+
+    // Generate generic grid layout
+    const cols = Math.max(Math.ceil(Math.sqrt(roomLabels.length)), 4);
+    const rooms = roomLabels.map((label, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      return {
+        roomId: `room-${label}`,
+        x: col * (CELL_WIDTH + GAP),
+        y: row * (CELL_HEIGHT + GAP),
+        w: CELL_WIDTH,
+        h: CELL_HEIGHT,
+        label: label,
+      };
+    });
+
     return {
-      id: 'default',
+      id: 'generic',
       facilityId: activeFacilityId,
-      name: 'Default Layout',
+      name: 'Generic Layout',
       version: 1,
       updatedAt: new Date().toISOString(),
-      rooms: floorplanLayout.map(r => ({
-        roomId: r.id,
-        x: r.x * (CELL_WIDTH + GAP),
-        y: r.y * (CELL_HEIGHT + GAP),
-        w: r.w * CELL_WIDTH + (r.w - 1) * GAP,
-        h: r.h * CELL_HEIGHT + (r.h - 1) * GAP,
-        label: r.label.replace('{{num}}', unitNumberPrefix),
-      }))
+      rooms: rooms
     };
-  }, [activeFacilityId, unitNumberPrefix, facility.floorLayouts]);
+  }, [activeFacilityId, unitNumberPrefix, facility.floorLayouts, selectedUnitId, store.residents]);
 
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};
