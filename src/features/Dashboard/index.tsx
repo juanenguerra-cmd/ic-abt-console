@@ -9,9 +9,9 @@ import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
 import { FloorLayout } from '../../domain/models';
 
-const CELL_WIDTH = 80;
-const CELL_HEIGHT = 36;
-const GAP = 8;
+const CELL_WIDTH = 100;
+const CELL_HEIGHT = 52;
+const GAP = 16;
 
 export const Dashboard: React.FC = () => {
   const { db } = useDatabase();

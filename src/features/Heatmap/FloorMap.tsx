@@ -48,22 +48,15 @@ export const FloorMap: React.FC<FloorMapProps> = ({
 
   return (
     <div className="w-full flex flex-col">
-      <div className="w-full overflow-hidden bg-neutral-100 rounded-xl border border-neutral-200 p-4 flex items-center justify-center min-h-[400px]">
+      <div className="w-full overflow-auto bg-neutral-100 rounded-xl border border-neutral-200 p-4 min-h-[400px]">
         <div 
+          className="relative bg-white shadow-inner rounded-lg border border-neutral-200"
           style={{ 
-            width: '100%',
-            maxWidth: `${canvasWidth}px`,
-            aspectRatio: `${canvasWidth} / ${canvasHeight}`,
-            position: 'relative',
+            width: `${canvasWidth}px`,
+            height: `${canvasHeight}px`,
+            minWidth: `${canvasWidth}px`,
           }}
         >
-          <div 
-            className="absolute top-0 left-0 bg-white shadow-inner rounded-lg border border-neutral-200 origin-top-left transition-transform duration-200"
-            style={{ 
-              width: '100%',
-              height: '100%',
-            }}
-          >
             {layout.rooms.map((room) => {
           const status = roomStatuses[room.roomId] || "normal";
           const colorClass = STATUS_COLORS[status];
@@ -74,10 +67,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
               onClick={() => onRoomClick?.(room.roomId)}
               className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all cursor-pointer shadow-sm ${colorClass}`}
               style={{
-                left: `${((room.x + 20) / canvasWidth) * 100}%`,
-                top: `${((room.y + 20) / canvasHeight) * 100}%`,
-                width: `${(room.w / canvasWidth) * 100}%`,
-                height: `${(room.h / canvasHeight) * 100}%`,
+                left: `${room.x + 20}px`,
+                top: `${room.y + 20}px`,
+                width: `${room.w}px`,
+                height: `${room.h}px`,
               }}
             >
               <span className="text-[10px] font-bold uppercase tracking-tighter opacity-60">
@@ -116,7 +109,6 @@ export const FloorMap: React.FC<FloorMapProps> = ({
             </div>
           );
         })}
-          </div>
         </div>
       </div>
       
