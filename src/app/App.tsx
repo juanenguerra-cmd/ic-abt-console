@@ -110,7 +110,7 @@ const AppShell = () => {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-neutral-900 hidden sm:inline-block">Infection Control & Antibiotic Stewardship Console</span>
+            <span className="font-bold text-lg text-emerald-900 hidden sm:inline-block">Infection Control & Antibiotic Stewardship Console</span>
           </div>
         </div>
 
@@ -169,26 +169,28 @@ const AppShell = () => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto relative">
-          <footer className="text-center py-4 text-xs text-neutral-500 border-t">
+        <main className="flex-1 overflow-auto relative flex flex-col">
+          <div className="flex-1">
+            <AnimatePresence mode="wait">
+              <Routes>
+                <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
+                <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
+                
+                <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
+                <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
+                <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
+                <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
+                <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
+                <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
+                <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </AnimatePresence>
+          </div>
+          <footer className="text-center py-4 text-xs text-neutral-500 border-t mt-auto shrink-0">
             Developed and built by Juan Enguerra. © 2026 All Rights Reserved.
           </footer>
-          <AnimatePresence mode="wait">
-            <Routes>
-              <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
-              <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
-              <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
-              
-              <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
-              <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
-              <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
-              <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
-              <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
-              <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
-              <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </AnimatePresence>
         </main>
       </div>
       

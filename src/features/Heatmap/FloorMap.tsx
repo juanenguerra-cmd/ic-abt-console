@@ -39,13 +39,19 @@ export const FloorMap: React.FC<FloorMapProps> = ({
     return `${resident.displayName} - ${precautionText}`;
   };
 
+  // Calculate bounding box
+  const maxX = Math.max(...layout.rooms.map(r => r.x + r.w), 0);
+  const maxY = Math.max(...layout.rooms.map(r => r.y + r.h), 0);
+  const canvasWidth = Math.max(maxX + 40, 800);
+  const canvasHeight = Math.max(maxY + 40, 400);
+
   return (
-    <div className="w-full overflow-auto bg-neutral-100 rounded-xl border border-neutral-200 p-8 min-h-[600px]">
+    <div className="w-full overflow-auto bg-neutral-100 rounded-xl border border-neutral-200 p-8 min-h-[400px]">
       <div 
         className="relative mx-auto bg-white shadow-inner rounded-lg border border-neutral-200"
         style={{ 
-          width: "1000px", // Fixed virtual width for the map canvas
-          height: "800px", // Fixed virtual height for the map canvas
+          width: `${canvasWidth}px`,
+          height: `${canvasHeight}px`,
         }}
       >
         {layout.rooms.map((room) => {
@@ -58,8 +64,8 @@ export const FloorMap: React.FC<FloorMapProps> = ({
               onClick={() => onRoomClick?.(room.roomId)}
               className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all cursor-pointer shadow-sm ${colorClass}`}
               style={{
-                left: `${room.x}px`,
-                top: `${room.y}px`,
+                left: `${room.x + 20}px`,
+                top: `${room.y + 20}px`,
                 width: `${room.w}px`,
                 height: `${room.h}px`,
               }}

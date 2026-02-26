@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { floorplanLayout } from './floorplanLayout';
-import { ArrowLeft, User } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
+import { FloorLayout } from '../../domain/models';
 
 interface Props {
   onBack: () => void;
@@ -18,21 +20,53 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
   const units = facility?.units || [];
   const [selectedUnitId, setSelectedUnitId] = useState(units[0]?.id || '');
 
-  const residentsByRoom = useMemo(() => {
-    const map: Record<string, any[]> = {};
-    Object.values(store.residents).forEach(res => {
-      if (res.currentUnit === selectedUnitId && res.currentRoom) {
-        if (!map[res.currentRoom]) {
-          map[res.currentRoom] = [];
-        }
-        map[res.currentRoom].push(res);
-      }
-    });
-    return map;
-  }, [store.residents, selectedUnitId]);
-
   const selectedUnit = units.find(u => u.id === selectedUnitId);
   const unitNumberPrefix = selectedUnit?.name.match(/\d+/)?.[0] || '';
+
+  const layout: FloorLayout = useMemo(() => {
+    return {
+      id: 'default',
+      facilityId: activeFacilityId,
+      name: 'Default Layout',
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      rooms: floorplanLayout.map(r => ({
+        roomId: r.id,
+        x: r.x * (CELL_WIDTH + GAP),
+        y: r.y * (CELL_HEIGHT + GAP),
+        w: r.w * CELL_WIDTH + (r.w - 1) * GAP,
+        h: r.h * CELL_HEIGHT + (r.h - 1) * GAP,
+        label: r.label.replace('{{num}}', unitNumberPrefix),
+      }))
+    };
+  }, [activeFacilityId, unitNumberPrefix]);
+
+  const roomStatuses = useMemo(() => {
+    const statuses: Record<string, RoomStatus> = {};
+    
+    // Find residents in this unit
+    const residentsInUnit = Object.values(store.residents).filter(r => r.currentUnit === selectedUnitId);
+    
+    // Check for active IP events for these residents
+    const activeInfections = Object.values(store.infections).filter(ip => ip.status === 'active');
+    
+    residentsInUnit.forEach(res => {
+      if (res.currentRoom) {
+        const infection = activeInfections.find(ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn);
+        if (infection) {
+          if (infection.outbreakId) {
+            statuses[res.currentRoom] = 'outbreak';
+          } else if (infection.isolationType) {
+            statuses[res.currentRoom] = 'isolation';
+          } else if (infection.ebp) {
+            statuses[res.currentRoom] = 'ebp';
+          }
+        }
+      }
+    });
+    
+    return statuses;
+  }, [store.residents, store.infections, selectedUnitId]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
@@ -59,36 +93,11 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
       </div>
 
       <div className="flex-1 overflow-auto p-8">
-        <div className="relative bg-white p-4 rounded-xl border border-neutral-200 shadow-sm">
-          {floorplanLayout.map(room => {
-            const roomLabel = room.label.replace('{{num}}', unitNumberPrefix);
-            const occupants = residentsByRoom[roomLabel] || [];
-            const isOccupied = occupants.length > 0;
-
-            // This is a placeholder for more complex status logic (e.g., isolation)
-            const isSpecialStatus = roomLabel.includes('279-A') || roomLabel.includes('281-A');
-
-            return (
-              <div
-                key={room.id}
-                className={`absolute flex flex-col items-center justify-center rounded border-2 text-xs font-bold transition-colors ${isSpecialStatus ? 'bg-red-100 border-red-500 text-red-800' : isOccupied ? 'bg-blue-100 border-blue-500 text-blue-800' : 'bg-neutral-100 border-neutral-300 text-neutral-500'}`}
-                style={{
-                  left: room.x * (CELL_WIDTH + GAP),
-                  top: room.y * (CELL_HEIGHT + GAP),
-                  width: room.w * CELL_WIDTH + (room.w - 1) * GAP,
-                  height: room.h * CELL_HEIGHT + (room.h - 1) * GAP,
-                }}
-              >
-                <span>{roomLabel}</span>
-                {isOccupied && (
-                  <div className="flex items-center gap-1 mt-1" title={occupants.map(o => o.displayName).join(', ')}>
-                    <User className="w-3 h-3" />
-                    <span className="text-[10px]">{occupants.length}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm">
+          <FloorMap 
+            layout={layout} 
+            roomStatuses={roomStatuses}
+          />
         </div>
       </div>
     </div>

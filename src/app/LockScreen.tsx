@@ -9,7 +9,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   return (
     <div className="fixed inset-0 bg-neutral-900 flex flex-col items-center justify-center text-white z-50">
       <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight">Infection Control & Antibiotic Stewardship Console</h1>
+        <h1 className="text-4xl font-bold tracking-tight text-emerald-500">Infection Control & Antibiotic Stewardship Console</h1>
         <p className="text-xl text-neutral-300">Juan Enguerra RN</p>
       </div>
       <div className="absolute bottom-10">

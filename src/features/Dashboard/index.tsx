@@ -1,18 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { Users, AlertCircle, FileText, Inbox, Building2 } from 'lucide-react';
-import { FloorMap } from '../Heatmap/FloorMap';
+import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
 import { ActivePrecautionsModal } from './ActivePrecautionsModal';
 import { AdmissionScreeningModal } from './AdmissionScreeningModal';
 import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
+import { floorplanLayout } from '../Floorplan/floorplanLayout';
+import { FloorLayout } from '../../domain/models';
+
+const CELL_WIDTH = 80;
+const CELL_HEIGHT = 36;
+const GAP = 8;
 
 export const Dashboard: React.FC = () => {
   const { db } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
   const facility = db.data.facilities.byId[activeFacilityId];
-  const layout = facility.floorLayouts?.[0];
+  
+  const layout: FloorLayout = facility.floorLayouts?.[0] || {
+    id: 'default',
+    facilityId: activeFacilityId,
+    name: 'Default Layout',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    rooms: floorplanLayout.map(r => ({
+      roomId: r.id,
+      x: r.x * (CELL_WIDTH + GAP),
+      y: r.y * (CELL_HEIGHT + GAP),
+      w: r.w * CELL_WIDTH + (r.w - 1) * GAP,
+      h: r.h * CELL_HEIGHT + (r.h - 1) * GAP,
+      label: r.label.replace('{{num}}', ''),
+    }))
+  };
 
   const [showCensusModal, setShowCensusModal] = useState(false);
   const [showPrecautionsModal, setShowPrecautionsModal] = useState(false);
@@ -112,21 +133,13 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {layout ? (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
-            <h2 className="text-lg font-bold text-neutral-900 mb-4">Live Floor Map</h2>
-            <FloorMap 
-              layout={layout} 
-              roomStatuses={{}} // TODO: Wire up real statuses
-            />
-          </div>
-        ) : (
-          <div className="bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-xl p-12 text-center">
-            <Building2 className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-            <h3 className="text-sm font-medium text-neutral-900">No Floor Layout Configured</h3>
-            <p className="text-sm text-neutral-500 mt-1">Upload a floor layout in Settings to see the live map.</p>
-          </div>
-        )}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
+          <h2 className="text-lg font-bold text-neutral-900 mb-4">Live Floor Map</h2>
+          <FloorMap 
+            layout={layout} 
+            roomStatuses={{}} // TODO: Wire up real statuses
+          />
+        </div>
       </div>
       {showCensusModal && <CensusModal onClose={() => setShowCensusModal(false)} />}
       {showPrecautionsModal && <ActivePrecautionsModal onClose={() => setShowPrecautionsModal(false)} />}
