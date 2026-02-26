@@ -11,7 +11,10 @@ import { ResidentChat } from "../features/Notes";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
+import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
+
+import { LockScreen } from './LockScreen';
 import { 
   LayoutDashboard, 
   Users, 
@@ -61,6 +64,7 @@ const AppShell = () => {
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
+  const [isLocked, setIsLocked] = React.useState(true);
 
   React.useEffect(() => {
     const lastBackupTimestamp = localStorage.getItem('ltc_last_backup_timestamp');
@@ -80,6 +84,10 @@ const AppShell = () => {
   const facilities = Object.values(db.data.facilities.byId) as any[];
   const activeFacility = db.data.facilities.byId[activeFacilityId];
   const quarantineCount = Object.keys(store.quarantine).length;
+
+    if (isLocked) {
+    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col">
@@ -102,7 +110,7 @@ const AppShell = () => {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-neutral-900 hidden sm:inline-block">ICN Console</span>
+            <span className="font-bold text-lg text-neutral-900 hidden sm:inline-block">Infection Control & Antibiotic Stewardship Console</span>
           </div>
         </div>
 
@@ -144,7 +152,9 @@ const AppShell = () => {
         `}>
           <nav className="p-4 space-y-1">
             <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
-            <SidebarLink to="/residents" icon={Users} label="Resident Board" />
+            <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
+            <SidebarLink to="/staff" icon={Users} label="Staff" />
+            
             <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
             <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
             <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
@@ -160,10 +170,15 @@ const AppShell = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto relative">
+          <footer className="text-center py-4 text-xs text-neutral-500 border-t">
+            Developed and built by Juan Enguerra. © 2026 All Rights Reserved.
+          </footer>
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
-              <Route path="/residents" element={<PageTransition><ResidentBoard /></PageTransition>} />
+              <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
+              <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
+              
               <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
               <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
               <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />

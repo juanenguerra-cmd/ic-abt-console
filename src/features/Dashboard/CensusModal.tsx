@@ -43,7 +43,14 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
           <div className="space-y-4">
             {Object.entries(residentsByUnit).map(([unit, residentsInUnit]) => (
               <div key={unit}>
-                <h3 className="font-bold text-lg text-neutral-800 mb-2 pb-1 border-b border-neutral-200">{unit} ({residentsInUnit.length})</h3>
+                <div className="flex justify-between items-baseline">
+                  <h3 className="font-bold text-lg text-neutral-800 mb-2 pb-1 border-b border-neutral-200">{unit} ({residentsInUnit.length})</h3>
+                  {facility.units.find(u => u.name === unit)?.bedCapacity &&
+                    <p className="text-xs text-neutral-500">
+                      ({((residentsInUnit.length / facility.units.find(u => u.name === unit)!.bedCapacity!) * 100).toFixed(1)}% Occupancy)
+                    </p>
+                  }
+                </div>
                 <ul className="divide-y divide-neutral-100">
                   {residentsInUnit.map(r => (
                     <li key={r.mrn} className="py-1.5 flex justify-between text-sm">

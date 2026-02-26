@@ -9,6 +9,7 @@ interface Props {
 
 export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
+  const [printView, setPrintView] = React.useState(false);
 
   const activePrecautions = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType);
 
@@ -33,16 +34,16 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
           <h2 className="text-xl font-bold text-neutral-900">Active Precautions</h2>
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
+            <button onClick={() => setPrintView(!printView)} className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
               <Printer className="w-4 h-4" />
-              Print by Unit
+              {printView ? 'Exit Print View' : 'Print by Unit'}
             </button>
             <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
               <X className="w-6 h-6" />
             </button>
           </div>
         </div>
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className={`p-6 overflow-y-auto flex-1 ${printView ? 'printable-area' : ''}`}>
           <table className="w-full text-sm text-left text-neutral-500">
             <thead className="text-xs text-neutral-700 uppercase bg-neutral-50">
               <tr>
@@ -60,7 +61,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                   <tr key={ip.id} className="bg-white border-b hover:bg-neutral-50">
                     <td className="px-6 py-4 font-medium text-neutral-900">{resident?.currentRoom || 'N/A'}</td>
                     <td className="px-6 py-4">{resident?.displayName || 'Unknown'}</td>
-                    <td className="px-6 py-4">{ip.isolationType}</td>
+                    <td className="px-6 py-4">{ip.ebp ? 'EBP' : 'Isolation'} - {ip.isolationType}</td>
                     <td className="px-6 py-4">{ip.sourceOfInfection || 'N/A'}</td>
                     <td className="px-6 py-4">{calculateDuration(ip.createdAt)}</td>
                   </tr>

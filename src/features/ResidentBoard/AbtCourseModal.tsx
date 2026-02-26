@@ -169,7 +169,19 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Drug Class</label>
-                <input type="text" value={medicationClass} onChange={e => setMedicationClass(e.target.value)} placeholder="e.g., Cephalosporin" className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500" />
+                <select value={medicationClass} onChange={e => setMedicationClass(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500">
+                  <option value="">Select...</option>
+                  <option>Penicillins</option>
+                  <option>Cephalosporins</option>
+                  <option>Carbapenems</option>
+                  <option>Macrolides</option>
+                  <option>Tetracyclines</option>
+                  <option>Fluoroquinolones</option>
+                  <option>Sulfonamides</option>
+                  <option>Glycopeptides</option>
+                  <option>Aminoglycosides</option>
+                  <option>Other</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Start Date</label>

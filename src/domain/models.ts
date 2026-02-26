@@ -276,6 +276,7 @@ export interface FloorLayout {
 export interface Unit {
   id: string;
   name: string;
+  bedCapacity?: number;
   roomFormat?: string;
 }
 

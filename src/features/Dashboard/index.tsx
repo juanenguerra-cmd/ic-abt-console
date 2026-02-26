@@ -6,6 +6,7 @@ import { CensusModal } from './CensusModal';
 import { ActivePrecautionsModal } from './ActivePrecautionsModal';
 import { AdmissionScreeningModal } from './AdmissionScreeningModal';
 import { ActiveAbtModal } from './ActiveAbtModal';
+import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
 
 export const Dashboard: React.FC = () => {
   const { db } = useDatabase();
@@ -17,12 +18,28 @@ export const Dashboard: React.FC = () => {
   const [showPrecautionsModal, setShowPrecautionsModal] = useState(false);
   const [showScreeningModal, setShowScreeningModal] = useState(false);
   const [showAbtModal, setShowAbtModal] = useState(false);
+  const [showOutbreakModal, setShowOutbreakModal] = useState(false);
 
   // Calculate stats
   const residentCount = Object.keys(store.residents).length;
+  const activePrecautionsCount = (Object.values(store.infections) as any[]).filter(ip => ip.status === 'active' && ip.isolationType).length;
   const outbreakCount = (Object.values(store.outbreaks) as any[]).filter(o => o.status !== 'closed').length;
   const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
+
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+  const recentAdmissions = Object.values(store.residents).filter(r => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
+
+  const residentsNeedingScreeningCount = recentAdmissions.filter(r => {
+    const hasScreeningNote = Object.values(store.notes).some(n => 
+      n.residentRef.kind === 'mrn' && 
+      n.residentRef.id === r.mrn && 
+      n.title?.includes('Admission Screening')
+    );
+    return !hasScreeningNote;
+  }).length;
   
   const capacityRate = facility.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
 
@@ -52,10 +69,21 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-neutral-500">Active Precautions</p>
-                <p className="text-2xl font-bold text-neutral-900">{outbreakCount}</p>
+                <p className="text-2xl font-bold text-neutral-900">{activePrecautionsCount}</p>
               </div>
               <div className="p-2 bg-red-50 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
+          </div>
+          <div onClick={() => setShowOutbreakModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Active Outbreaks</p>
+                <p className="text-2xl font-bold text-neutral-900">{outbreakCount}</p>
+              </div>
+              <div className="p-2 bg-orange-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-orange-600" />
               </div>
             </div>
           </div>
@@ -63,7 +91,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-neutral-500">Admission Screening</p>
-                <p className="text-2xl font-bold text-neutral-900">{abtCount}</p>
+                <p className="text-2xl font-bold text-neutral-900">{residentsNeedingScreeningCount}</p>
               </div>
               <div className="p-2 bg-emerald-50 rounded-lg">
                 <FileText className="w-5 h-5 text-emerald-600" />
@@ -74,7 +102,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-neutral-500">Active ABTs</p>
-                <p className="text-2xl font-bold text-neutral-900">{qCount}</p>
+                <p className="text-2xl font-bold text-neutral-900">{abtCount}</p>
               </div>
               <div className="p-2 bg-amber-50 rounded-lg">
                 <Inbox className="w-5 h-5 text-amber-600" />
@@ -103,6 +131,7 @@ export const Dashboard: React.FC = () => {
       {showPrecautionsModal && <ActivePrecautionsModal onClose={() => setShowPrecautionsModal(false)} />}
       {showScreeningModal && <AdmissionScreeningModal onClose={() => setShowScreeningModal(false)} />}
       {showAbtModal && <ActiveAbtModal onClose={() => setShowAbtModal(false)} />}
+      {showOutbreakModal && <OutbreakDrilldownModal onClose={() => setShowOutbreakModal(false)} />}
     </>
   );
 };

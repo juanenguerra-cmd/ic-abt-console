@@ -197,6 +197,8 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 <InfoItem label="Status" value={resident.status} />
                 <InfoItem label="Admission Date" value={resident.admissionDate ? new Date(resident.admissionDate).toLocaleDateString() : "N/A"} />
                 <InfoItem label="Length of Stay" value={resident.admissionDate ? `${Math.floor((new Date().getTime() - new Date(resident.admissionDate).getTime()) / (1000 * 3600 * 24))} days` : "N/A"} />
+                <InfoItem label="Primary Diagnosis" value={resident.primaryDiagnosis || "None recorded"} />
+                <InfoItem label="Attending MD" value={resident.attendingMD || "None recorded"} />
               </div>
             )}
           </section>
@@ -235,10 +237,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                     <p className="text-sm text-neutral-900 italic">No known allergies.</p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <InfoItem label="Primary Diagnosis" value={resident.primaryDiagnosis || "None recorded"} />
-                  <InfoItem label="Attending MD" value={resident.attendingMD || "None recorded"} />
-                </div>
+                
               </div>
             )}
           </section>

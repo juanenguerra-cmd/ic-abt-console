@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { IPEvent } from "../../domain/models";
+import { IPEvent, Outbreak } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 
 interface Props {
@@ -40,6 +40,7 @@ const INFECTION_CATEGORY_OPTIONS = [
   "Other"
 ];
 
+const INFECTION_SITE_OPTIONS = ["Urinary Tract", "Respiratory Tract", "Skin", "Soft Tissue", "Bloodstream", "Surgical Site", "GI Tract", "Eye", "Ear", "Other"];
 const SOURCE_OPTIONS = ["Urinary", "Respiratory", "Skin/Soft Tissue", "GI", "Bloodstream", "Wound site", "Other"];
 const DEVICE_OPTIONS = ["Urinary Catheter", "Central Line", "Feeding Tube", "Other"];
 
@@ -57,6 +58,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const { activeFacilityId, store } = useFacilityData();
   
   const resident = residentId.startsWith("Q:") ? store.quarantine[residentId] : store.residents[residentId];
+  const activeOutbreaks = (Object.values(store.outbreaks) as Outbreak[]).filter(o => o.status !== 'closed');
 
   // Core Identity & Status
   const [status, setStatus] = useState<IPEvent["status"]>(existingIp?.status || "active");
@@ -84,6 +86,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
 
   // Notes
   const [notes, setNotes] = useState("");
+  const [outbreakId, setOutbreakId] = useState(existingIp?.outbreakId || "");
 
   // Restore State on Mount
   useEffect(() => {
@@ -91,6 +94,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       if (existingIp.isolationType) setIsolationTypes(existingIp.isolationType.split(",").map(s => s.trim()));
       if (existingIp.organism) setInfectionTags(existingIp.organism.split(",").map(s => s.trim()));
       if (existingIp.sourceOfInfection) setSourceTags(existingIp.sourceOfInfection.split(",").map(s => s.trim()));
+      if (existingIp.outbreakId) setOutbreakId(existingIp.outbreakId);
       
       if (existingIp.ebp) setProtocol("ebp");
       else if (existingIp.isolationType) setProtocol("isolation");
@@ -241,6 +245,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         organism: infectionTags.join(", ") || undefined,
         specimenCollectedDate: specimenCollectedDate || undefined,
         labResultDate: labResultDate || undefined,
+        outbreakId: outbreakId || undefined,
         locationSnapshot,
         notes: finalNotes,
         createdAt: existingIp?.createdAt || now,
@@ -355,7 +360,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
               <AlertCircle className="w-4 h-4 text-neutral-500" />
               Infection Details
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Infection Category</label>
                 <select 
@@ -365,6 +370,18 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                 >
                   <option value="">Select Category...</option>
                   {INFECTION_CATEGORY_OPTIONS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Infection Site</label>
+                <select
+                  value={infectionSite}
+                  onChange={e => setInfectionSite(e.target.value)}
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                >
+                  <option value="">Select Site...</option>
+                  {INFECTION_SITE_OPTIONS.map(site => <option key={site} value={site}>{site}</option>)}
                 </select>
               </div>
 
@@ -400,7 +417,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                 </div>
               </div>
 
-              <div className="md:col-span-2">
+              <div className="md:col-span-3">
                 <label className="block text-sm font-medium text-neutral-700 mb-2">Source of Infection</label>
                 <div className="flex flex-wrap gap-3">
                   {SOURCE_OPTIONS.map(source => (
@@ -471,6 +488,29 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                 />
               </div>
+            </div>
+          </section>
+
+          {/* Linkages */}
+          <section>
+            <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
+              <AlertCircle className="w-4 h-4 text-neutral-500" />
+              Linkages
+            </h3>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">Link to Active Outbreak</label>
+              <select
+                value={outbreakId}
+                onChange={e => setOutbreakId(e.target.value)}
+                className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+              >
+                <option value="">None</option>
+                {activeOutbreaks.map(o => (
+                    <option key={o.id} value={o.id}>
+                        {o.title} ({o.pathogen || 'Unknown'}) - Started {new Date(o.startDate).toLocaleDateString()}
+                    </option>
+                ))}
+              </select>
             </div>
           </section>
 

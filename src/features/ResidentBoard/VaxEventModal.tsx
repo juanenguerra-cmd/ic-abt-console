@@ -52,6 +52,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
   const [offerAgainDate, setOfferAgainDate] = useState("");
   const [nextDoseNeeded, setNextDoseNeeded] = useState<'due' | 'scheduled' | 'complete'>('complete');
   const [scheduledDate, setScheduledDate] = useState("");
+  const [consentFormId, setConsentFormId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (existingVax) {
@@ -76,6 +77,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
             setOfferAgainDate(ext.offerAgainDate || "");
             setNextDoseNeeded(ext.nextDoseNeeded || 'complete');
             setScheduledDate(ext.scheduledDate || "");
+            setConsentFormId(ext.consentFormId);
             setNotes(existingVax.notes.replace(/\n\n--- EXTENDED DATA ---\n.*/s, ""));
           } else {
             setNotes(existingVax.notes);
@@ -112,7 +114,8 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
         permanentDeclination,
         offerAgainDate,
         nextDoseNeeded,
-        scheduledDate
+        scheduledDate,
+        consentFormId
       };
 
       const finalNotes = notes.trim() 
@@ -348,6 +351,27 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
               </div>
             </section>
           )}
+
+          {/* Linkages */}
+          <section>
+            <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
+                <FileText className="w-4 h-4 text-neutral-500" />
+                Linkages
+            </h3>
+            <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Consent Form</label>
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="text" 
+                        value={consentFormId || ""} 
+                        onChange={e => setConsentFormId(e.target.value)} 
+                        placeholder="Enter Document ID or URL"
+                        className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
+                    />
+                    <button className="px-3 py-2 bg-neutral-100 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-200 border border-neutral-200">Upload</button>
+                </div>
+            </div>
+          </section>
 
           {/* Notes */}
           <section>
