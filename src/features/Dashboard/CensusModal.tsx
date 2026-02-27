@@ -12,15 +12,20 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const { db } = useDatabase();
   const facility = db.data.facilities.byId[activeFacilityId];
 
-  const residents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned") as Resident[];
-  const residentsByUnit: Record<string, Resident[]> = {};
+  const residents = Object.values(store.residents) as Resident[];
+  const censusByUnit: Record<string, { total: number; male: number; female: number; unknown: number }> = {};
 
-  residents.forEach(r => {
-    const unit = r.currentUnit || 'Unassigned';
-    if (!residentsByUnit[unit]) {
-      residentsByUnit[unit] = [];
+  residents.forEach((resident) => {
+    const trimmedUnit = resident.currentUnit?.trim();
+    const unit = trimmedUnit || 'Unknown';
+    const sex = resident.sex?.trim().toLowerCase() || 'unknown';
+    if (!censusByUnit[unit]) {
+      censusByUnit[unit] = { total: 0, male: 0, female: 0, unknown: 0 };
     }
-    residentsByUnit[unit].push(r);
+    censusByUnit[unit].total += 1;
+    if (sex === 'm' || sex === 'male') censusByUnit[unit].male += 1;
+    else if (sex === 'f' || sex === 'female') censusByUnit[unit].female += 1;
+    else censusByUnit[unit].unknown += 1;
   });
 
   const residentCount = residents.length;
@@ -40,28 +45,33 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
             Total Residents: <strong>{residentCount}</strong>
             {capacityRate && ` | Occupancy: <strong>${capacityRate}%</strong>`}
           </div>
-          <div className="space-y-4">
-            {Object.entries(residentsByUnit).map(([unit, residentsInUnit]) => (
-              <div key={unit}>
-                <div className="flex justify-between items-baseline">
-                  <h3 className="font-bold text-lg text-neutral-800 mb-2 pb-1 border-b border-neutral-200">{unit} ({residentsInUnit.length})</h3>
-                  {facility.units.find(u => u.name === unit)?.bedCapacity &&
-                    <p className="text-xs text-neutral-500">
-                      ({((residentsInUnit.length / facility.units.find(u => u.name === unit)!.bedCapacity!) * 100).toFixed(1)}% Occupancy)
-                    </p>
-                  }
-                </div>
-                <ul className="divide-y divide-neutral-100">
-                  {residentsInUnit.map(r => (
-                    <li key={r.mrn} className="py-1.5 flex justify-between text-sm">
-                      <span>{r.displayName}</span>
-                      <span className="text-neutral-500 font-mono">MRN: {r.mrn}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <table className="w-full text-sm text-left text-neutral-600">
+            <thead className="text-xs text-neutral-700 uppercase bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2">Unit</th>
+                <th className="px-4 py-2">Total</th>
+                <th className="px-4 py-2">M</th>
+                <th className="px-4 py-2">F</th>
+                <th className="px-4 py-2">Unknown</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(censusByUnit).sort(([a], [b]) => a.localeCompare(b)).map(([unit, counts]) => (
+                <tr key={unit} className="bg-white border-b">
+                  <td className="px-4 py-2 font-medium text-neutral-900">{unit}</td>
+                  <td className="px-4 py-2">{counts.total}</td>
+                  <td className="px-4 py-2">{counts.male}</td>
+                  <td className="px-4 py-2">{counts.female}</td>
+                  <td className="px-4 py-2">{counts.unknown}</td>
+                </tr>
+              ))}
+              {Object.keys(censusByUnit).length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center py-8 text-neutral-500">No residents available.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

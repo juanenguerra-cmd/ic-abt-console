@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { Users, AlertCircle, FileText, Inbox, Building2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
 import { ActivePrecautionsModal } from './ActivePrecautionsModal';
@@ -16,6 +17,7 @@ const GAP = 16;
 export const Dashboard: React.FC = () => {
   const { db } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
+  const location = useLocation();
   const facility = db.data.facilities.byId[activeFacilityId];
   
   const layout: FloorLayout = useMemo(() => {
@@ -111,6 +113,13 @@ export const Dashboard: React.FC = () => {
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [showOutbreakModal, setShowOutbreakModal] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string>("all");
+
+  React.useEffect(() => {
+    if ((location.state as { openModal?: string } | null)?.openModal === 'precautions') {
+      setShowPrecautionsModal(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const units = useMemo(() => {
     const unitSet = new Set<string>();
@@ -241,6 +250,8 @@ export const Dashboard: React.FC = () => {
           </div>
           <FloorMap 
             layout={filteredLayout} 
+            facilityId={activeFacilityId}
+            unitId={selectedUnit}
             roomStatuses={roomStatuses}
           />
         </div>

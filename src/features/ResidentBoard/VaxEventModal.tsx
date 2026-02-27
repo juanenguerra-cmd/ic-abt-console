@@ -12,14 +12,8 @@ interface Props {
 
 const VACCINE_OPTIONS = [
   "Influenza",
-  "COVID-19 (Pfizer)",
-  "COVID-19 (Moderna)",
-  "COVID-19 (Novavax)",
-  "Pneumococcal (PCV20)",
-  "Pneumococcal (PCV15)",
-  "Pneumococcal (PPSV23)",
-  "Tdap",
-  "Zoster (Shingrix)",
+  "Pneumococcal",
+  "Covid-19",
   "RSV",
   "Other"
 ];
@@ -27,9 +21,12 @@ const VACCINE_OPTIONS = [
 export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClose }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId } = useFacilityData();
+  const existingVaccineValue = existingVax?.vaccine || "";
+  const isExistingVaccineOther = !!existingVaccineValue && !VACCINE_OPTIONS.includes(existingVaccineValue);
 
   // Core Identity & Status
-  const [vaccine, setVaccine] = useState(existingVax?.vaccine || "");
+  const [vaccine, setVaccine] = useState(isExistingVaccineOther ? "Other" : existingVaccineValue);
+  const [vaccineOther, setVaccineOther] = useState(isExistingVaccineOther ? existingVaccineValue.replace(/^Other:\s*/i, '') : "");
   const [status, setStatus] = useState<VaxEvent["status"] | "historical">("given");
 
   // Dates
@@ -125,7 +122,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
       facility.vaxEvents[vaxId] = {
         id: vaxId,
         residentRef,
-        vaccine: vaccine.trim(),
+        vaccine: (vaccine === 'Other' ? `Other: ${vaccineOther.trim() || 'Unspecified'}` : vaccine).trim(),
         status: finalStatus as VaxEvent["status"],
         dateGiven: (status === 'given' || status === 'historical') ? (dateGiven || new Date().toISOString().split('T')[0]) : undefined,
         dueDate: (status === 'given' && nextDoseNeeded === 'due') || (status === 'historical' && seriesComplete === false) ? dueDate || undefined : undefined,
@@ -182,6 +179,15 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
                   <option value="">Select Vaccine...</option>
                   {VACCINE_OPTIONS.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
+                {vaccine === 'Other' && (
+                  <input
+                    type="text"
+                    value={vaccineOther}
+                    onChange={e => setVaccineOther(e.target.value)}
+                    placeholder="Specify vaccine name..."
+                    className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Status</label>
@@ -408,4 +414,3 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
     </div>
   );
 };
-

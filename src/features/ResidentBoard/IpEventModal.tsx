@@ -49,8 +49,7 @@ const EBP_ORGANISM_SUGGESTIONS = ["MRSA", "VRE", "ESBL", "CRE", "C. diff", "Acin
 const ISOLATION_CATEGORY_MAP: Record<string, string[]> = {
   "Contact": ["MRSA", "VRE", "C. diff", "Scabies", "Lice", "Norovirus", "ESBL", "CRE", "Acinetobacter"],
   "Droplet": ["Influenza", "COVID-19", "RSV", "Meningitis", "Pertussis"],
-  "Airborne": ["Tuberculosis", "Varicella (Chickenpox)", "Measles", "COVID-19"],
-  "Standard": ["Routine surveillance", "Other"]
+  "Airborne": ["Tuberculosis", "Varicella (Chickenpox)", "Measles", "COVID-19"]
 };
 
 export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose }) => {
@@ -64,10 +63,14 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const [status, setStatus] = useState<IPEvent["status"]>(existingIp?.status || "active");
 
   // Extended State (Serialized to Notes)
-  const [protocol, setProtocol] = useState<"standard" | "isolation">("standard");
-  const [isEbp, setIsEbp] = useState<boolean>(existingIp?.ebp || false);
+  const [protocol, setProtocol] = useState<"isolation" | "ebp">(existingIp?.ebp ? "ebp" : "isolation");
   const [isolationTypes, setIsolationTypes] = useState<string[]>([]);
   const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
+  const [ebpDetailOther, setEbpDetailOther] = useState("");
+  const [woundLocation, setWoundLocation] = useState("");
+  const [mdroType, setMdroType] = useState("");
+  const [sourceOther, setSourceOther] = useState("");
+  const [labOutcomeNote, setLabOutcomeNote] = useState("");
   const [onsetDate, setOnsetDate] = useState(new Date().toISOString().split('T')[0]);
   const [eventDetectedDate, setEventDetectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [precautionStartDate, setPrecautionStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -112,20 +115,29 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     if (existingIp) {
       if (existingIp.isolationType) setIsolationTypes(existingIp.isolationType.split(",").map(s => s.trim()));
       if (existingIp.organism) setInfectionTags(existingIp.organism.split(",").map(s => s.trim()));
-      if (existingIp.sourceOfInfection) setSourceTags(existingIp.sourceOfInfection.split(",").map(s => s.trim()));
+      if (existingIp.sourceOfInfection) {
+        const parsedSources = existingIp.sourceOfInfection.split(",").map(s => s.trim()).filter(Boolean);
+        const hasOther = parsedSources.find(s => s.toLowerCase().startsWith("other:"));
+        setSourceTags(parsedSources.map(s => s.toLowerCase().startsWith("other:") ? "Other" : s));
+        if (hasOther) setSourceOther(hasOther.replace(/^other:\s*/i, ""));
+      }
       if (existingIp.outbreakId) setOutbreakId(existingIp.outbreakId);
       
-      if (existingIp.ebp) setIsEbp(true);
-      if (existingIp.isolationType) setProtocol("isolation");
-      else setProtocol("standard");
+      if (existingIp.ebp) setProtocol("ebp");
+      else setProtocol("isolation");
 
       if (existingIp.notes) {
         try {
           const match = existingIp.notes.match(/--- EXTENDED DATA ---\n(.*)/s);
           if (match) {
             const ext = JSON.parse(match[1]);
-            if (ext.protocol && ext.protocol !== "ebp") setProtocol(ext.protocol);
+            if (ext.protocol === "ebp" || ext.protocol === "isolation") setProtocol(ext.protocol);
             if (ext.deviceTypes) setDeviceTypes(ext.deviceTypes);
+            if (ext.ebpDetailOther) setEbpDetailOther(ext.ebpDetailOther);
+            if (ext.woundLocation) setWoundLocation(ext.woundLocation);
+            if (ext.mdroType) setMdroType(ext.mdroType);
+            if (ext.sourceOther) setSourceOther(ext.sourceOther);
+            if (ext.labOutcomeNote) setLabOutcomeNote(ext.labOutcomeNote);
             if (ext.onsetDate) setOnsetDate(ext.onsetDate);
             if (ext.eventDetectedDate) setEventDetectedDate(ext.eventDetectedDate);
             if (ext.precautionStartDate) setPrecautionStartDate(ext.precautionStartDate);
@@ -141,40 +153,20 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   }, [existingIp]);
 
   // Cascading Logic 1: Protocol Change
-  const updateIpProtocol = (newProtocol: "standard" | "isolation") => {
+  const updateIpProtocol = (newProtocol: "isolation" | "ebp") => {
     setProtocol(newProtocol);
-    if (newProtocol === "standard") {
-      setIsolationTypes([]);
-      setInfectionCategory("Routine surveillance");
-      setDeviceTypes([]);
-    } else if (newProtocol === "isolation") {
+    if (newProtocol === "isolation") {
       setIsolationTypes(["Contact"]);
+      setInfectionCategory("");
+      setDeviceTypes([]);
+    } else if (newProtocol === "ebp") {
+      setIsolationTypes(["Indwelling Catheter"]);
       setInfectionCategory("");
       setDeviceTypes([]);
     }
   };
 
-  // Cascading Logic 2: Isolation Type Change
-  const toggleIpIsolationType = (type: string) => {
-    let newTypes = isolationTypes.includes(type)
-      ? isolationTypes.filter(t => t !== type)
-      : [...isolationTypes, type];
-    
-    setIsolationTypes(newTypes);
-
-    if (isEbp && newTypes.length > 0) {
-      const primary = newTypes[0];
-      if (primary === "Device") setInfectionCategory("Device-associated");
-      else if (primary === "Wound") {
-        setInfectionCategory("Wound infection");
-        if (!sourceTags.includes("Wound site")) setSourceTags([...sourceTags, "Wound site"]);
-      }
-      else if (primary === "MDRO") setInfectionCategory("MDRO colonization/infection");
-      else setInfectionCategory("");
-    }
-  };
-
-  // Cascading Logic 3: Category Change (Auto-population)
+  // Cascading Logic 2: Category Change (Auto-population)
   const updateIpCategory = (cat: string) => {
     setInfectionCategory(cat);
     
@@ -203,6 +195,14 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     setSourceTags(prev => prev.includes(source) ? prev.filter(t => t !== source) : [...prev, source]);
   };
 
+  useEffect(() => {
+    if (protocol !== "ebp" || isolationTypes.length === 0) return;
+    const primary = isolationTypes[0];
+    if (primary === "Indwelling Catheter") setInfectionCategory("Device-associated");
+    else if (primary === "Wound") setInfectionCategory("Wound infection");
+    else if (primary === "MDRO") setInfectionCategory("MDRO colonization/infection");
+  }, [protocol, isolationTypes]);
+
   const addOrganismTag = (tag: string) => {
     if (tag.trim() && !infectionTags.includes(tag.trim())) {
       setInfectionTags([...infectionTags, tag.trim()]);
@@ -219,7 +219,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     ? ISOLATION_CATEGORY_MAP[isolationTypes[0]] || []
     : [];
 
-  const organismSuggestions = isEbp 
+  const organismSuggestions = protocol === "ebp" 
     ? EBP_ORGANISM_SUGGESTIONS 
     : (protocol === "isolation" && infectionCategory && ["MRSA", "VRE", "ESBL", "CRE", "C. diff"].includes(infectionCategory) ? [infectionCategory] : []);
 
@@ -241,6 +241,11 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       const extData = {
         protocol,
         deviceTypes,
+        ebpDetailOther,
+        woundLocation,
+        mdroType,
+        sourceOther,
+        labOutcomeNote,
         onsetDate,
         eventDetectedDate,
         precautionStartDate
@@ -256,9 +261,9 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         status,
         infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
         infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
-        sourceOfInfection: sourceTags.join(", ") || undefined,
+        sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
         isolationType: isolationTypes.join(", ") || undefined,
-        ebp: isEbp,
+        ebp: protocol === "ebp",
         organism: infectionTags.join(", ") || undefined,
         specimenCollectedDate: specimenCollectedDate || undefined,
         labResultDate: labResultDate || undefined,
@@ -299,16 +304,12 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                 <label className="block text-sm font-medium text-neutral-700 mb-2">Protocol Type</label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
-                    <input type="radio" checked={protocol === "standard"} onChange={() => updateIpProtocol("standard")} className="text-amber-600 focus:ring-amber-500" />
-                    Standard Precautions
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
                     <input type="radio" checked={protocol === "isolation"} onChange={() => updateIpProtocol("isolation")} className="text-amber-600 focus:ring-amber-500" />
                     Isolation (Transmission-based)
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer mt-2 pt-2 border-t border-neutral-200">
-                    <input type="checkbox" checked={isEbp} onChange={(e) => setIsEbp(e.target.checked)} className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500" />
-                    Enhanced Barrier Precautions (EBP)
+                  <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+                    <input type="radio" checked={protocol === "ebp"} onChange={() => updateIpProtocol("ebp")} className="text-amber-600 focus:ring-amber-500" />
+                    Enhanced Barrier Precaution (EBP)
                   </label>
                 </div>
                 <p className="mt-2 text-xs text-neutral-500">Determines form layout and required fields.</p>
@@ -330,18 +331,19 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           </section>
 
           {/* Dynamic Isolation Types */}
-          {(protocol !== "standard" || isEbp) && (
+          {protocol && (
             <section className="bg-amber-50/50 p-4 rounded-lg border border-amber-100">
               <h3 className="text-sm font-bold text-neutral-900 mb-3">
-                {isEbp ? "EBP Indication" : "Isolation Type"}
+                {protocol === "ebp" ? "EBP Indication" : "Isolation Type"}
               </h3>
               <div className="flex flex-wrap gap-3">
-                {(isEbp ? ["Device", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
+                {(protocol === "ebp" ? ["Indwelling Catheter", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
                   <label key={type} className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer bg-white px-3 py-1.5 rounded border border-neutral-200 shadow-sm hover:border-amber-300">
                     <input 
-                      type="checkbox" 
-                      checked={isolationTypes.includes(type)}
-                      onChange={() => toggleIpIsolationType(type)}
+                      type="radio"
+                      name="isolation-selection"
+                      checked={isolationTypes[0] === type}
+                      onChange={() => setIsolationTypes([type])}
                       className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
                     />
                     {type}
@@ -350,7 +352,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
               </div>
 
               {/* Device Type Cascade */}
-              {isEbp && isolationTypes.includes("Device") && (
+              {protocol === "ebp" && isolationTypes.includes("Indwelling Catheter") && (
                 <div className="mt-4 pt-4 border-t border-amber-200/50">
                   <label className="block text-sm font-medium text-neutral-700 mb-2">Device Types</label>
                   <div className="flex flex-wrap gap-3">
@@ -366,6 +368,33 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                       </label>
                     ))}
                   </div>
+                  {deviceTypes.includes("Other") && (
+                    <input
+                      type="text"
+                      value={ebpDetailOther}
+                      onChange={e => setEbpDetailOther(e.target.value)}
+                      placeholder="Specify other device..."
+                      className="mt-2 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  )}
+                </div>
+              )}
+              {protocol === "ebp" && isolationTypes.includes("Wound") && (
+                <div className="mt-4 pt-4 border-t border-amber-200/50">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Wound Location</label>
+                  <input type="text" value={woundLocation} onChange={e => setWoundLocation(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
+                </div>
+              )}
+              {protocol === "ebp" && isolationTypes.includes("MDRO") && (
+                <div className="mt-4 pt-4 border-t border-amber-200/50">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">MDRO Organism/Type</label>
+                  <input type="text" value={mdroType} onChange={e => setMdroType(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
+                </div>
+              )}
+              {protocol === "ebp" && isolationTypes.includes("Other") && (
+                <div className="mt-4 pt-4 border-t border-amber-200/50">
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">EBP Details</label>
+                  <input type="text" value={ebpDetailOther} onChange={e => setEbpDetailOther(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
                 </div>
               )}
             </section>
@@ -467,6 +496,15 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                     </label>
                   ))}
                 </div>
+                {sourceTags.includes("Other") && (
+                  <input
+                    type="text"
+                    value={sourceOther}
+                    onChange={e => setSourceOther(e.target.value)}
+                    placeholder="Specify other source..."
+                    className="mt-2 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                  />
+                )}
               </div>
             </div>
           </section>
@@ -522,6 +560,10 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   onChange={e => setLabResultDate(e.target.value)}
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                 />
+              </div>
+              <div className="md:col-span-3">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">Lab Result / Outcome Note</label>
+                <textarea value={labOutcomeNote} onChange={e => setLabOutcomeNote(e.target.value)} rows={2} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500 resize-y" />
               </div>
             </div>
           </section>

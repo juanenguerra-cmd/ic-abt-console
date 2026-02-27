@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, ABTCourse, IPEvent } from '../../domain/models';
-import { Save, FileText } from 'lucide-react';
+import { Save, FileText, Copy } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useSearchParams } from 'react-router-dom';
 
 const NOTE_TEMPLATES = {
   ABT_STEWARDSHIP: 'On [Today], antibiotic stewardship review completed for [displayName]... Current antibiotic therapy includes [medication] initiated on [startDate] for [syndromeCategory].',
@@ -15,10 +16,18 @@ type NoteType = keyof typeof NOTE_TEMPLATES;
 export const NoteGenerator: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
+  const [searchParams] = useSearchParams();
 
   const [selectedMrn, setSelectedMrn] = useState<string>('');
   const [noteType, setNoteType] = useState<NoteType>('ABT_STEWARDSHIP');
   const [noteContent, setNoteContent] = useState('');
+
+  React.useEffect(() => {
+    const mrn = searchParams.get('mrn');
+    const incomingType = searchParams.get('noteType');
+    if (mrn && store.residents[mrn]) setSelectedMrn(mrn);
+    if (incomingType && incomingType in NOTE_TEMPLATES) setNoteType(incomingType as NoteType);
+  }, [searchParams, store.residents]);
 
   const residents = Object.values(store.residents) as Resident[];
 
@@ -86,6 +95,20 @@ export const NoteGenerator: React.FC = () => {
     setNoteContent('');
   };
 
+  const handleCopy = async () => {
+    if (!noteContent.trim()) return;
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      alert('Clipboard is unavailable. Please copy the note manually.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(noteContent);
+      alert('Note copied to clipboard.');
+    } catch {
+      alert('Unable to copy to clipboard. Please copy the note manually.');
+    }
+  };
+
   return (
     <div className="p-6 bg-neutral-100 h-full">
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 flex flex-col h-full">
@@ -142,7 +165,15 @@ export const NoteGenerator: React.FC = () => {
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={handleCopy}
+              disabled={!noteContent.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-neutral-600 text-white rounded-md hover:bg-neutral-700 disabled:bg-neutral-300 text-sm font-medium"
+            >
+              <Copy className="w-4 h-4" />
+              Copy to Clipboard
+            </button>
             <button
               onClick={handleSaveNote}
               disabled={!noteContent.trim() || !selectedMrn}

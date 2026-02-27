@@ -717,16 +717,19 @@ const MonthlyAnalytics: React.FC = () => {
       const results: any[] = [];
       Object.entries(metrics).forEach(([month, residentDays]) => {
         const [year, monthNum] = month.split('-');
+        const yearNum = parseInt(year, 10);
+        const monthNumParsed = parseInt(monthNum, 10);
+        const daysInMonth = new Date(yearNum, monthNumParsed, 0).getDate();
         const infections = Object.values(store.infections).filter(ip => {
           const eventDate = new Date(ip.createdAt);
-          return eventDate.getFullYear() === parseInt(year) && eventDate.getMonth() + 1 === parseInt(monthNum);
+          return eventDate.getFullYear() === yearNum && eventDate.getMonth() + 1 === monthNumParsed;
         });
 
         const abtDays = Object.values(store.abts).reduce((total, abt) => {
           if (abt.startDate && abt.endDate) {
             const start = new Date(abt.startDate);
             const end = new Date(abt.endDate);
-            if (start.getFullYear() === parseInt(year) && start.getMonth() + 1 === parseInt(monthNum)) {
+            if (start.getFullYear() === yearNum && start.getMonth() + 1 === monthNumParsed) {
               const diffTime = Math.abs(end.getTime() - start.getTime());
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
               return total + diffDays;
@@ -737,10 +740,12 @@ const MonthlyAnalytics: React.FC = () => {
 
         const infectionRate = residentDays > 0 ? (infections.length / residentDays) * 1000 : 0;
         const aur = residentDays > 0 ? (abtDays / residentDays) * 1000 : 0;
+        const averageCensus = daysInMonth > 0 ? residentDays / daysInMonth : 0;
 
         results.push({
           month,
           residentDays,
+          averageCensus: averageCensus.toFixed(1),
           totalInfections: infections.length,
           infectionRate: infectionRate.toFixed(2),
           totalAbtDays: abtDays,
@@ -766,6 +771,7 @@ const MonthlyAnalytics: React.FC = () => {
             <tr>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Month</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Resident Days</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Average Census</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Infections</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Infection Rate / 1000</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Total ABT Days</th>
@@ -777,6 +783,7 @@ const MonthlyAnalytics: React.FC = () => {
               <tr key={row.month}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{row.month}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.residentDays}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.averageCensus}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.totalInfections}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.infectionRate}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.totalAbtDays}</td>

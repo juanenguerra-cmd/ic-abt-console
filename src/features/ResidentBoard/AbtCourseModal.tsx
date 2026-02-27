@@ -3,6 +3,7 @@ import { X, Save, Activity, TestTube, FileText, Link, Shield } from "lucide-reac
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { ABTCourse, IPEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   residentId: string;
@@ -14,12 +15,13 @@ interface Props {
 const ROUTE_OPTIONS = ["PO", "IV", "IM", "Topical", "Inhaled", "Other"];
 const FREQUENCY_OPTIONS = ["Daily", "BID", "TID", "QID", "Q4h", "Q6h", "Q8h", "Q12h", "Weekly", "Other"];
 const SYNDROME_CATEGORY_OPTIONS = ["Respiratory", "Urinary", "Skin/Soft Tissue", "GI", "Bloodstream", "Other"];
-const INFECTION_SOURCE_OPTIONS = ["Community-Acquired", "Hospital-Acquired", "Facility-Acquired", "Device-Associated", "Unknown"];
+const INFECTION_SOURCE_OPTIONS = ["Community-Acquired", "Hospital-Acquired", "Facility-Acquired", "Device-Associated", "Prior Admission", "Unknown"];
 const TREATMENT_TYPE_OPTIONS = ["Empiric", "Targeted", "Prophylaxis", "Suppression"];
 
 export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClose }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
+  const navigate = useNavigate();
   
   const resident = residentId.startsWith("Q:") ? store.quarantine[residentId] : store.residents[residentId];
   const activeIpEvents = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.residentRef.id === residentId && ip.status === 'active');
@@ -327,6 +329,16 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate('/', { state: { openModal: 'precautions' } });
+                  }}
+                  className="mt-2 text-sm text-emerald-700 hover:text-emerald-900 underline"
+                >
+                  View Active Precautions List
+                </button>
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Notes</label>

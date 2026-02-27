@@ -13,6 +13,8 @@ import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
+import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
+import AuditReportPrint from "../pages/print/AuditReportPrint";
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -27,7 +29,8 @@ import {
   X,
   MessageSquare,
   FileBarChart,
-  PenSquare
+  PenSquare,
+  ClipboardCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -60,11 +63,13 @@ const SidebarLink = ({ to, icon: Icon, label, badge }: { to: string, icon: any, 
 };
 
 const AppShell = () => {
+  const location = useLocation();
+  const isPrintRoute = location.pathname === "/print/audit-report";
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
-  const [isLocked, setIsLocked] = React.useState(true);
+  const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
 
   React.useEffect(() => {
     const lastBackupTimestamp = localStorage.getItem('ltc_last_backup_timestamp');
@@ -85,7 +90,11 @@ const AppShell = () => {
   const activeFacility = db.data.facilities.byId[activeFacilityId];
   const quarantineCount = Object.keys(store.quarantine).length;
 
-    if (isLocked) {
+  if (isPrintRoute) {
+    return <AuditReportPrint />;
+  }
+
+  if (isLocked) {
     return <LockScreen onUnlock={() => setIsLocked(false)} />;
   }
 
@@ -159,6 +168,7 @@ const AppShell = () => {
             <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
             <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
             <SidebarLink to="/reports" icon={FileText} label="Reports" />
+            <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />
             <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />
             <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />
             
@@ -181,7 +191,9 @@ const AppShell = () => {
                 <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
+                <Route path="/audit-center" element={<PageTransition><InfectionControlAuditCenter /></PageTransition>} />
                 <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
+                <Route path="/print/audit-report" element={<AuditReportPrint />} />
                 <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
                 <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />

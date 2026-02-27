@@ -10,6 +10,7 @@ interface Props {
 export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
   const [printView, setPrintView] = React.useState(false);
+  const [selectedUnit, setSelectedUnit] = React.useState('all');
 
   const activePrecautions = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp));
 
@@ -28,15 +29,51 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
     return `${diffDays} day(s)`;
   };
 
+  const units = React.useMemo(() => {
+    const unitSet = new Set<string>();
+    activePrecautions.forEach((ip) => {
+      const resident = getResident(ip.residentRef);
+      const unit = resident?.currentUnit?.trim() || 'Unknown';
+      unitSet.add(unit);
+    });
+    return Array.from(unitSet).sort();
+  }, [activePrecautions]);
+
+  const filteredPrecautions = activePrecautions.filter((ip) => {
+    if (selectedUnit === 'all') return true;
+    const resident = getResident(ip.residentRef);
+    return (resident?.currentUnit?.trim() || 'Unknown') === selectedUnit;
+  });
+
+  const handlePrint = () => {
+    setPrintView(true);
+    const restore = () => {
+      setPrintView(false);
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    requestAnimationFrame(() => {
+      window.print();
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[90vh]">
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
           <h2 className="text-xl font-bold text-neutral-900">Active Precautions</h2>
           <div className="flex items-center gap-4">
-            <button onClick={() => setPrintView(!printView)} className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
+            <select
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
+              className="border border-neutral-300 rounded-md p-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="all">All Units</option>
+              {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+            </select>
+            <button onClick={handlePrint} className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
               <Printer className="w-4 h-4" />
-              {printView ? 'Exit Print View' : 'Print by Unit'}
+              Print Precaution List
             </button>
             <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
               <X className="w-6 h-6" />
@@ -55,7 +92,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
               </tr>
             </thead>
             <tbody>
-              {activePrecautions.map(ip => {
+              {filteredPrecautions.map(ip => {
                 const resident = getResident(ip.residentRef);
                 return (
                   <tr key={ip.id} className="bg-white border-b hover:bg-neutral-50">
@@ -67,7 +104,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                   </tr>
                 );
               })}
-              {activePrecautions.length === 0 && (
+              {filteredPrecautions.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center py-12 text-neutral-500">No residents on active precautions.</td>
                 </tr>

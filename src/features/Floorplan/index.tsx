@@ -144,6 +144,8 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
         <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm">
           <FloorMap 
             layout={layout} 
+            facilityId={activeFacilityId}
+            unitId={selectedUnitId || 'all'}
             roomStatuses={roomStatuses}
           />
         </div>

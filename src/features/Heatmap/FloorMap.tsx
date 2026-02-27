@@ -1,11 +1,15 @@
 import React from 'react';
 import { useFacilityData } from '../../app/providers';
 import { IPEvent, Resident, FloorLayout } from '../../domain/models';
+import { GripVertical } from 'lucide-react';
+import { loadLayout, mergeLayout, resetLayout, saveLayout } from '../../utils/floorMapLayout';
 
 export type RoomStatus = "normal" | "isolation" | "outbreak" | "ebp";
 
 interface FloorMapProps {
   layout: FloorLayout;
+  facilityId: string;
+  unitId?: string;
   roomStatuses?: Record<string, RoomStatus>;
   onRoomClick?: (roomId: string) => void;
 }
@@ -19,10 +23,28 @@ const STATUS_COLORS: Record<RoomStatus, string> = {
 
 export const FloorMap: React.FC<FloorMapProps> = ({
   layout,
+  facilityId,
+  unitId = 'all',
   roomStatuses = {},
   onRoomClick,
 }) => {
   const { store } = useFacilityData();
+  const [isEditMode, setIsEditMode] = React.useState(false);
+  const [draggingRoomId, setDraggingRoomId] = React.useState<string | null>(null);
+  const [orderedRoomIds, setOrderedRoomIds] = React.useState<string[]>([]);
+  const suppressNextClickRef = React.useRef(false);
+
+  const sortedSlots = React.useMemo(
+    () => [...layout.rooms].sort((a, b) => a.y - b.y || a.x - b.x),
+    [layout.rooms]
+  );
+  const currentRoomIds = React.useMemo(() => sortedSlots.map(room => room.roomId), [sortedSlots]);
+
+  React.useEffect(() => {
+    const saved = loadLayout(facilityId, unitId);
+    const merged = mergeLayout(saved, currentRoomIds);
+    setOrderedRoomIds(merged);
+  }, [facilityId, unitId, currentRoomIds]);
 
   // Calculate bounding box
   const maxX = Math.max(...layout.rooms.map(r => r.x + r.w), 0);
@@ -46,8 +68,58 @@ export const FloorMap: React.FC<FloorMapProps> = ({
     }).join('\n');
   };
 
+  const roomById = React.useMemo(
+    () => Object.fromEntries(layout.rooms.map(room => [room.roomId, room])),
+    [layout.rooms]
+  );
+  const displayRooms = orderedRoomIds.map(id => roomById[id]).filter((room): room is FloorLayout['rooms'][number] => !!room);
+
+  const reorderRooms = (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    setOrderedRoomIds(prev => {
+      const sourceIndex = prev.indexOf(sourceId);
+      const targetIndex = prev.indexOf(targetId);
+      if (sourceIndex < 0 || targetIndex < 0) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      saveLayout(facilityId, unitId, next);
+      return next;
+    });
+  };
+
   return (
     <div className="w-full flex flex-col">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs text-neutral-500">
+          {isEditMode ? 'Drag tiles to rearrange. Changes save automatically.' : ''}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsEditMode(prev => !prev)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md border ${
+              isEditMode
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+            }`}
+          >
+            {isEditMode ? 'Done' : 'Edit layout'}
+          </button>
+          {isEditMode && (
+            <button
+              onClick={() => {
+                resetLayout(facilityId, unitId);
+                const defaults = [...currentRoomIds];
+                setOrderedRoomIds(defaults);
+                saveLayout(facilityId, unitId, defaults);
+              }}
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+            >
+              Reset layout
+            </button>
+          )}
+        </div>
+      </div>
       <div className="w-full overflow-auto bg-neutral-100 rounded-xl border border-neutral-200 p-4 min-h-[400px]">
         <div 
           className="relative bg-white shadow-inner rounded-lg border border-neutral-200"
@@ -57,22 +129,54 @@ export const FloorMap: React.FC<FloorMapProps> = ({
             minWidth: `${canvasWidth}px`,
           }}
         >
-            {layout.rooms.map((room) => {
+            {displayRooms.map((room, index) => {
+          const slot = sortedSlots[index];
+          if (!slot) return null;
           const status = roomStatuses[room.roomId] || "normal";
           const colorClass = STATUS_COLORS[status];
 
           return (
             <div
               key={room.roomId}
-              onClick={() => onRoomClick?.(room.roomId)}
-              className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all cursor-pointer shadow-sm ${colorClass}`}
+              onClick={() => {
+                if (suppressNextClickRef.current) {
+                  suppressNextClickRef.current = false;
+                  return;
+                }
+                onRoomClick?.(room.roomId);
+              }}
+              draggable={isEditMode}
+              onDragStart={() => {
+                if (!isEditMode) return;
+                setDraggingRoomId(room.roomId);
+              }}
+              onDragOver={(e) => {
+                if (!isEditMode) return;
+                e.preventDefault();
+              }}
+              onDrop={(e) => {
+                if (!isEditMode || !draggingRoomId) return;
+                e.preventDefault();
+                reorderRooms(draggingRoomId, room.roomId);
+                setDraggingRoomId(null);
+                suppressNextClickRef.current = true;
+              }}
+              onDragEnd={() => setDraggingRoomId(null)}
+              className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all shadow-sm ${colorClass} ${
+                isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+              } ${draggingRoomId === room.roomId ? 'opacity-60' : ''}`}
               style={{
-                left: `${room.x + 20}px`,
-                top: `${room.y + 20}px`,
-                width: `${room.w}px`,
-                height: `${room.h}px`,
+                left: `${slot.x + 20}px`,
+                top: `${slot.y + 20}px`,
+                width: `${slot.w}px`,
+                height: `${slot.h}px`,
               }}
             >
+              {isEditMode && (
+                <div className="absolute left-1 top-1 opacity-70">
+                  <GripVertical className="w-3 h-3 text-neutral-500" />
+                </div>
+              )}
               <span className="text-[10px] font-bold uppercase tracking-tighter opacity-60">
                 Room
               </span>
