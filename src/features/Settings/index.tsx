@@ -110,7 +110,7 @@ export const SettingsConsole: React.FC = () => {
             alert('Invalid backup file: Schema version does not match.');
             return;
           }
-          if (restoreConfirm.toUpperCase() === 'RESTORE') {
+          if (restoreConfirm === 'RESTORE') {
             setDB(parsed);
             alert('Backup restored successfully.');
             setRestoreConfirm('');
@@ -124,6 +124,7 @@ export const SettingsConsole: React.FC = () => {
       };
       reader.readAsText(file);
     }
+    event.target.value = '';
   };
 
   return (
@@ -366,7 +367,7 @@ export const SettingsConsole: React.FC = () => {
               <button
                 data-testid="select-restore-file-button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={restoreConfirm.toUpperCase() !== 'RESTORE'}
+                disabled={restoreConfirm !== 'RESTORE'}
                 className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
               >
                 <Upload className="w-4 h-4" />
