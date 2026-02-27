@@ -21,12 +21,13 @@ export const SettingsConsole: React.FC = () => {
   const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
   
   // Floor tile sizes
-  const [tileSizes, setTileSizes] = useState<Record<string, number>>(() => {
-    try { return JSON.parse(localStorage.getItem('ltc_floor_tile_sizes_v1') || '{}'); } catch { return {}; }
-  });
+  const [tileSizes, setTileSizes] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try { setTileSizes(JSON.parse(localStorage.getItem(`ltc_floor_tile_sizes_v1:${activeFacilityId}`) || '{}')); } catch { setTileSizes({}); }
+  }, [activeFacilityId]);
   const saveTileSizes = (sizes: Record<string, number>) => {
     setTileSizes(sizes);
-    localStorage.setItem('ltc_floor_tile_sizes_v1', JSON.stringify(sizes));
+    localStorage.setItem(`ltc_floor_tile_sizes_v1:${activeFacilityId}`, JSON.stringify(sizes));
   };
   
   const facility = db.data.facilities.byId[activeFacilityId];
