@@ -426,7 +426,18 @@ export function saveDB(db: UnifiedDB): void {
 
   const verifyStr = localStorage.getItem(DB_KEY_TMP);
   if (verifyStr !== serialized) {
-    throw new StorageError("Verification failed: TMP data mismatch after write.");
+    let semanticallyEqual = false;
+    if (verifyStr !== null) {
+      try {
+        semanticallyEqual =
+          JSON.stringify(JSON.parse(verifyStr)) === JSON.stringify(JSON.parse(serialized));
+      } catch {
+        // Unparseable — treat as a hard mismatch.
+      }
+    }
+    if (!semanticallyEqual) {
+      throw new StorageError("Verification failed: TMP data mismatch after write.");
+    }
   }
 
   const currentMain = localStorage.getItem(DB_KEY_MAIN);

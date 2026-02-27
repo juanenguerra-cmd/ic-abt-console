@@ -41,8 +41,10 @@ export async function idbSet(key: string, value: unknown): Promise<void> {
     const tx = db.transaction(IDB_STORE_NAME, "readwrite");
     const store = tx.objectStore(IDB_STORE_NAME);
     const req = store.put(value, key);
-    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("IDB transaction aborted"));
   });
 }
 
@@ -52,7 +54,9 @@ export async function idbRemove(key: string): Promise<void> {
     const tx = db.transaction(IDB_STORE_NAME, "readwrite");
     const store = tx.objectStore(IDB_STORE_NAME);
     const req = store.delete(key);
-    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("IDB transaction aborted"));
   });
 }
