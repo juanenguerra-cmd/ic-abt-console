@@ -184,6 +184,21 @@ export const runDetectionPipeline = (
             { ipId: ip.id }
           );
         }
+
+        // G5: Active IP event with no isolation type assigned after 4 hours
+        const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+        if (!ip.isolationType && createdDate < fourHoursAgo) {
+          const resId = ip?.residentRef?.id;
+          const { name } = getResDetails(resId);
+          addNotif(
+            'ip_no_isolation_rule',
+            'LINE_LIST_REVIEW',
+            resId,
+            ip.id,
+            `${name || 'Unknown Resident'} has an active ${ip.infectionCategory || 'infection'} with no isolation type assigned. Review and assign precautions.`,
+            { ipId: ip.id }
+          );
+        }
       }
     }
   });
@@ -440,6 +455,20 @@ export const runDetectionPipeline = (
           resId,
           abt.id,
           `${name || 'Unknown Resident'} is on ${abt.medication} for ${Math.floor(hoursElapsed)}h. 48–72h stewardship time-out review is due.`,
+          { abtId: abt.id }
+        );
+      }
+
+      // G4: 14-day hard escalation
+      if (hoursElapsed >= 336) { // 14 days = 336 h
+        const resId = abt?.residentRef?.id;
+        const { name } = getResDetails(resId);
+        addNotif(
+          'abt_14day_timeout_rule',
+          'ABT_STEWARDSHIP',
+          resId,
+          abt.id,
+          `${name || 'Unknown Resident'} has been on ${abt.medication} for ≥14 days with no end date. Escalate to prescribing provider.`,
           { abtId: abt.id }
         );
       }
