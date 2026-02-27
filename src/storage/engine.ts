@@ -1,6 +1,6 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 
-const DB_KEY_MAIN = "UNIFIED_DB_MAIN";
+export const DB_KEY_MAIN = "UNIFIED_DB_MAIN";
 const DB_KEY_PREV = "UNIFIED_DB_PREV";
 const DB_KEY_TMP = "UNIFIED_DB_TMP";
 
@@ -94,6 +94,15 @@ export function createEmptyDB(): UnifiedDB {
   };
 }
 
+export class SchemaMigrationError extends Error {
+  public readonly detectedVersion: string;
+  constructor(detectedVersion: string) {
+    super(`Schema migration required. Detected version: "${detectedVersion}". Expected: "UNIFIED_DB_V2". Contact support or restore from a backup.`);
+    this.name = "SchemaMigrationError";
+    this.detectedVersion = detectedVersion;
+  }
+}
+
 export function loadDB(): UnifiedDB {
   try {
     const raw = localStorage.getItem(DB_KEY_MAIN);
@@ -101,11 +110,11 @@ export function loadDB(): UnifiedDB {
     
     const db = JSON.parse(raw) as UnifiedDB;
     if (db.schemaVersion !== "UNIFIED_DB_V2") {
-      console.warn("Schema mismatch, returning empty DB.");
-      return createEmptyDB();
+      throw new SchemaMigrationError(db.schemaVersion ?? "unknown");
     }
     return db;
   } catch (e) {
+    if (e instanceof SchemaMigrationError) throw e;
     console.error("Failed to load DB from localStorage:", e);
     throw new StorageError("Database corruption detected.");
   }

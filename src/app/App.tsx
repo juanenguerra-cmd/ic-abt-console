@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
@@ -235,10 +236,12 @@ const PageTransition = ({ children }: { children: React.ReactNode }) => (
 
 export default function App() {
   return (
-    <AppProviders>
-      <BrowserRouter>
-        <AppShell />
-      </BrowserRouter>
-    </AppProviders>
+    <ErrorBoundary>
+      <AppProviders>
+        <BrowserRouter>
+          <AppShell />
+        </BrowserRouter>
+      </AppProviders>
+    </ErrorBoundary>
   );
 }

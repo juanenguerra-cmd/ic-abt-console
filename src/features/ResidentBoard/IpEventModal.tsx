@@ -224,6 +224,14 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     : (protocol === "isolation" && infectionCategory && ["MRSA", "VRE", "ESBL", "CRE", "C. diff"].includes(infectionCategory) ? [infectionCategory] : []);
 
   const handleSave = () => {
+    if (specimenCollectedDate && labResultDate && labResultDate < specimenCollectedDate) {
+      alert("Lab result date cannot be before specimen collected date.");
+      return;
+    }
+    if (onsetDate && precautionStartDate && precautionStartDate < onsetDate) {
+      alert("Precaution start date cannot be before onset date.");
+      return;
+    }
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       const now = new Date().toISOString();

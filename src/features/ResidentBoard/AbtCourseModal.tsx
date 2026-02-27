@@ -79,6 +79,10 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
       alert("Medication name is required.");
       return;
     }
+    if (startDate && endDate && endDate < startDate) {
+      alert("End date cannot be before start date.");
+      return;
+    }
 
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];

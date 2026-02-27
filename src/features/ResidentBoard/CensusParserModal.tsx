@@ -11,10 +11,21 @@ const ROOM_ID_PATTERN = /^\d+(?:-[A-Za-z0-9]+)?$/; // e.g. 101, 101-A
 
 export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
   const { updateDB } = useDatabase();
-  const { activeFacilityId } = useFacilityData();
+  const { activeFacilityId, store } = useFacilityData();
   const [rawText, setRawText] = useState("");
   const [results, setResults] = useState<any[] | null>(null);
   const [parserMode, setParserMode] = useState<"census" | "listing">("census");
+  const [conflictsAcknowledged, setConflictsAcknowledged] = useState(false);
+
+  const getMrnConflicts = (rows: any[]) =>
+    rows.filter(p => {
+      if (!p.mrn || !p.name) return false;
+      const existing = store.residents[p.mrn];
+      if (!existing) return false;
+      const existingName = (existing.displayName || "").toLowerCase().replace(/[^a-z]/g, "");
+      const newName = p.name.toLowerCase().replace(/[^a-z]/g, "");
+      return existingName && newName && existingName !== newName;
+    });
 
   const handleParse = () => {
     if (parserMode === "census") {
@@ -180,62 +191,108 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
           firstName = first ? first.trim() : "";
         }
 
-        const validStatus = ["Active", "Discharged", "Deceased"].includes(p.status) 
-          ? p.status as "Active" | "Discharged" | "Deceased" 
-          : "Active";
+        if (parserMode === "census") {
+          // Census Report is the authoritative source for census count.
+          // It only updates room, unit, status, payor, and dob.
+          // It does NOT overwrite clinical fields (attendingMD, primaryDiagnosis,
+          // admissionDate, sex) which come from the Resident Listing.
+          const validStatus = ["Active", "Discharged", "Deceased"].includes(p.status)
+            ? p.status as "Active" | "Discharged" | "Deceased"
+            : "Active";
 
-        if (p.mrn) {
-          if (facility.residents[p.mrn]) {
-            // Update existing
-            if (p.room) facility.residents[p.mrn].currentRoom = p.room;
-            if (p.unit) facility.residents[p.mrn].currentUnit = p.unit;
-            if (p.status) facility.residents[p.mrn].status = validStatus;
-            if (p.payor) facility.residents[p.mrn].payor = p.payor;
-            if (p.admissionDate) facility.residents[p.mrn].admissionDate = p.admissionDate;
-            if (p.gender) facility.residents[p.mrn].sex = p.gender;
-            if (p.primaryMD) facility.residents[p.mrn].attendingMD = p.primaryMD;
-            if (p.primaryDiagnosis) facility.residents[p.mrn].primaryDiagnosis = p.primaryDiagnosis;
-            if (p.allergies) {
-              facility.residents[p.mrn].allergies = p.allergies === "No Known Allergies" 
-                ? [] 
-                : p.allergies.split(",").map((a: string) => a.trim());
+          if (p.mrn) {
+            if (facility.residents[p.mrn]) {
+              // Update census-owned fields only
+              if (p.room) facility.residents[p.mrn].currentRoom = p.room;
+              if (p.unit) facility.residents[p.mrn].currentUnit = p.unit;
+              if (p.status) facility.residents[p.mrn].status = validStatus;
+              if (p.payor) facility.residents[p.mrn].payor = p.payor;
+              if (p.dob) facility.residents[p.mrn].dob = p.dob;
+              facility.residents[p.mrn].updatedAt = now;
+            } else {
+              // Create new resident from census data (clinical fields left blank until
+              // a Resident Listing import fills them in)
+              facility.residents[p.mrn] = {
+                mrn: p.mrn,
+                displayName: p.name,
+                firstName,
+                lastName,
+                dob: p.dob,
+                sex: undefined,
+                admissionDate: undefined,
+                currentRoom: p.room,
+                currentUnit: p.unit,
+                status: validStatus,
+                payor: p.payor,
+                attendingMD: undefined,
+                primaryDiagnosis: undefined,
+                allergies: [],
+                createdAt: now,
+                updatedAt: now,
+              };
             }
-            facility.residents[p.mrn].updatedAt = now;
           } else {
-            // Create new
-            facility.residents[p.mrn] = {
-              mrn: p.mrn,
-              displayName: p.name,
-              firstName,
-              lastName,
-              dob: p.dob || p.admissionDate, // Fallback if DOB missing
-              sex: p.gender,
-              admissionDate: p.admissionDate,
-              currentRoom: p.room,
-              currentUnit: p.unit,
-              status: validStatus,
-              payor: p.payor,
-              attendingMD: p.primaryMD,
-              primaryDiagnosis: p.primaryDiagnosis,
-              allergies: p.allergies && p.allergies !== "No Known Allergies" ? p.allergies.split(",").map((a: string) => a.trim()) : [],
+            // No MRN — send to quarantine
+            const qId = `Q:${uuidv4()}`;
+            facility.quarantine[qId] = {
+              tempId: qId as `Q:${string}`,
+              displayName: p.name || (p.room ? `Room ${p.room}` : "Unassigned"),
+              dob: p.dob,
+              unitSnapshot: p.unit,
+              roomSnapshot: p.room,
+              source: "census_missing_mrn",
+              rawHint: JSON.stringify(p),
               createdAt: now,
               updatedAt: now,
             };
           }
         } else {
-          // Send to quarantine
-          const qId = `Q:${uuidv4()}`;
-          facility.quarantine[qId] = {
-            tempId: qId as `Q:${string}`,
-            displayName: p.name || (p.room ? `Room ${p.room}` : "Unassigned"),
-            dob: p.dob,
-            unitSnapshot: p.unit,
-            roomSnapshot: p.room,
-            source: "census_missing_mrn",
-            rawHint: JSON.stringify(p),
-            createdAt: now,
-            updatedAt: now,
-          };
+          // Resident Listing Report is the authoritative source for clinical fields.
+          // It only updates attendingMD, primaryDiagnosis, admissionDate, sex, and
+          // allergies. It does NOT touch currentRoom, currentUnit, or status, which
+          // are owned by the Census Report and drive the occupancy/census count.
+          if (p.mrn) {
+            if (facility.residents[p.mrn]) {
+              if (p.gender) facility.residents[p.mrn].sex = p.gender;
+              if (p.admissionDate) facility.residents[p.mrn].admissionDate = p.admissionDate;
+              if (p.primaryMD) facility.residents[p.mrn].attendingMD = p.primaryMD;
+              if (p.primaryDiagnosis) facility.residents[p.mrn].primaryDiagnosis = p.primaryDiagnosis;
+              if (p.allergies) {
+                facility.residents[p.mrn].allergies = p.allergies === "No Known Allergies"
+                  ? []
+                  : p.allergies.split(",").map((a: string) => a.trim());
+              }
+              facility.residents[p.mrn].updatedAt = now;
+            } else {
+              // Resident not yet in the database — create a stub record with clinical
+              // fields from the listing. Room/unit/status remain undefined until a Census
+              // Report import provides them. Leaving status undefined intentionally
+              // excludes this stub from the occupancy/census count until confirmed by
+              // a Census Report.
+              facility.residents[p.mrn] = {
+                mrn: p.mrn,
+                displayName: p.name,
+                firstName,
+                lastName,
+                dob: undefined,
+                sex: p.gender,
+                admissionDate: p.admissionDate,
+                currentRoom: undefined,
+                currentUnit: undefined,
+                status: undefined,
+                payor: undefined,
+                attendingMD: p.primaryMD,
+                primaryDiagnosis: p.primaryDiagnosis,
+                allergies: p.allergies && p.allergies !== "No Known Allergies"
+                  ? p.allergies.split(",").map((a: string) => a.trim())
+                  : [],
+                createdAt: now,
+                updatedAt: now,
+              };
+            }
+          }
+          // Listing Report has no quarantine concept (no room data) — skip records
+          // without an MRN rather than quarantining them
         }
       });
     });
@@ -282,8 +339,8 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
               </div>
               <p className="text-sm text-neutral-600">
                 {parserMode === "census" 
-                  ? "Paste your raw census data below. The parser will extract Unit, Room, Name, MRN, DOB, Status, and Payor."
-                  : "Paste your Resident Listing Report below. The parser will extract Name, MRN, Gender, Admission Date, Allergies, MD, and Diagnosis."}
+                  ? "Paste your Census Report below. This is the authoritative source for census count and occupancy. Updates: Unit, Room, Status, Payor, and DOB."
+                  : "Paste your Resident Listing Report below. This is the authoritative source for clinical fields. Updates: Attending MD, Diagnosis, Admission Date, Sex, and Allergies. Does not affect census count."}
               </p>
               <textarea
                 value={rawText}
@@ -305,6 +362,27 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
             </>
           ) : (
             <>
+              {(() => {
+                const mrnConflicts = getMrnConflicts(results || []);
+
+                return mrnConflicts.length > 0 ? (
+                  <div className="bg-amber-50 border border-amber-300 rounded-md p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-800">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <p className="text-sm font-semibold">{mrnConflicts.length} MRN conflict{mrnConflicts.length > 1 ? "s" : ""} detected</p>
+                    </div>
+                    <ul className="text-xs text-amber-700 space-y-1 pl-7 list-disc">
+                      {mrnConflicts.map((p: any, i: number) => (
+                        <li key={i}>MRN <strong>{p.mrn}</strong>: existing resident "{store.residents[p.mrn]?.displayName}" vs. imported "{p.name}"</li>
+                      ))}
+                    </ul>
+                    <label className="flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
+                      <input type="checkbox" checked={conflictsAcknowledged} onChange={e => setConflictsAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
+                      I acknowledge these conflicts and want to update the existing records
+                    </label>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 p-3 rounded-md border border-emerald-200">
                 <AlertCircle className="w-5 h-5" />
                 <p className="text-sm font-medium">Found {results.length} valid resident records.</p>
@@ -351,14 +429,19 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
-                  onClick={() => setResults(null)}
+                  onClick={() => { setResults(null); setConflictsAcknowledged(false); }}
                   className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleCommit}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  disabled={(() => {
+                    if (!results) return true;
+                    const hasMrnConflicts = getMrnConflicts(results).length > 0;
+                    return hasMrnConflicts && !conflictsAcknowledged;
+                  })()}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Commit to Database
                 </button>
