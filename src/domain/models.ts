@@ -25,6 +25,7 @@ export interface Resident {
   status?: "Active" | "Discharged" | "Deceased";
   payor?: string;
   primaryDiagnosis?: string;
+  cognitiveStatus?: "Intact" | "Mildly Impaired" | "Severely Impaired" | "Unknown";
   allergies?: string[];
   identityAliases?: Alias[];
   createdAt: ISO;
@@ -333,7 +334,7 @@ export interface AppNotification {
   facilityId: string;
   createdAtISO: string;
   status: 'unread' | 'read' | 'dismissed';
-  category: 'LINE_LIST_REVIEW' | 'OUTBREAK_SUGGESTION' | 'VAX_GAP' | 'DEVICE_LINK' | 'ADMISSION_SCREENING' | 'SYMPTOM_WATCH';
+  category: 'LINE_LIST_REVIEW' | 'OUTBREAK_SUGGESTION' | 'VAX_GAP' | 'DEVICE_LINK' | 'ADMISSION_SCREENING' | 'SYMPTOM_WATCH' | 'ABT_STEWARDSHIP' | 'DEVICE_REVIEW' | 'VAX_REOFFER';
   residentId?: string;
   unit?: string;
   room?: string;

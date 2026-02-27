@@ -37,6 +37,12 @@ const ReportsConsole: React.FC = () => {
             Monthly Analytics
           </button>
           <button 
+            data-testid="qapi-tab-button"
+            onClick={() => setActiveTab('qapi')}
+            className={`${activeTab === 'qapi' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            QAPI Rollup
+          </button>
+          <button 
             data-testid="ondemand-tab-button"
             onClick={() => setActiveTab('ondemand')}
             className={`${activeTab === 'ondemand' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
@@ -50,6 +56,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'daily' && <DailyReport />}
         {activeTab === 'weekly' && <WeeklyReport />}
         {activeTab === 'monthly' && <MonthlyAnalytics />}
+        {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
       </div>
     </div>
@@ -917,5 +924,248 @@ const MonthlyAnalytics: React.FC = () => {
     </div>
   )
 }
+
+const QapiRollup: React.FC = () => {
+  const { store } = useFacilityData();
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+
+  const [year, monthNum] = selectedMonth.split('-').map(Number);
+  const monthStart = useMemo(() => new Date(year, monthNum - 1, 1), [year, monthNum]);
+  const monthEnd = useMemo(() => new Date(year, monthNum, 0, 23, 59, 59), [year, monthNum]);
+
+  const inMonth = (dateStr: string | undefined) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return d >= monthStart && d <= monthEnd;
+  };
+
+  // Infections by category
+  const infectionsByCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    (Object.values(store.infections) as IPEvent[]).forEach(ip => {
+      if (inMonth(ip.createdAt)) {
+        const cat = ip.infectionCategory || 'Unknown';
+        map[cat] = (map[cat] || 0) + 1;
+      }
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [store.infections, monthStart, monthEnd]);
+
+  // Infections by unit
+  const infectionsByUnit = useMemo(() => {
+    const map: Record<string, number> = {};
+    (Object.values(store.infections) as IPEvent[]).forEach(ip => {
+      if (inMonth(ip.createdAt)) {
+        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+        const unit = ip.locationSnapshot?.unit || (res as any)?.currentUnit || 'Unknown';
+        map[unit] = (map[unit] || 0) + 1;
+      }
+    });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [store.infections, store.residents, store.quarantine, monthStart, monthEnd]);
+
+  // ABT use rate: active ABTs with starts in month
+  const abtCount = useMemo(() =>
+    (Object.values(store.abts) as ABTCourse[]).filter(a => inMonth(a.startDate || a.createdAt)).length,
+    [store.abts, monthStart, monthEnd]
+  );
+
+  const activeResidentCount = useMemo(() =>
+    Object.values(store.residents).filter((r: Resident) => r.status === 'Active').length,
+    [store.residents]
+  );
+
+  // Vaccine coverage by vaccine type (given this month OR ever given)
+  const vaccineTypes = useMemo(() => {
+    const s = new Set<string>();
+    (Object.values(store.vaxEvents) as VaxEvent[]).forEach(v => s.add(v.vaccine));
+    return Array.from(s).sort();
+  }, [store.vaxEvents]);
+
+  const vaccineCoverage = useMemo(() => {
+    return vaccineTypes.map(vacType => {
+      const givenResidents = new Set(
+        (Object.values(store.vaxEvents) as VaxEvent[])
+          .filter(v => v.vaccine === vacType && v.status === 'given' && v.residentRef.kind === 'mrn')
+          .map(v => v.residentRef.id)
+      );
+      const pct = activeResidentCount > 0 ? ((givenResidents.size / activeResidentCount) * 100).toFixed(1) : '0.0';
+      return { vaccine: vacType, given: givenResidents.size, total: activeResidentCount, pct };
+    });
+  }, [vaccineTypes, store.vaxEvents, activeResidentCount]);
+
+  const handleExportCsv = () => {
+    const rows: string[][] = [];
+    rows.push([`QAPI Rollup — ${selectedMonth}`]);
+    rows.push([]);
+    rows.push(['Infections by Category']);
+    rows.push(['Category', 'Count']);
+    infectionsByCategory.forEach(([cat, cnt]) => rows.push([cat, String(cnt)]));
+    rows.push([]);
+    rows.push(['Infections by Unit']);
+    rows.push(['Unit', 'Count']);
+    infectionsByUnit.forEach(([unit, cnt]) => rows.push([unit, String(cnt)]));
+    rows.push([]);
+    rows.push(['ABT Use Rate']);
+    rows.push(['New ABT Courses (Month)', 'Active Residents', 'Rate per Resident']);
+    rows.push([String(abtCount), String(activeResidentCount), activeResidentCount > 0 ? (abtCount / activeResidentCount * 100).toFixed(1) + '%' : 'N/A']);
+    rows.push([]);
+    rows.push(['Vaccine Coverage (Cumulative)']);
+    rows.push(['Vaccine', 'Residents Given', 'Active Census', 'Coverage %']);
+    vaccineCoverage.forEach(r => rows.push([r.vaccine, String(r.given), String(r.total), r.pct + '%']));
+
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `qapi_rollup_${selectedMonth}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+        <span className="font-bold text-indigo-900 text-sm">QAPI Rollup</span>
+        <input
+          type="month"
+          value={selectedMonth}
+          onChange={e => setSelectedMonth(e.target.value)}
+          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+        />
+        <button
+          onClick={handleExportCsv}
+          className="ml-auto px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Infections by Category */}
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
+            <h3 className="text-base font-bold text-red-900">Infections by Category</h3>
+            <p className="text-xs text-red-700 mt-0.5">New infections created in {selectedMonth}</p>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Count</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {infectionsByCategory.length === 0 && (
+                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400">No infections this month</td></tr>
+              )}
+              {infectionsByCategory.map(([cat, cnt]) => (
+                <tr key={cat}>
+                  <td className="px-4 py-2 text-neutral-700">{cat}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-neutral-900">{cnt}</td>
+                </tr>
+              ))}
+              {infectionsByCategory.length > 0 && (
+                <tr className="bg-neutral-50">
+                  <td className="px-4 py-2 font-bold text-neutral-700">Total</td>
+                  <td className="px-4 py-2 text-right font-bold text-neutral-900">{infectionsByCategory.reduce((s, [, c]) => s + c, 0)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Infections by Unit */}
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
+            <h3 className="text-base font-bold text-amber-900">Infections by Unit</h3>
+            <p className="text-xs text-amber-700 mt-0.5">New infections created in {selectedMonth}</p>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Count</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {infectionsByUnit.length === 0 && (
+                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400">No infections this month</td></tr>
+              )}
+              {infectionsByUnit.map(([unit, cnt]) => (
+                <tr key={unit}>
+                  <td className="px-4 py-2 text-neutral-700">{unit}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-neutral-900">{cnt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ABT Use Rate */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-emerald-50">
+          <h3 className="text-base font-bold text-emerald-900">Antibiotic Use Rate</h3>
+          <p className="text-xs text-emerald-700 mt-0.5">New ABT courses started in {selectedMonth}</p>
+        </div>
+        <div className="px-6 py-4 flex gap-12">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-emerald-700">{abtCount}</div>
+            <div className="text-xs text-neutral-500 mt-1">New ABT Courses</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-neutral-700">{activeResidentCount}</div>
+            <div className="text-xs text-neutral-500 mt-1">Active Residents</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-indigo-700">
+              {activeResidentCount > 0 ? (abtCount / activeResidentCount * 100).toFixed(1) : '—'}%
+            </div>
+            <div className="text-xs text-neutral-500 mt-1">ABT Rate (% of census)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Vaccine Coverage */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-purple-50">
+          <h3 className="text-base font-bold text-purple-900">Vaccine Coverage (Cumulative)</h3>
+          <p className="text-xs text-purple-700 mt-0.5">% of active residents with at least one "given" record</p>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Given</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Active Census</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Coverage %</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {vaccineCoverage.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-neutral-400">No vaccination records found</td></tr>
+            )}
+            {vaccineCoverage.map(r => (
+              <tr key={r.vaccine}>
+                <td className="px-4 py-2 text-neutral-700">{r.vaccine}</td>
+                <td className="px-4 py-2 text-right text-neutral-700">{r.given}</td>
+                <td className="px-4 py-2 text-right text-neutral-500">{r.total}</td>
+                <td className="px-4 py-2 text-right">
+                  <span className={`font-semibold ${parseFloat(r.pct) >= 80 ? 'text-green-700' : parseFloat(r.pct) >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+                    {r.pct}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 export default ReportsConsole;

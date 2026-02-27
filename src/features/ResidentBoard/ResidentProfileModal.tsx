@@ -43,6 +43,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const [primaryDiagnosis, setPrimaryDiagnosis] = useState("");
   const [attendingMD, setAttendingMD] = useState("");
   const [allergiesInput, setAllergiesInput] = useState("");
+  const [cognitiveStatus, setCognitiveStatus] = useState<Resident["cognitiveStatus"]>(undefined);
 
   useEffect(() => {
     if (resident) {
@@ -57,6 +58,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
       setPrimaryDiagnosis(resident.primaryDiagnosis || "");
       setAttendingMD(resident.attendingMD || "");
       setAllergiesInput(resident.allergies ? resident.allergies.join(", ") : "");
+      setCognitiveStatus(resident.cognitiveStatus);
     }
   }, [resident]);
 
@@ -101,6 +103,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
         r.primaryDiagnosis = primaryDiagnosis.trim() || undefined;
         r.attendingMD = attendingMD.trim() || undefined;
         r.allergies = allergiesInput.trim() ? allergiesInput.split(",").map(a => a.trim()).filter(a => a) : [];
+        r.cognitiveStatus = cognitiveStatus;
         r.updatedAt = new Date().toISOString();
       }
     });
@@ -199,6 +202,11 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 <InfoItem label="Length of Stay" value={resident.admissionDate ? `${Math.floor((new Date().getTime() - new Date(resident.admissionDate).getTime()) / (1000 * 3600 * 24))} days` : "N/A"} />
                 <InfoItem label="Primary Diagnosis" value={resident.primaryDiagnosis || "None recorded"} />
                 <InfoItem label="Attending MD" value={resident.attendingMD || "None recorded"} />
+                <InfoItem label="Cognitive / Capacity Status" value={
+                  resident.cognitiveStatus
+                    ? <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${resident.cognitiveStatus === 'Intact' ? 'bg-green-100 text-green-800' : resident.cognitiveStatus === 'Mildly Impaired' ? 'bg-yellow-100 text-yellow-800' : resident.cognitiveStatus === 'Severely Impaired' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-700'}`}>{resident.cognitiveStatus}</span>
+                    : "Not documented"
+                } />
               </div>
             )}
           </section>
@@ -219,6 +227,16 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 mb-1">Attending MD</label>
                   <input type="text" value={attendingMD} onChange={e => setAttendingMD(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 mb-1">Cognitive / Capacity Status</label>
+                  <select value={cognitiveStatus || ""} onChange={e => setCognitiveStatus((e.target.value as Resident["cognitiveStatus"]) || undefined)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">Select...</option>
+                    <option value="Intact">Intact</option>
+                    <option value="Mildly Impaired">Mildly Impaired</option>
+                    <option value="Severely Impaired">Severely Impaired</option>
+                    <option value="Unknown">Unknown</option>
+                  </select>
                 </div>
               </div>
             ) : (

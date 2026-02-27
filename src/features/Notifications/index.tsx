@@ -63,10 +63,13 @@ export const NotificationsPage: React.FC = () => {
     switch (category) {
       case 'ADMISSION_SCREENING': return <AlertTriangle className="w-5 h-5 text-red-600" />;
       case 'VAX_GAP': return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+      case 'VAX_REOFFER': return <AlertTriangle className="w-5 h-5 text-purple-500" />;
       case 'LINE_LIST_REVIEW': return <Info className="w-5 h-5 text-blue-500" />;
       case 'SYMPTOM_WATCH': return <Info className="w-5 h-5 text-blue-500" />;
       case 'OUTBREAK_SUGGESTION': return <AlertTriangle className="w-5 h-5 text-red-600" />;
       case 'DEVICE_LINK': return <Info className="w-5 h-5 text-blue-500" />;
+      case 'ABT_STEWARDSHIP': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
+      case 'DEVICE_REVIEW': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
       default: return <Bell className="w-5 h-5 text-neutral-500" />;
     }
   };
@@ -76,10 +79,13 @@ export const NotificationsPage: React.FC = () => {
     switch (category) {
       case 'ADMISSION_SCREENING': return 'bg-red-50 border-red-200';
       case 'VAX_GAP': return 'bg-amber-50 border-amber-200';
+      case 'VAX_REOFFER': return 'bg-purple-50 border-purple-200';
       case 'LINE_LIST_REVIEW': return 'bg-blue-50 border-blue-200';
       case 'SYMPTOM_WATCH': return 'bg-blue-50 border-blue-200';
       case 'OUTBREAK_SUGGESTION': return 'bg-red-50 border-red-200';
       case 'DEVICE_LINK': return 'bg-blue-50 border-blue-200';
+      case 'ABT_STEWARDSHIP': return 'bg-orange-50 border-orange-200';
+      case 'DEVICE_REVIEW': return 'bg-orange-50 border-orange-200';
       default: return 'bg-white border-neutral-200';
     }
   };
@@ -88,10 +94,13 @@ export const NotificationsPage: React.FC = () => {
     switch (category) {
       case 'ADMISSION_SCREENING': return 'Missing Admission Screening';
       case 'VAX_GAP': return 'Vaccine Due/Overdue';
+      case 'VAX_REOFFER': return 'Vaccine Re-Offer Due';
       case 'LINE_LIST_REVIEW': return 'Line List Review Recommended';
       case 'SYMPTOM_WATCH': return 'Symptom Watch';
       case 'OUTBREAK_SUGGESTION': return 'Possible Outbreak Cluster';
       case 'DEVICE_LINK': return 'Device Link Detected';
+      case 'ABT_STEWARDSHIP': return 'ABT Stewardship Time-Out Due';
+      case 'DEVICE_REVIEW': return 'Device Necessity Review Due';
       default: return 'Notification';
     }
   };
@@ -100,10 +109,13 @@ export const NotificationsPage: React.FC = () => {
     switch (category) {
       case 'ADMISSION_SCREENING': return 'alert';
       case 'VAX_GAP': return 'warning';
+      case 'VAX_REOFFER': return 'warning';
       case 'LINE_LIST_REVIEW': return 'info';
       case 'SYMPTOM_WATCH': return 'info';
       case 'OUTBREAK_SUGGESTION': return 'alert';
       case 'DEVICE_LINK': return 'info';
+      case 'ABT_STEWARDSHIP': return 'warning';
+      case 'DEVICE_REVIEW': return 'warning';
       default: return 'info';
     }
   };
