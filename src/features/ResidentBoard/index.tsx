@@ -57,9 +57,23 @@ export const ResidentBoard: React.FC = () => {
 
   // Read unit filter from navigation state (e.g. from Dashboard census click)
   useEffect(() => {
-    const state = location.state as { filterUnit?: string } | null;
-    if (state?.filterUnit) {
-      setFilterUnit(state.filterUnit);
+    const state = location.state as { 
+      filterUnit?: string;
+      selectedResidentId?: string;
+      openProfile?: boolean;
+      openModal?: 'abt' | 'ip' | 'vax';
+      editId?: string;
+    } | null;
+    
+    if (state) {
+      if (state.filterUnit) setFilterUnit(state.filterUnit);
+      if (state.selectedResidentId) {
+        setSelectedResidentId(state.selectedResidentId);
+        if (state.openProfile) setShowProfileModal(true);
+        if (state.openModal === 'abt') { setEditingAbtId(state.editId || null); setShowAbtModal(true); }
+        if (state.openModal === 'ip') { setEditingIpId(state.editId || null); setShowIpModal(true); }
+        if (state.openModal === 'vax') { setEditingVaxId(state.editId || null); setShowVaxModal(true); }
+      }
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);

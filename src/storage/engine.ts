@@ -65,6 +65,7 @@ export function createEmptyDB(): UnifiedDB {
     surveyPackets: {},
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},
+    notifications: {},
   };
 
   return {

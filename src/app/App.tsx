@@ -11,6 +11,7 @@ import { ResidentChat } from "../features/Notes";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
+import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
@@ -30,7 +31,8 @@ import {
   MessageSquare,
   FileBarChart,
   PenSquare,
-  ClipboardCheck
+  ClipboardCheck,
+  Bell
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -67,6 +69,7 @@ const AppShell = () => {
   const isPrintRoute = location.pathname === "/print/audit-report";
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
+  const { notifications } = useNotifications();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
   const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
@@ -166,6 +169,7 @@ const AppShell = () => {
             
             <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
             <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
+            <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} />
             <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
             <SidebarLink to="/reports" icon={FileText} label="Reports" />
             <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />
@@ -189,6 +193,7 @@ const AppShell = () => {
                 
                 <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
+                <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><InfectionControlAuditCenter /></PageTransition>} />

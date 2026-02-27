@@ -328,6 +328,26 @@ export interface Facility {
   updatedAt: ISO;
 }
 
+export interface AppNotification {
+  id: string;
+  facilityId: string;
+  createdAtISO: string;
+  status: 'unread' | 'read' | 'dismissed';
+  category: 'LINE_LIST_REVIEW' | 'OUTBREAK_SUGGESTION' | 'VAX_GAP' | 'DEVICE_LINK' | 'ADMISSION_SCREENING' | 'SYMPTOM_WATCH';
+  residentId?: string;
+  unit?: string;
+  room?: string;
+  message: string;
+  clusterDetails?: { residentId: string; residentName: string; refType: 'note' | 'abt'; refId: string }[];
+  refs?: {
+    abtId?: string;
+    ipId?: string;
+    vaxId?: string;
+    noteId?: string;
+  };
+  ruleId: string;
+}
+
 export interface FacilityStore {
   residents: Record<string, Resident>;
   quarantine: Record<string, QuarantineResident>;
@@ -347,6 +367,11 @@ export interface FacilityStore {
   surveyPackets: Record<string, SurveyPacket>;
   infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
+  notifications: Record<string, AppNotification>;
+  notificationMeta?: {
+    lastDetectionRunAtISO?: string;
+    lastSeenEventAtISO?: string;
+  };
 }
 
 export interface UnifiedDB {
