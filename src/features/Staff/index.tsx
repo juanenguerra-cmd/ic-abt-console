@@ -244,6 +244,12 @@ const StaffPage: React.FC = () => {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   };
 
+  const getFieldLabel = (field: 'displayName' | 'role' | 'department' | 'type' | 'hireDate'): string => {
+    if (field === 'displayName') return 'Name *';
+    if (field === 'hireDate') return 'Hire Date';
+    return field.charAt(0).toUpperCase() + field.slice(1);
+  };
+
   // Filtered + searched staff list
   const filteredStaff = staffList.filter(s => {
     const matchesSearch = !searchQuery ||
@@ -288,7 +294,7 @@ const StaffPage: React.FC = () => {
     setShowBulkMenu(false);
   };
 
-  const bulkMarkVaccine = (vaccine: string, vaxStatus: string) => {
+  const bulkMarkVaccine = (vaccine: string, vaxStatus: 'given' | 'declined' | 'contraindicated') => {
     const date = new Date().toISOString().split('T')[0];
     updateDB(draft => {
       const facilityStore = draft.data.facilityData[activeFacilityId];
@@ -299,7 +305,7 @@ const StaffPage: React.FC = () => {
           id,
           staffId,
           vaccine,
-          status: vaxStatus as any,
+          status: vaxStatus,
           dateGiven: vaxStatus === 'given' ? date : undefined,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -351,7 +357,7 @@ const StaffPage: React.FC = () => {
           <select
             id="staff-status-filter"
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value as any)}
+            onChange={e => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
             className="border border-neutral-300 rounded-md px-2 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="all">All</option>
@@ -457,7 +463,7 @@ const StaffPage: React.FC = () => {
           <h3 className="font-semibold text-neutral-800 mb-3">New Staff Member</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {(['displayName', 'role', 'department', 'type', 'hireDate'] as const).map(field => {
-              const labelText = field === 'displayName' ? 'Name *' : field === 'hireDate' ? 'Hire Date' : field.charAt(0).toUpperCase() + field.slice(1);
+              const labelText = getFieldLabel(field);
               const inputId = `new-staff-${field}`;
               return (
                 <div key={field}>

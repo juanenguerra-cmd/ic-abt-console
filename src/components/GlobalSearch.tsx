@@ -18,6 +18,7 @@ export const GlobalSearch: React.FC = () => {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +82,9 @@ export const GlobalSearch: React.FC = () => {
     return out.slice(0, 10);
   }, [query, store]);
 
+  // Reset active index when results change
+  useEffect(() => { setActiveIndex(-1); }, [results]);
+
   const handleSelect = (result: SearchResult) => {
     navigate(result.navigateTo, result.navigateState ? { state: result.navigateState } : undefined);
     setQuery("");
@@ -92,8 +96,16 @@ export const GlobalSearch: React.FC = () => {
       setQuery("");
       setIsOpen(false);
       inputRef.current?.blur();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex(i => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && activeIndex >= 0 && results[activeIndex]) {
+      handleSelect(results[activeIndex]);
     }
-  }, []);
+  }, [results, activeIndex]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -109,7 +121,9 @@ export const GlobalSearch: React.FC = () => {
   // Open on keyboard shortcut (/)
   useEffect(() => {
     const handleGlobalKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      const active = document.activeElement;
+      const isEditable = active?.tagName === "INPUT" || active?.tagName === "TEXTAREA" || active?.getAttribute("contenteditable") === "true";
+      if (e.key === "/" && !isEditable) {
         e.preventDefault();
         inputRef.current?.focus();
         setIsOpen(true);
@@ -170,11 +184,12 @@ export const GlobalSearch: React.FC = () => {
             </div>
           ) : (
             <ul className="max-h-72 overflow-y-auto divide-y divide-neutral-100">
-              {results.map(result => (
-                <li key={`${result.type}-${result.id}`} role="option" aria-selected="false">
+              {results.map((result, index) => (
+                <li key={`${result.type}-${result.id}`} role="option" aria-selected={index === activeIndex}>
                   <button
                     onClick={() => handleSelect(result)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 text-left transition-colors focus:outline-none focus:bg-neutral-100"
+                    onMouseEnter={() => setActiveIndex(index)}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors focus:outline-none ${index === activeIndex ? "bg-indigo-50" : "hover:bg-neutral-50"}`}
                   >
                     {getIcon(result.type)}
                     <div className="min-w-0 flex-1">

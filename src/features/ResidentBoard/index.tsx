@@ -698,7 +698,7 @@ export const ResidentBoard: React.FC = () => {
                         </span>
                         <button
                           onClick={() => handleDeleteNote(note.id)}
-                          aria-label="Delete note"
+                          aria-label={`Delete note from ${new Date(note.createdAt).toLocaleDateString()}`}
                           className="text-neutral-400 hover:text-red-500"
                         >
                           <Trash2 className="w-3 h-3" />
