@@ -251,6 +251,35 @@ export interface AuditSession {
   completedAt?: string;
 }
 
+export type InfectionControlAuditResponse = "UNKNOWN" | "COMPLIANT" | "NON_COMPLIANT" | "NA";
+export type InfectionControlAuditSeverity = "Low" | "Medium" | "High";
+
+export interface InfectionControlAuditSession {
+  id: string;
+  auditDateISO: string;
+  unit: string;
+  shift: string;
+  auditorName: string;
+  notes: string;
+  createdAt: ISO;
+  updatedAt: ISO;
+  finalizedAt?: ISO;
+}
+
+export interface InfectionControlAuditItem {
+  id: string;
+  sessionId: string;
+  category: "HAND_HYGIENE" | "PPE" | "ISOLATION" | "EBP" | "ENV_CLEANING" | "ANTIBIOTIC_STEWARDSHIP" | "VACCINATION" | "OUTBREAK_PREP";
+  questionId: string;
+  questionText: string;
+  response: InfectionControlAuditResponse;
+  evidenceNote: string;
+  severity: InfectionControlAuditSeverity;
+  correctiveAction: string;
+  dueDateISO: string;
+  completedAt: string;
+}
+
 export interface FloorRoom {
   roomId: string;
   x: number;
@@ -305,6 +334,8 @@ export interface FacilityStore {
   outbreakDailyStatuses: Record<string, OutbreakDailyStatus>;
   exportProfiles: Record<string, ExportProfile>;
   surveyPackets: Record<string, SurveyPacket>;
+  infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
+  infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
 }
 
 export interface UnifiedDB {

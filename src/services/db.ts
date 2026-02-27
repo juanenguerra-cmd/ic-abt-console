@@ -22,6 +22,8 @@ function createEmptyFacilityStore(): FacilityStore {
     outbreakDailyStatuses: {},
     exportProfiles: {},
     surveyPackets: {},
+    infectionControlAuditSessions: {},
+    infectionControlAuditItems: {},
   };
 }
 
