@@ -423,6 +423,85 @@ export const runDetectionPipeline = (
     });
   }
 
+  // 8. ABT Stewardship 48-72h time-out (ABT_STEWARDSHIP)
+  const MS_PER_HOUR = 1000 * 60 * 60;
+  const THREE_DAYS_MS = 3 * 24 * MS_PER_HOUR;
+
+  Object.values(store.abts || {}).forEach((abt: ABTCourse) => {
+    if (abt.status === 'active' && abt.startDate) {
+      const startDate = new Date(abt.startDate);
+      const hoursElapsed = (now.getTime() - startDate.getTime()) / MS_PER_HOUR;
+      if (hoursElapsed >= 48 && hoursElapsed < 96) {
+        const resId = abt?.residentRef?.id;
+        const { name } = getResDetails(resId);
+        addNotif(
+          'abt_stewardship_timeout_rule',
+          'ABT_STEWARDSHIP',
+          resId,
+          abt.id,
+          `${name || 'Unknown Resident'} is on ${abt.medication} for ${Math.floor(hoursElapsed)}h. 48–72h stewardship time-out review is due.`,
+          { abtId: abt.id }
+        );
+      }
+    }
+  });
+
+  // 9. CAUTI/CLABSI device necessity review (DEVICE_REVIEW)
+  const deviceCategories = ['CAUTI', 'CLABSI'];
+  Object.values(store.infections || {}).forEach((ip: IPEvent) => {
+    if (ip.status === 'active') {
+      const isDevice = deviceCategories.some(cat => (ip.infectionCategory || '').toUpperCase().includes(cat));
+      // Also catch EBP events with Urinary Catheter or Central Line device types (case-insensitive)
+      const notesLower = (ip.notes || '').toLowerCase();
+      const hasDeviceInNotes = ip.ebp && (notesLower.includes('urinary catheter') || notesLower.includes('central line'));
+      if (isDevice || hasDeviceInNotes) {
+        const createdDate = new Date(ip.createdAt);
+        const threeDaysAgo = new Date(now.getTime() - THREE_DAYS_MS);
+        if (createdDate < threeDaysAgo) {
+          const resId = ip?.residentRef?.id;
+          const { name } = getResDetails(resId);
+          addNotif(
+            'device_necessity_review_rule',
+            'DEVICE_REVIEW',
+            resId,
+            ip.id,
+            `${name || 'Unknown Resident'} has had a device (${ip.infectionCategory || 'indwelling device'}) for >3 days. Document device necessity review.`,
+            { ipId: ip.id }
+          );
+        }
+      }
+    }
+  });
+
+  // 10. Vaccine re-offer reminder (VAX_REOFFER)
+  Object.values(store.vaxEvents || {}).forEach((vax: VaxEvent) => {
+    if (vax.status === 'declined' && vax.notes) {
+      try {
+        const match = vax.notes.match(/--- EXTENDED DATA ---\n(.*)/s);
+        if (match) {
+          const ext = JSON.parse(match[1]);
+          if (ext.offerAgainDate && !ext.permanentDeclination) {
+            const offerAgain = new Date(ext.offerAgainDate);
+            if (offerAgain <= now) {
+              const resId = vax?.residentRef?.id;
+              const { name } = getResDetails(resId);
+              addNotif(
+                'vax_reoffer_rule',
+                'VAX_REOFFER',
+                resId,
+                vax.id,
+                `${name || 'Unknown Resident'} is due for re-offer of ${vax.vaccine} vaccine (re-offer date: ${ext.offerAgainDate}).`,
+                { vaxId: vax.id }
+              );
+            }
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
+  });
+
   if (detected.length > 0 || currentMaxEventIso > lastSeen || isNewDay) {
     updateDB((draft: any) => {
       const facilityData = draft.data.facilityData[facilityId];

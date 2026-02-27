@@ -117,6 +117,20 @@ export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }
           <LinedText label="If Isolation checked, type (Contact/Droplet/Airborne/Other)" className="mt-2" />
         </section>
 
+        <section className="mb-6">
+          <h3 className="font-bold text-sm mb-2">COGNITIVE / CAPACITY STATUS</h3>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+            <Checkbox label="Intact" checked={resident.cognitiveStatus === 'Intact'} />
+            <Checkbox label="Mildly Impaired" checked={resident.cognitiveStatus === 'Mildly Impaired'} />
+            <Checkbox label="Severely Impaired" checked={resident.cognitiveStatus === 'Severely Impaired'} />
+            <Checkbox label="Unknown / Not Assessed" checked={!resident.cognitiveStatus || resident.cognitiveStatus === 'Unknown'} />
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <Checkbox label="Education materials modified for cognitive status" checked={resident.cognitiveStatus === 'Mildly Impaired' || resident.cognitiveStatus === 'Severely Impaired'} />
+          </div>
+          <LinedText label="Capacity notes / surrogate decision maker" className="mt-2" />
+        </section>
+
         <section className="mb-6 flex-1 flex flex-col">
           <h3 className="font-bold text-sm mb-2">SCREENING NOTES</h3>
           <div className="flex-1 border border-black p-2"></div>
