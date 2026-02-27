@@ -20,6 +20,15 @@ export const SettingsConsole: React.FC = () => {
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
   
+  // Floor tile sizes
+  const [tileSizes, setTileSizes] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('ltc_floor_tile_sizes_v1') || '{}'); } catch { return {}; }
+  });
+  const saveTileSizes = (sizes: Record<string, number>) => {
+    setTileSizes(sizes);
+    localStorage.setItem('ltc_floor_tile_sizes_v1', JSON.stringify(sizes));
+  };
+  
   const facility = db.data.facilities.byId[activeFacilityId];
   const [facilityName, setFacilityName] = useState(facility?.name || "");
   const [bedCapacity, setBedCapacity] = useState(facility?.bedCapacity?.toString() || "");
@@ -164,61 +173,54 @@ export const SettingsConsole: React.FC = () => {
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
           <Map className="h-5 w-5 text-indigo-500 mr-2" />
-          <h3 className="text-lg leading-6 font-medium text-neutral-900">Floor Layout Settings</h3>
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Floor Layout — Room Tile Sizes</h3>
         </div>
         <div className="px-4 py-5 sm:p-6 space-y-4">
-          <p className="text-sm text-neutral-600">Upload a JSON file containing the floor layout configuration. The layout will be used to render the live floor map on the Dashboard and Resident Board.</p>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.json';
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                      try {
-                        const parsed = JSON.parse(e.target?.result as string);
-                        updateDB(draft => {
-                          const f = draft.data.facilities.byId[activeFacilityId];
-                          if (f) {
-                            f.floorLayouts = [parsed];
-                          }
-                        });
-                        alert('Floor layout updated successfully.');
-                      } catch (error) {
-                        alert('Invalid JSON file.');
-                      }
-                    };
-                    reader.readAsText(file);
-                  }
-                };
-                input.click();
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
-            >
-              <Upload className="w-4 h-4" />
-              Upload Layout JSON
-            </button>
-            {facility.floorLayouts && facility.floorLayouts.length > 0 && (
-              <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to remove the custom floor layout? The default layout will be used instead.')) {
-                    updateDB(draft => {
-                      const f = draft.data.facilities.byId[activeFacilityId];
-                      if (f) {
-                        f.floorLayouts = undefined;
-                      }
-                    });
-                  }
-                }}
-                className="text-sm text-red-600 hover:text-red-800 font-medium"
-              >
-                Remove Custom Layout
-              </button>
-            )}
+          <p className="text-sm text-neutral-600">Configure the visual tile size for each room on the floor map (1 = smallest, 10 = largest).</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {(() => {
+              // Collect all rooms from residents and stored config
+              const roomSet = new Set<string>();
+              Object.values(store.residents).forEach(r => { if (r.currentRoom) roomSet.add(r.currentRoom); });
+              try {
+                const stored = localStorage.getItem('ltc_facility_rooms_config');
+                if (stored) {
+                  const mapping = JSON.parse(stored);
+                  Object.values(mapping).forEach((roomsStr: any) => {
+                    roomsStr.split(',').map((s: string) => s.trim()).filter(Boolean).forEach((r: string) => roomSet.add(r));
+                  });
+                }
+              } catch {}
+              const rooms = Array.from(roomSet).sort();
+              if (rooms.length === 0) return <p className="text-sm text-neutral-400 col-span-3">No rooms configured yet.</p>;
+              return rooms.map(room => {
+                const size = tileSizes[room] ?? 5;
+                return (
+                  <div key={room} className="flex flex-col gap-2 bg-neutral-50 border border-neutral-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-neutral-700">Room {room}</span>
+                      <span className="text-xs text-neutral-500">{size}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={size}
+                      onChange={e => saveTileSizes({ ...tileSizes, [room]: Number(e.target.value) })}
+                      className="w-full"
+                    />
+                    {/* Live preview */}
+                    <div className="flex justify-center">
+                      <div
+                        style={{ width: `${size * 8}px`, height: `${size * 8}px` }}
+                        className="bg-indigo-400 rounded-sm transition-all duration-200"
+                        title={`Tile preview: size ${size}`}
+                      />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>

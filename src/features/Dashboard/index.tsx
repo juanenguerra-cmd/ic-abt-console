@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Users, AlertCircle, FileText, Inbox, Building2 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
 import { ActivePrecautionsModal } from './ActivePrecautionsModal';
@@ -18,6 +18,7 @@ export const Dashboard: React.FC = () => {
   const { db } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
   const location = useLocation();
+  const navigate = useNavigate();
   const facility = db.data.facilities.byId[activeFacilityId];
   
   const layout: FloorLayout = useMemo(() => {
@@ -147,6 +148,15 @@ export const Dashboard: React.FC = () => {
   const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
 
+  // Audit Center metrics
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const auditSessions = Object.values(store.infectionControlAuditSessions || {}) as any[];
+  const auditItems = Object.values(store.infectionControlAuditItems || {}) as any[];
+  const auditsLast30 = auditSessions.filter((s: any) => new Date(s.createdAt) >= thirtyDaysAgo).length;
+  const openCorrectiveActions = auditItems.filter((i: any) => i.response === 'NON_COMPLIANT' && i.correctiveAction?.trim() && !i.completedAt).length;
+  const nonCompliantItems = auditItems.filter((i: any) => i.response === 'NON_COMPLIANT').length;
+
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
@@ -226,6 +236,43 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="p-2 bg-amber-50 rounded-lg">
                 <Inbox className="w-5 h-5 text-amber-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Audit Center Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Audits (Last 30d)</p>
+                <p className="text-2xl font-bold text-neutral-900">{auditsLast30}</p>
+              </div>
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <ClipboardCheck className="w-5 h-5 text-indigo-600" />
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Open Corrective Actions</p>
+                <p className="text-2xl font-bold text-neutral-900">{openCorrectiveActions}</p>
+              </div>
+              <div className="p-2 bg-yellow-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Non-Compliant Items</p>
+                <p className="text-2xl font-bold text-neutral-900">{nonCompliantItems}</p>
+              </div>
+              <div className="p-2 bg-red-50 rounded-lg">
+                <ClipboardCheck className="w-5 h-5 text-red-600" />
               </div>
             </div>
           </div>

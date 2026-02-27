@@ -3,13 +3,13 @@ import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
 import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { useLocation } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
 import { IpEventModal } from "./IpEventModal";
 import { VaxEventModal } from "./VaxEventModal";
 import { ResidentProfileModal } from "./ResidentProfileModal";
 import { SettingsModal } from "./SettingsModal";
-import { Floorplan } from "../Floorplan";
 import { ShiftReport } from "./ShiftReport";
 import { QuarantineLinkModal } from "./QuarantineLinkModal";
 import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
@@ -17,16 +17,18 @@ import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreenin
 export const ResidentBoard: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { db, updateDB } = useDatabase();
+  const location = useLocation();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [filterAbtOnly, setFilterAbtOnly] = useState(false);
+  const [filterUnit, setFilterUnit] = useState<string>("");
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCensusModal, setShowCensusModal] = useState(false);
   
-  const [view, setView] = useState<'board' | 'report' | 'floorplan' | 'quarantine'>('board');
+  const [view, setView] = useState<'board' | 'report' | 'quarantine'>('board');
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showArchivedNotes, setShowArchivedNotes] = useState(false);
@@ -52,6 +54,15 @@ export const ResidentBoard: React.FC = () => {
   const [mentionQuery, setMentionQuery] = useState("");
   const [cursorPos, setCursorPos] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Read unit filter from navigation state (e.g. from Dashboard census click)
+  useEffect(() => {
+    const state = location.state as { filterUnit?: string } | null;
+    if (state?.filterUnit) {
+      setFilterUnit(state.filterUnit);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const residents = Object.values(store.residents) as Resident[];
   const activeInfections = (Object.values(store.infections) as any[]).filter(i => i.status === 'active');
@@ -96,9 +107,11 @@ export const ResidentBoard: React.FC = () => {
         if (!hasAbt) return false;
       }
 
+      if (filterUnit && r.currentUnit?.trim() !== filterUnit) return false;
+
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, activeABTs]);
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, activeABTs, filterUnit]);
 
   // Group by Unit
   // The prompt asks for Unit 2, Unit 3, Unit 4. We'll group dynamically based on currentUnit.
@@ -209,7 +222,17 @@ export const ResidentBoard: React.FC = () => {
   };
 
   const submitNote = () => {
-    if (!noteInput.trim() || !selectedResidentId) return;
+    if (!noteInput.trim()) return;
+
+    // Extract @mention MRN if any
+    const mentionMatch = noteInput.match(/@(\S+,\s*\S+)\s+\(([^)]+)\)/);
+    let linkedResidentId: string | null = selectedResidentId;
+    if (!linkedResidentId && mentionMatch) {
+      // Try to find referenced resident by name in mention
+      const mentionText = mentionMatch[0];
+      const found = residents.find(r => mentionText.includes(`${r.lastName},`) || mentionText.includes(r.displayName));
+      linkedResidentId = found?.mrn || null;
+    }
 
     updateDB((draft) => {
       const facilityId = draft.data.facilities.activeFacilityId;
@@ -217,8 +240,8 @@ export const ResidentBoard: React.FC = () => {
       
       draft.data.facilityData[facilityId].notes[noteId] = {
         id: noteId,
-        residentRef: { kind: "mrn", id: selectedResidentId },
-        noteType: "general",
+        residentRef: linkedResidentId ? { kind: "mrn", id: linkedResidentId } : { kind: "mrn", id: "general" },
+        noteType: linkedResidentId ? "general" : "shift",
         body: noteInput,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -316,10 +339,6 @@ export const ResidentBoard: React.FC = () => {
     );
   }
 
-  if (view === 'floorplan') {
-    return <Floorplan onBack={() => setView('board')} />;
-  }
-
   if (view === 'report') {
     return <ShiftReport onBack={() => setView('board')} />;
   }
@@ -340,6 +359,14 @@ export const ResidentBoard: React.FC = () => {
               className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-64"
             />
           </div>
+          {filterUnit && (
+            <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+              Unit: {filterUnit}
+              <button onClick={() => setFilterUnit("")} className="ml-1 hover:text-indigo-900">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -355,13 +382,6 @@ export const ResidentBoard: React.FC = () => {
           >
             <Inbox className="w-4 h-4" />
             Quarantine
-          </button>
-          <button 
-            onClick={() => setView('floorplan')}
-            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
-          >
-            <Map className="w-4 h-4" />
-            Floor Plan
           </button>
           <button 
             onClick={() => setView('report')}
@@ -689,13 +709,12 @@ export const ResidentBoard: React.FC = () => {
                 ref={inputRef}
                 value={noteInput}
                 onChange={handleNoteInput}
-                disabled={!selectedResidentId}
-                placeholder={selectedResidentId ? "Type a note... Use @ to tag others" : "Select a resident first"}
-                className="w-full min-h-[80px] p-2 text-sm border border-neutral-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none disabled:bg-neutral-50 disabled:cursor-not-allowed"
+                placeholder="Type a note... Use @ to tag a resident"
+                className="w-full min-h-[80px] p-2 text-sm border border-neutral-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
               />
               <button
                 onClick={submitNote}
-                disabled={!noteInput.trim() || !selectedResidentId}
+                disabled={!noteInput.trim()}
                 className="self-end px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 <Send className="w-4 h-4" />

@@ -2,6 +2,7 @@ import React from 'react';
 import { Printer, X } from 'lucide-react';
 import { useFacilityData } from '../../app/providers';
 import { Resident, ResidentNote } from '../../domain/models';
+import { NewAdmissionIpScreening } from '../ResidentBoard/PrintableForms/NewAdmissionIpScreening';
 
 interface Props {
   onClose: () => void;
@@ -9,7 +10,7 @@ interface Props {
 
 export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
-  const [printView, setPrintView] = React.useState(false);
+  const [printingResidentId, setPrintingResidentId] = React.useState<string | null>(null);
 
   const residents = Object.values(store.residents) as Resident[];
   const notes = Object.values(store.notes) as ResidentNote[];
@@ -28,34 +29,20 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
     return !hasScreeningNote;
   });
 
-  const handlePrint = () => {
-    setPrintView(true);
-    const restore = () => {
-      setPrintView(false);
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    requestAnimationFrame(() => {
-      window.print();
-    });
-  };
+  if (printingResidentId) {
+    return <NewAdmissionIpScreening residentId={printingResidentId} onClose={() => setPrintingResidentId(null)} />;
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col h-[90vh]">
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
           <h2 className="text-xl font-bold text-neutral-900">Admission Screening Status (Last 72 Hours)</h2>
-          <div className="flex items-center gap-4">
-            <button onClick={handlePrint} className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
-              <Printer className="w-4 h-4" />
-              Print
-            </button>
-            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
+            <X className="w-6 h-6" />
+          </button>
         </div>
-        <div className={`p-6 overflow-y-auto flex-1 ${printView ? 'printable-area' : ''}`}>
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4 text-sm mb-4">
             <strong>{residentsNeedingScreening.length}</strong> resident(s) require an admission screening note.
           </div>
@@ -66,7 +53,16 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
                   <p className="font-medium text-neutral-800">{r.displayName}</p>
                   <p className="text-neutral-500">Admitted: {new Date(r.admissionDate!).toLocaleDateString()}</p>
                 </div>
-                <span className="text-red-600 font-semibold">Screening Due</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-red-600 font-semibold">Screening Due</span>
+                  <button
+                    onClick={() => setPrintingResidentId(r.mrn)}
+                    title="Print Admission Screening"
+                    className="text-neutral-500 hover:text-indigo-600"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
+                </div>
               </li>
             ))}
             {residentsNeedingScreening.length === 0 && (

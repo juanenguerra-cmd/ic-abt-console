@@ -210,7 +210,7 @@ export const ResidentChat: React.FC = () => {
                 handleSubmit();
               }
             }}
-            placeholder="Type a note... e.g. '@Smith checked vitals, stable.'"
+            placeholder="Type a note... e.g. '@Doe, Jane checked vitals, stable.'"
             className="flex-1 min-h-[80px] p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
           />
           <button
