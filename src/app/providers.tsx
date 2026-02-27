@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { UnifiedDB, FacilityStore } from "../domain/models";
-import { loadDB, saveDB, restoreFromPrev, StorageError, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
+import { loadDBAsync, saveDBAsync, restoreFromPrevAsync, StorageError, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 
 interface DatabaseContextType {
@@ -29,20 +29,21 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [crossTabAlert, setCrossTabAlert] = useState(false);
 
   useEffect(() => {
-    try {
-      const loadedDb = loadDB();
-      setDb(loadedDb);
-      setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
-    } catch (err) {
-      console.error("Failed to load DB:", err);
-      if (err instanceof SchemaMigrationError) {
-        setIsMigrationRequired(true);
-        setError(err.message);
-      } else {
-        setIsSafeMode(true);
-        setError(err instanceof Error ? err.message : "Unknown database error");
-      }
-    }
+    loadDBAsync()
+      .then((loadedDb) => {
+        setDb(loadedDb);
+        setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
+      })
+      .catch((err) => {
+        console.error("Failed to load DB:", err);
+        if (err instanceof SchemaMigrationError) {
+          setIsMigrationRequired(true);
+          setError(err.message);
+        } else {
+          setIsSafeMode(true);
+          setError(err instanceof Error ? err.message : "Unknown database error");
+        }
+      });
   }, []);
 
   // Multi-tab dirty-write guard: detect when another tab writes to localStorage
@@ -58,18 +59,31 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const updateDB = useCallback((updater: (draft: UnifiedDB) => void) => {
     if (!db) return;
-    
+
     try {
+      // Capture the previous state before the optimistic update so that a
+      // late-failing async save rolls back to the correct snapshot even if
+      // updateDB is called again before the save completes.
+      const prevDb = db;
+
       // Create a deep clone to act as our draft
       const nextDb = JSON.parse(JSON.stringify(db)) as UnifiedDB;
       updater(nextDb);
-      
-      // Attempt to save to storage engine
-      saveDB(nextDb);
-      
-      // If successful, update React state
+
+      // Optimistically update React state immediately so the UI feels instant.
       setDb(nextDb);
       setError(null);
+
+      // Persist asynchronously to IndexedDB (primary store).
+      saveDBAsync(nextDb).catch((err) => {
+        console.error("DB_SAVE_FAILURE", err);
+        window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
+        const msg = err instanceof Error ? err.message : "Failed to save database";
+        setError(msg);
+        setSaveErrorToast(msg);
+        // Roll back to the explicitly captured previous state.
+        setDb(prevDb);
+      });
     } catch (err) {
       console.error("DB_SAVE_FAILURE", err);
       window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
@@ -80,25 +94,27 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [db]);
 
   const setDB = useCallback((newDb: UnifiedDB) => {
-    try {
-      saveDB(newDb);
-      setDb(newDb);
-      setError(null);
-    } catch (err) {
+    // Optimistically update React state.
+    setDb(newDb);
+    setError(null);
+
+    saveDBAsync(newDb).catch((err) => {
       console.error("DB_SAVE_FAILURE", err);
       window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
       const msg = err instanceof Error ? err.message : "Failed to save database";
       setError(msg);
       setSaveErrorToast(msg);
-    }
+    });
   }, []);
 
   const handleRestore = () => {
-    if (restoreFromPrev()) {
-      window.location.reload();
-    } else {
-      alert("No previous healthy snapshot found to restore.");
-    }
+    restoreFromPrevAsync().then((ok) => {
+      if (ok) {
+        window.location.reload();
+      } else {
+        alert("No previous healthy snapshot found to restore.");
+      }
+    });
   };
 
   const handleHardReset = () => {
