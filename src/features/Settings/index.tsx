@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { restoreFromPrev } from "../../storage/engine";
+import { restoreFromPrevAsync } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
@@ -80,12 +80,14 @@ export const SettingsConsole: React.FC = () => {
     if (confirm("Are you sure you want to restore the previous snapshot? Current unsaved changes may be lost.")) {
       setIsRestoring(true);
       setTimeout(() => {
-        if (restoreFromPrev()) {
-          window.location.reload();
-        } else {
-          alert("No previous snapshot found.");
-          setIsRestoring(false);
-        }
+        restoreFromPrevAsync().then((ok) => {
+          if (ok) {
+            window.location.reload();
+          } else {
+            alert("No previous snapshot found.");
+            setIsRestoring(false);
+          }
+        });
       }, 1000);
     }
   };
