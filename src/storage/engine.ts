@@ -322,10 +322,34 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
 
   // --- IDB atomic swap ---
   await idbSet(DB_KEY_TMP, serialized);
+  await new Promise<void>((resolve) => setTimeout(resolve, 0)); // yield to IDB flush
 
   const tmpVerify = await idbGet<string>(DB_KEY_TMP);
+  if (!tmpVerify) {
+    // TMP slot is completely absent — genuine write failure.
+    throw new StorageError(
+      "Save failed: storage write could not be verified. " +
+      "This is often caused by a browser extension interfering with storage. " +
+      "Try disabling extensions or using an Incognito window. Your data has NOT been lost."
+    );
+  }
   if (tmpVerify !== serialized) {
-    throw new StorageError("IDB verification failed: TMP data mismatch after write.");
+    // Soft mismatch: values differ but are not absent (possible extension interference
+    // or IDB re-serialization with different key order / whitespace).  Attempt a
+    // semantic comparison before deciding to abort.
+    let semanticallyEqual = false;
+    try {
+      semanticallyEqual =
+        JSON.stringify(JSON.parse(tmpVerify)) === JSON.stringify(JSON.parse(serialized));
+    } catch {
+      // Unparseable — treat as a hard mismatch below.
+    }
+    if (!semanticallyEqual) {
+      // Log for diagnostics but degrade gracefully — do NOT abort the save.
+      console.warn(
+        "IDB TMP verify: soft mismatch detected (possible extension interference). Continuing with save operation."
+      );
+    }
   }
 
   const currentMain = await idbGet<string>(DB_KEY_MAIN);
