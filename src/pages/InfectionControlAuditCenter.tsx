@@ -161,8 +161,9 @@ const InfectionControlAuditCenter: React.FC = () => {
     });
   };
 
-  const toastOnError = () => {
-    setErrorMessage("Unable to delete audit session. Please try again.");
+  const toastOnError = (error: unknown) => {
+    const suffix = error instanceof Error && error.message ? ` (${error.message})` : "";
+    setErrorMessage(`Unable to delete audit session. Please try again.${suffix}`);
   };
 
   const deleteSession = () => {
