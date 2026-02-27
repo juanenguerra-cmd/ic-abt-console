@@ -2,40 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { restoreFromPrev } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map } from "lucide-react";
-import { UnifiedDB, ABTCourse, IPEvent, VaxEvent } from "../../domain/models";
-import { v4 as uuidv4 } from 'uuid';
+import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
+import { CsvMigrationWizard } from "./CsvMigrationWizard";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
-
-const parseCsvRow = (row: string): string[] => {
-  const values: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < row.length; i++) {
-    const char = row[i];
-    if (char === '"') {
-      if (inQuotes && row[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      values.push(current.trim());
-      current = "";
-    } else {
-      current += char;
-    }
-  }
-
-  values.push(current.trim());
-  return values;
-};
-
-const normalizeCsvHeader = (header: string) => header.trim().toLowerCase().replace(/[\s_]+/g, "");
 
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
@@ -134,68 +106,6 @@ export const SettingsConsole: React.FC = () => {
       };
       reader.readAsText(file);
     }
-  };
-
-  const handleCsvImport = (file: File, type: 'ABT' | 'IP' | 'VAX') => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const rows = text.split(/\r?\n/).filter(row => row.trim());
-      if (rows.length < 2) {
-        alert(`No ${type} data rows found.`);
-        return;
-      }
-      const headers = parseCsvRow(rows[0]).map(normalizeCsvHeader);
-      const getCol = (cols: string[], ...keys: string[]) => {
-        for (const key of keys) {
-          const idx = headers.indexOf(normalizeCsvHeader(key));
-          if (idx >= 0) return cols[idx]?.trim() || "";
-        }
-        return "";
-      };
-      let importedCount = 0;
-      let quarantinedCount = 0;
-      updateDB(draft => {
-        rows.slice(1).forEach(row => {
-          const cols = parseCsvRow(row);
-          const mrn = getCol(cols, 'mrn');
-          if (!mrn) return;
-          if (!draft.data.facilityData[activeFacilityId].residents[mrn]) {
-            const now = new Date().toISOString();
-            const qId = `Q:${uuidv4()}`;
-            draft.data.facilityData[activeFacilityId].quarantine[qId] = {
-              tempId: qId,
-              displayName: getCol(cols, 'displayName', 'name') || `MRN ${mrn}`,
-              dob: getCol(cols, 'dob', 'dateOfBirth'),
-              unitSnapshot: getCol(cols, 'currentUnit', 'unit'),
-              roomSnapshot: getCol(cols, 'currentRoom', 'room'),
-              source: 'legacy_import',
-              rawHint: JSON.stringify({ type, row }),
-              createdAt: now,
-              updatedAt: now,
-            };
-            quarantinedCount++;
-            return;
-          }
-          const id = uuidv4();
-          const residentRef: { kind: 'mrn'; id: string } = { kind: 'mrn', id: mrn };
-          
-          if (type === 'ABT') {
-            const newAbt: ABTCourse = { id, residentRef, medication: getCol(cols, 'medication', 'antibiotic'), startDate: getCol(cols, 'startDate', 'start'), status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-            draft.data.facilityData[activeFacilityId].abts[id] = newAbt;
-          } else if (type === 'IP') {
-            const newIp: IPEvent = { id, residentRef, infectionSite: getCol(cols, 'infectionSite', 'site'), organism: getCol(cols, 'organism'), status: 'resolved', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-            draft.data.facilityData[activeFacilityId].infections[id] = newIp;
-          } else if (type === 'VAX') {
-            const newVax: VaxEvent = { id, residentRef, vaccine: getCol(cols, 'vaccine'), dateGiven: getCol(cols, 'dateGiven', 'date'), status: 'given', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-            draft.data.facilityData[activeFacilityId].vaxEvents[id] = newVax;
-          }
-          importedCount++;
-        });
-      });
-      alert(`${type} import complete. Imported: ${importedCount}. Sent to Quarantine: ${quarantinedCount}.`);
-    };
-    reader.readAsText(file);
   };
 
   return (
@@ -401,12 +311,8 @@ export const SettingsConsole: React.FC = () => {
           <h3 className="text-lg leading-6 font-medium text-neutral-900">CSV Data Migration</h3>
         </div>
         <div className="px-4 py-5 sm:p-6 space-y-4">
-          <p className="text-sm text-neutral-600">Import historical data from CSV files. Use the template headers for accurate mapping. Records with MRNs not found in current census will be sent to Quarantine for review/editing.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <CsvUploader label="ABT History" onFileUpload={(file) => handleCsvImport(file, 'ABT')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,medication,startDate\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Ceftriaxone,2026-01-12`}/>
-            <CsvUploader label="IP History" onFileUpload={(file) => handleCsvImport(file, 'IP')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,infectionSite,organism\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Lung,E. coli`} />
-            <CsvUploader label="Vax History" onFileUpload={(file) => handleCsvImport(file, 'VAX')} templateCsv={`mrn,displayName,dob,currentUnit,currentRoom,vaccine,dateGiven\n12345,DOE JOHN,1940-01-01,Unit 1,101A,Influenza,2025-10-15`} />
-          </div>
+          <p className="text-sm text-neutral-600">Download full migration templates for IP, ABT, and VAX, then import using a CSV mapper with preview and validation.</p>
+          <CsvMigrationWizard />
         </div>
       </div>
 
@@ -467,45 +373,3 @@ export const SettingsConsole: React.FC = () => {
     </div>
   );
 };
-
-const CsvUploader = ({ label, onFileUpload, templateCsv }: { label: string, onFileUpload: (file: File) => void, templateCsv: string }) => {
-  const ref = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState('');
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      onFileUpload(file);
-    }
-  };
-
-  const handleDownloadTemplate = () => {
-    const blob = new Blob([templateCsv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${label.toLowerCase().replace(' ', '_')}_template.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  return (
-    <div className="text-center p-4 border-2 border-dashed border-neutral-300 rounded-lg flex flex-col justify-between">
-      <div>
-        <p className="text-sm font-medium text-neutral-800 mb-2">{label}</p>
-        <button 
-          data-testid={`upload-csv-button-${label.toLowerCase().replace(' ', '-')}`}
-          onClick={() => ref.current?.click()}
-          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-        >
-          {fileName ? 'Replace File' : 'Upload CSV'}
-        </button>
-        {fileName && <p className="text-xs text-neutral-500 mt-1 truncate">{fileName}</p>}
-        <input type="file" ref={ref} onChange={handleChange} className="hidden" accept=".csv" />
-      </div>
-      <button data-testid={`download-template-button-${label.toLowerCase().replace(' ', '-')}`} onClick={handleDownloadTemplate} className="mt-2 text-xs text-neutral-500 hover:text-neutral-700 active:scale-95">Download Template</button>
-    </div>
-  )
-}

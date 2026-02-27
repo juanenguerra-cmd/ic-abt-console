@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardCopy, FileDown, Printer } from "lucide-react";
+import { CheckCircle2, ClipboardCopy, FileDown, Printer, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../app/providers";
 import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession } from "../domain/models";
@@ -25,6 +25,14 @@ const normalizeSeverity = (value: string): InfectionControlAuditItem["severity"]
   if (value === "HIGH") return "HIGH";
   if (value === "MED") return "MED";
   return "LOW";
+};
+
+const safeRun = (task: () => void, onError: (error: unknown) => void) => {
+  try {
+    task();
+  } catch (error) {
+    onError(error);
+  }
 };
 
 const InfectionControlAuditCenter: React.FC = () => {
@@ -54,7 +62,7 @@ const InfectionControlAuditCenter: React.FC = () => {
       setSelectedSessionId("");
       return;
     }
-    if (!selectedSessionId || !sessions.some(s => s.id === selectedSessionId)) {
+    if (selectedSessionId && !sessions.some(s => s.id === selectedSessionId)) {
       setSelectedSessionId(sessions[0].id);
     }
   }, [sessions, selectedSessionId]);
@@ -151,6 +159,34 @@ const InfectionControlAuditCenter: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
     });
+  };
+
+  const toastOnError = (error: unknown) => {
+    const suffix = error instanceof Error && error.message ? ` (${error.message})` : "";
+    setErrorMessage(`Unable to delete audit session. Please try again.${suffix}`);
+  };
+
+  const deleteSession = () => {
+    if (!selectedSession || selectedSession.finalizedAt) return;
+    const confirmed = window.confirm("Delete this audit session? This will permanently remove the session and all its audit items.");
+    if (!confirmed) return;
+
+    safeRun(() => {
+      updateDB(draft => {
+        const facilityStore = draft.data.facilityData[activeFacilityId];
+        facilityStore.infectionControlAuditSessions ||= {};
+        facilityStore.infectionControlAuditItems ||= {};
+
+        delete facilityStore.infectionControlAuditSessions[selectedSession.id];
+        Object.keys(facilityStore.infectionControlAuditItems).forEach(itemId => {
+          if (facilityStore.infectionControlAuditItems[itemId]?.sessionId === selectedSession.id) {
+            delete facilityStore.infectionControlAuditItems[itemId];
+          }
+        });
+      });
+      setSelectedSessionId("");
+      setErrorMessage("");
+    }, toastOnError);
   };
 
   const openPrint = () => {
@@ -266,6 +302,16 @@ const InfectionControlAuditCenter: React.FC = () => {
             <button onClick={finalizeAudit} disabled={!selectedSession || isReadOnly} className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50">
               <CheckCircle2 className="w-4 h-4" /> Finalize Audit
             </button>
+            {selectedSession && (
+              <button
+                onClick={deleteSession}
+                disabled={isReadOnly}
+                title={isReadOnly ? "Finalized sessions cannot be deleted." : "Delete session"}
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-red-300 text-red-700 text-sm hover:bg-red-50 disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" /> Delete Session
+              </button>
+            )}
           </div>
         </div>
 
