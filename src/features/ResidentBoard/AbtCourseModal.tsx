@@ -71,7 +71,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
   const duplicateWarning = useMemo(() => {
     if (!medication.trim()) return null;
     const medLower = medication.trim().toLowerCase();
-    const duplicate = Object.values(store.abts as Record<string, import("../../domain/models").ABTCourse>).find(
+    const duplicate = Object.values(store.abts as Record<string, ABTCourse>).find(
       (a) =>
         a.id !== existingAbt?.id &&
         a.residentRef.id === residentId &&
