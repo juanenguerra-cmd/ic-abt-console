@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, Users, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useLocation } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
@@ -13,11 +13,14 @@ import { SettingsModal } from "./SettingsModal";
 import { ShiftReport } from "./ShiftReport";
 import { QuarantineLinkModal } from "./QuarantineLinkModal";
 import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
+import { useUndoToast } from "../../components/UndoToast";
+import { EmptyState } from "../../components/EmptyState";
 
 export const ResidentBoard: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { db, updateDB } = useDatabase();
   const location = useLocation();
+  const { showUndo } = useUndoToast();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
@@ -266,12 +269,25 @@ export const ResidentBoard: React.FC = () => {
   };
 
   const handleDeleteNote = (noteId: string) => {
-    if (window.confirm("Are you sure you want to delete this note? This action cannot be undone.")) {
-      updateDB(draft => {
-        const facilityId = draft.data.facilities.activeFacilityId;
-        delete draft.data.facilityData[facilityId].notes[noteId];
-      });
-    }
+    // Capture the note before deleting so we can undo
+    const facilityId = db.data.facilities.activeFacilityId;
+    const noteSnapshot = db.data.facilityData[facilityId]?.notes?.[noteId];
+    if (!noteSnapshot) return;
+
+    updateDB(draft => {
+      const fId = draft.data.facilities.activeFacilityId;
+      delete draft.data.facilityData[fId].notes[noteId];
+    });
+
+    showUndo({
+      message: "Note deleted",
+      onUndo: () => {
+        updateDB(draft => {
+          const fId = draft.data.facilities.activeFacilityId;
+          draft.data.facilityData[fId].notes[noteId] = noteSnapshot;
+        });
+      },
+    });
   };
 
   const selectedResidentNotes = useMemo(() => {
@@ -306,11 +322,18 @@ export const ResidentBoard: React.FC = () => {
   }, [store.notes, selectedResidentId]);
 
   const handleClearQuarantine = () => {
-    if (window.confirm("Are you sure you want to clear the entire Quarantine Inbox? This action cannot be undone.")) {
-      updateDB(draft => {
-        draft.data.facilityData[activeFacilityId].quarantine = {};
-      });
-    }
+    const snapshot = { ...store.quarantine };
+    updateDB(draft => {
+      draft.data.facilityData[activeFacilityId].quarantine = {};
+    });
+    showUndo({
+      message: `Quarantine inbox cleared (${Object.keys(snapshot).length} records)`,
+      onUndo: () => {
+        updateDB(draft => {
+          draft.data.facilityData[activeFacilityId].quarantine = snapshot;
+        });
+      },
+    });
   };
 
   if (view === 'quarantine') {
@@ -343,8 +366,12 @@ export const ResidentBoard: React.FC = () => {
               </div>
             ))}
             {Object.keys(store.quarantine).length === 0 && (
-              <div className="col-span-full text-center text-neutral-500 py-12">
-                Quarantine Inbox is empty.
+              <div className="col-span-full">
+                <EmptyState
+                  icon={<Inbox className="w-16 h-16 text-neutral-300" />}
+                  title="Quarantine Inbox is empty"
+                  description="Residents parsed from the census that could not be matched automatically will appear here for manual review."
+                />
               </div>
             )}
           </div>
@@ -360,13 +387,14 @@ export const ResidentBoard: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
       {/* Top Bar */}
-      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0" role="toolbar" aria-label="Resident board controls">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-neutral-900">Resident Board</h1>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" aria-hidden="true" />
             <input 
-              type="text" 
+              type="search"
+              aria-label="Search residents by name, MRN, or room"
               placeholder="Search name, MRN, room..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -376,7 +404,7 @@ export const ResidentBoard: React.FC = () => {
           {filterUnit && (
             <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
               Unit: {filterUnit}
-              <button onClick={() => setFilterUnit("")} className="ml-1 hover:text-indigo-900">
+              <button onClick={() => setFilterUnit("")} aria-label={`Remove unit filter: ${filterUnit}`} className="ml-1 hover:text-indigo-900">
                 <X className="w-3 h-3" />
               </button>
             </div>
@@ -385,36 +413,41 @@ export const ResidentBoard: React.FC = () => {
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setShowCensusModal(true)}
+            aria-label="Upload or update census file"
             className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4" aria-hidden="true" />
             Update Census
           </button>
           <button 
             onClick={() => setView('quarantine')}
+            aria-label="View quarantine inbox"
             className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors"
           >
-            <Inbox className="w-4 h-4" />
+            <Inbox className="w-4 h-4" aria-hidden="true" />
             Quarantine
           </button>
           <button 
             onClick={() => setView('report')}
+            aria-label="View shift report"
             className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
-            <FileText className="w-4 h-4" />
+            <FileText className="w-4 h-4" aria-hidden="true" />
             Shift Report
           </button>
           <button 
             onClick={() => setShowSettingsModal(true)}
+            aria-label="Board settings"
             className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-4 h-4" aria-hidden="true" />
             Settings
           </button>
-          <div className="h-6 w-px bg-neutral-300 mx-1"></div>
+          <div className="h-6 w-px bg-neutral-300 mx-1" aria-hidden="true"></div>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
             <input 
-              type="checkbox" 
+              type="checkbox"
+              aria-label="Filter: active residents only"
               checked={filterActiveOnly}
               onChange={e => setFilterActiveOnly(e.target.checked)}
               className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
@@ -423,7 +456,8 @@ export const ResidentBoard: React.FC = () => {
           </label>
           <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
             <input 
-              type="checkbox" 
+              type="checkbox"
+              aria-label="Filter: residents on antibiotic therapy only"
               checked={filterAbtOnly}
               onChange={e => setFilterAbtOnly(e.target.checked)}
               className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
@@ -437,6 +471,30 @@ export const ResidentBoard: React.FC = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Unit Columns */}
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
+          {Object.keys(units).length === 0 && (
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState
+                icon={<Users className="w-16 h-16 text-neutral-300" />}
+                title="No residents on the board"
+                description={
+                  searchQuery || filterActiveOnly || filterAbtOnly || filterUnit
+                    ? "No residents match your current filters. Try clearing the filters above."
+                    : "Upload a census file to populate the board, or add residents manually through Settings."
+                }
+                action={
+                  !searchQuery && !filterActiveOnly && !filterAbtOnly && !filterUnit ? (
+                    <button
+                      onClick={() => setShowCensusModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
+                    >
+                      <Upload className="w-4 h-4" aria-hidden="true" />
+                      Upload Census
+                    </button>
+                  ) : undefined
+                }
+              />
+            </div>
+          )}
           {(Object.entries(units) as [string, Resident[]][])
             .sort(([unitNameA], [unitNameB]) => {
               const order = ['Unit 2', 'Unit 3', 'Unit 4'];
@@ -618,13 +676,16 @@ export const ResidentBoard: React.FC = () => {
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-neutral-50/50">
             {!selectedResidentId ? (
-              <div className="text-center text-neutral-400 py-8 text-sm">
-                Click a resident tile to view and add notes.
-              </div>
+              <EmptyState
+                icon={<User className="w-12 h-12 text-neutral-300" />}
+                title="No resident selected"
+                description="Click a resident tile on the board to view their notes and add new entries."
+              />
             ) : selectedResidentNotes.active.length === 0 && selectedResidentNotes.archived.length === 0 ? (
-              <div className="text-center text-neutral-400 py-8 text-sm">
-                No notes for this resident.
-              </div>
+              <EmptyState
+                title="No notes yet"
+                description="Use the text box below to add the first note for this resident."
+              />
             ) : (
               <>
                 {selectedResidentNotes.active.map(note => (
@@ -635,7 +696,11 @@ export const ResidentBoard: React.FC = () => {
                         <span className="text-[10px] text-neutral-400">
                           {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
+                        <button
+                          onClick={() => handleDeleteNote(note.id)}
+                          aria-label="Delete note"
+                          className="text-neutral-400 hover:text-red-500"
+                        >
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
@@ -663,7 +728,7 @@ export const ResidentBoard: React.FC = () => {
                                 <span className="text-[10px] text-neutral-400">
                                   {new Date(note.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </span>
-                                <button onClick={() => handleDeleteNote(note.id)} className="text-neutral-400 hover:text-red-500">
+                                <button onClick={() => handleDeleteNote(note.id)} aria-label="Delete archived note" className="text-neutral-400 hover:text-red-500">
                                   <Trash2 className="w-3 h-3" />
                                 </button>
                               </div>
