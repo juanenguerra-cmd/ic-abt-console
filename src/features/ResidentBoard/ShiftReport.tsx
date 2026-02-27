@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ResidentNote } from '../../domain/models';
-import { ArrowLeft, Tag, Printer, Plus } from 'lucide-react';
+import { ArrowLeft, Tag, Printer } from 'lucide-react';
 
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -108,13 +108,7 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
             <Printer className="w-4 h-4" />
             Print Precaution List
           </button>
-          <button 
-            onClick={() => setShowReportBuilder(true)}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Build Report
-          </button>
+          {/* Saved Build Report template persistence currently uses facility.customReports via ReportBuilderModal; no separate template store exists yet. */}
         </div>
       </div>
 
