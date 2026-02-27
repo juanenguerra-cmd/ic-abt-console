@@ -723,7 +723,7 @@ const OnDemandReport: React.FC = () => {
             <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Status</label>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
               <option value="all">All Statuses</option>
-              {STATUS_OPTIONS[dataset].map(s => <option key={s} value={s}>{s}</option>)}
+              {(STATUS_OPTIONS[dataset] || []).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1">
