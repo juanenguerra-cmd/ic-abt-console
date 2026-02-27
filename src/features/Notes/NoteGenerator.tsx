@@ -1,26 +1,36 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, ABTCourse, IPEvent } from '../../domain/models';
-import { Save, FileText, Copy } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { FileText, Copy } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 const NOTE_TEMPLATES = {
-  ABT_STEWARDSHIP: 'On [Today], antibiotic stewardship review completed for [displayName]... Current antibiotic therapy includes [medication] initiated on [startDate] for [syndromeCategory].',
-  INFECTION_REVIEW: 'On [Today], infection surveillance completed for [displayName] related to [infectionCategory]. Resident is on [isolationType] precautions.',
-  ADMISSION_SCREENING: 'Admission infection prevention screening completed for [displayName] admitted on [admissionDate]. Resident is [isolationType / "not on isolation"].',
+  ABT_STEWARDSHIP: `On [Today], antibiotic stewardship review completed for [displayName], [Age] [Sex] | MRN: [mrn] | Location: [currentUnit]/[currentRoom]. Current antibiotic therapy includes [medication, dose, route, frequency] initiated on [startDate] for [indication/syndromeCategory] with [infectionSource/site]. Indication reviewed against available clinical data including symptoms ([symptoms]), vital signs, and pertinent results ([UA/UCx, CXR, CBC, wound culture]) with culture status noted as [cultureStatus] and organism/susceptibilities: [organism; sensitivities]. Current day of therapy is [#] with planned duration [# days] and expected stop date [endDate]; renal/hepatic considerations reviewed ([SCr/CrCl], allergies, interactions) and dose is [appropriate/adjusted to new dose] due to [reason]. Clinical response assessed as [improving/stable/worsening]. Stewardship actions: [de-escalate/discontinue/IV-to-PO/narrow spectrum/obtain cultures/reassess in 48-72h]. Communication completed with [provider], [pharmacy/ID/NP], and nursing; plan is to [continue/modify/stop] antibiotics, monitor for adverse effects ([C. difficile risk, rash, GI upset, QT prolongation, renal injury]), and follow up on [pending labs/cultures] by [date/time].`,
+  INFECTION_REVIEW: `On [Today], infection surveillance completed for [displayName], [Age] [Sex] | Location: [currentUnit]/[currentRoom], related to [suspected/confirmed infection type]. Resident presentation included [symptoms] with onset [date/time] and current vitals [T, BP, HR, RR, O2 sat]; baseline status compared: [none/yes—describe]. Assessment using [McGeer/Loeb/clinical criteria]: findings [meet/do not meet] criteria because [rationale]. Diagnostics: [labs/imaging/cultures] with results [summary]; pending: [list]. Treatment plan: [antibiotics/antivirals/supportive care] and non-pharmacologic measures [hydration, wound care, pulmonary hygiene]. Precautions: resident is on [standard/contact/droplet/airborne] precautions due to [reason/organism]; signage, PPE, and staff compliance [adequate/addressed]. Notifications to [provider], [DON/ADON], [family/POA if indicated]; documented in [line list/EMR log]. Follow-up on [date] to reassess symptoms, results, and isolation/treatment need.`,
+  ADMISSION_SCREENING: `Admission infection prevention screening completed for [displayName], a [Age]-year-old [Sex] admitted on [admissionDate]. Primary diagnosis: [primaryDx]; secondary diagnoses: [secondaryDx list]. Cognition: [alert/oriented x__ / confused / dementia—stage]; ability to follow IP instructions: [independent/needs cues/limited]; education via [teach-back/verbal/written]: [understood/needs reinforcement]. Isolation on admission: [none / contact/droplet/airborne for reason]; MDRO history: [MRSA/VRE/ESBL/CRE/C. auris—known/unknown]; screens ordered: [type/date]. Antibiotics on admission: [none / drug, dose, route, indication, start, planned duration]; allergy history: [allergies]. Devices: [Foley/suprapubic/trach/central line/PICC/dialysis access/feeding tube/wound vac/ostomy/oxygen]; device care plan initiated. Skin/wound: [intact / wounds—location/type/stage]. Vaccines offered: Influenza [accepted/declined/contraindicated/unknown], Pneumococcal [same], RSV [same], COVID-19 [same]; risks/benefits reviewed; decision documented; plan to administer on [date] or re-offer on [date]. Pain medication review: [regimen]; education on [sedation/constipation/falls/respiratory depression/interactions]; response: [resident response]. Safety measures: [fall precautions/call bell/bed alarm/non-skid footwear/safe transfer/aspiration precautions/hand hygiene coaching/respiratory etiquette]; PPE available, isolation cart [if needed]. Plan: continue admission monitoring, follow pending records/results, reinforce education, update precautions/treatment per clinical course.`,
+  VACCINATION_OFFER: `On [Today], [displayName], a [Age]-year-old [Sex] residing in [currentUnit]/[currentRoom], was offered the following vaccines per facility schedule and eligibility review: Influenza [accepted/declined/contraindicated], Pneumococcal [accepted/declined/contraindicated], RSV [accepted/declined/contraindicated], and COVID-19 [accepted/declined/contraindicated]. Education provided on purpose and benefits (reduced risk of severe illness, hospitalization, and complications) and risks/side effects (injection-site soreness, fatigue/fever, allergic reaction warning signs, and when to seek medical attention). Resident/POA demonstrated understanding by [teach-back statement] and decision was [consent given/refused/requested more time]; consent documented in [EMR/consent form]. Plan is to administer [vaccines] on [date/time] or re-offer on [date], monitor for adverse reactions per protocol, and update immunization record accordingly.`,
 };
 
 type NoteType = keyof typeof NOTE_TEMPLATES;
 
+const getAge = (dob?: string): string => {
+  if (!dob) return '[Age]';
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return String(age);
+};
+
 export const NoteGenerator: React.FC = () => {
-  const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { store } = useFacilityData();
   const [searchParams] = useSearchParams();
 
   const [selectedMrn, setSelectedMrn] = useState<string>('');
   const [noteType, setNoteType] = useState<NoteType>('ABT_STEWARDSHIP');
   const [noteContent, setNoteContent] = useState('');
+  const [copied, setCopied] = useState(false);
 
   React.useEffect(() => {
     const mrn = searchParams.get('mrn');
@@ -40,70 +50,62 @@ export const NoteGenerator: React.FC = () => {
     const resident = store.residents[selectedMrn];
     if (!resident) return;
 
-    let template = NOTE_TEMPLATES[noteType];
-    let generatedNote = template;
+    let generatedNote = NOTE_TEMPLATES[noteType];
 
     const today = new Date().toLocaleDateString();
+    const age = getAge(resident.dob);
+    const sex = resident.sex || '[Sex]';
+
     generatedNote = generatedNote.replace(/\[Today\]/g, today);
     generatedNote = generatedNote.replace(/\[displayName\]/g, resident.displayName);
-    generatedNote = generatedNote.replace(/\[admissionDate\]/g, resident.admissionDate || 'N/A');
+    generatedNote = generatedNote.replace(/\[Age\]/g, age);
+    generatedNote = generatedNote.replace(/\[Sex\]/g, sex);
+    generatedNote = generatedNote.replace(/\[mrn\]/g, resident.mrn);
+    generatedNote = generatedNote.replace(/\[currentUnit\]/g, resident.currentUnit || '[Unit]');
+    generatedNote = generatedNote.replace(/\[currentRoom\]/g, resident.currentRoom || '[Room]');
+    generatedNote = generatedNote.replace(/\[admissionDate\]/g, resident.admissionDate ? new Date(resident.admissionDate).toLocaleDateString() : '[Admission Date]');
+    generatedNote = generatedNote.replace(/\[primaryDx\]/g, resident.primaryDiagnosis || '[Primary Dx]');
+    generatedNote = generatedNote.replace(/\[allergies\]/g, resident.allergies?.join(', ') || '[Allergies]');
 
-    switch (noteType) {
-      case 'ABT_STEWARDSHIP':
-        const activeAbt = (Object.values(store.abts) as ABTCourse[]).find(a => a.residentRef.id === selectedMrn && a.status === 'active');
-        generatedNote = generatedNote.replace(/\[medication\]/g, activeAbt?.medication || 'N/A');
-        generatedNote = generatedNote.replace(/\[startDate\]/g, activeAbt?.startDate || 'N/A');
-        generatedNote = generatedNote.replace(/\[syndromeCategory\]/g, activeAbt?.syndromeCategory || 'N/A');
-        break;
-      case 'INFECTION_REVIEW':
-        const activeIp = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.id === selectedMrn && i.status === 'active');
-        generatedNote = generatedNote.replace(/\[infectionCategory\]/g, activeIp?.infectionCategory || 'N/A');
-        generatedNote = generatedNote.replace(/\[isolationType\]/g, activeIp?.isolationType || 'Standard');
-        break;
-      case 'ADMISSION_SCREENING':
-        const admissionIp = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.id === selectedMrn && i.status === 'active');
-        generatedNote = generatedNote.replace(/\[isolationType \/ "not on isolation"\]/g, admissionIp?.isolationType || 'not on isolation');
-        break;
+    if (noteType === 'ABT_STEWARDSHIP') {
+      const activeAbt = (Object.values(store.abts) as ABTCourse[]).find(a => a.residentRef.id === selectedMrn && a.status === 'active');
+      if (activeAbt) {
+        const medDetail = `${activeAbt.medication}${activeAbt.route ? ` ${activeAbt.route}` : ''}${activeAbt.frequency ? ` ${activeAbt.frequency}` : ''}`;
+        generatedNote = generatedNote.replace(/\[medication, dose, route, frequency\]/g, medDetail);
+        generatedNote = generatedNote.replace(/\[startDate\]/g, activeAbt.startDate || '[Start Date]');
+        generatedNote = generatedNote.replace(/\[indication\/syndromeCategory\]/g, `${activeAbt.indication || ''}/${activeAbt.syndromeCategory || ''}`);
+        generatedNote = generatedNote.replace(/\[infectionSource\/site\]/g, activeAbt.infectionSource || '[Infection Source]');
+        generatedNote = generatedNote.replace(/\[organism; sensitivities\]/g, activeAbt.organismIdentified || '[Organism/Sensitivities]');
+        generatedNote = generatedNote.replace(/\[endDate\]/g, activeAbt.endDate || '[End Date]');
+        generatedNote = generatedNote.replace(/\[cultureStatus\]/g, activeAbt.cultureCollected ? 'collected' : 'not collected');
+      }
     }
+
+    if (noteType === 'INFECTION_REVIEW') {
+      const activeIp = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.id === selectedMrn && i.status === 'active');
+      if (activeIp) {
+        generatedNote = generatedNote.replace(/\[suspected\/confirmed infection type\]/g, activeIp.infectionCategory || '[Infection Type]');
+        generatedNote = generatedNote.replace(/\[standard\/contact\/droplet\/airborne\]/g, activeIp.isolationType || 'standard');
+        generatedNote = generatedNote.replace(/\[reason\/organism\]/g, activeIp.organism || activeIp.infectionCategory || '[Reason/Organism]');
+      }
+    }
+
+    if (noteType === 'ADMISSION_SCREENING') {
+      const admissionIp = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.id === selectedMrn);
+      if (admissionIp) {
+        generatedNote = generatedNote.replace(/\[none \/ contact\/droplet\/airborne for reason\]/g, admissionIp.isolationType || 'none');
+      }
+    }
+
     setNoteContent(generatedNote);
-  };
-
-  const handleSaveNote = () => {
-    if (!selectedMrn || !noteContent.trim()) {
-      alert('Please select a resident and generate note content.');
-      return;
-    }
-
-    updateDB(draft => {
-      const facilityData = draft.data.facilityData[activeFacilityId];
-      const noteId = uuidv4();
-      facilityData.notes[noteId] = {
-        id: noteId,
-        residentRef: { kind: 'mrn', id: selectedMrn },
-        noteType: 'Generated Note',
-        title: `${noteType.replace(/_/g, ' ')} Note`,
-        body: noteContent,
-        derived: true,
-        generator: { name: 'NoteGenerator', version: '1.0' },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    });
-
-    alert('Note saved to Shift Log!');
-    setSelectedMrn('');
-    setNoteContent('');
   };
 
   const handleCopy = async () => {
     if (!noteContent.trim()) return;
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-      alert('Clipboard is unavailable. Please copy the note manually.');
-      return;
-    }
     try {
       await navigator.clipboard.writeText(noteContent);
-      alert('Note copied to clipboard.');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     } catch {
       alert('Unable to copy to clipboard. Please copy the note manually.');
     }
@@ -141,6 +143,7 @@ export const NoteGenerator: React.FC = () => {
                 <option value="ABT_STEWARDSHIP">ABT Stewardship</option>
                 <option value="INFECTION_REVIEW">Infection Review</option>
                 <option value="ADMISSION_SCREENING">Admission Screening</option>
+                <option value="VACCINATION_OFFER">Vaccination Offer</option>
               </select>
             </div>
             <div className="self-end">
@@ -169,18 +172,10 @@ export const NoteGenerator: React.FC = () => {
             <button
               onClick={handleCopy}
               disabled={!noteContent.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-neutral-600 text-white rounded-md hover:bg-neutral-700 disabled:bg-neutral-300 text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-neutral-300 text-sm font-medium"
             >
               <Copy className="w-4 h-4" />
-              Copy to Clipboard
-            </button>
-            <button
-              onClick={handleSaveNote}
-              disabled={!noteContent.trim() || !selectedMrn}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:bg-neutral-300 text-sm font-medium"
-            >
-              <Save className="w-4 h-4" />
-              Save to Shift Log
+              {copied ? 'Copied!' : 'Copy to Clipboard'}
             </button>
           </div>
         </div>

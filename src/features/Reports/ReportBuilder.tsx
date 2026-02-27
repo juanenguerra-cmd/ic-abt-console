@@ -51,6 +51,7 @@ export const ReportBuilder: React.FC = () => {
   const [reportName, setReportName] = useState('');
   const [availableCols, setAvailableCols] = useState<ColumnDef[]>(AVAILABLE_COLUMNS);
   const [selectedCols, setSelectedCols] = useState<ColumnDef[]>([]);
+  const [displayHeaders, setDisplayHeaders] = useState<Record<string, string>>({});
   
   const [selectedAvailableIds, setSelectedAvailableIds] = useState<Set<string>>(new Set());
   const [selectedSelectedIds, setSelectedSelectedIds] = useState<Set<string>>(new Set());
@@ -105,25 +106,37 @@ export const ReportBuilder: React.FC = () => {
       return;
     }
 
+    const id = uuidv4();
+    const colsWithHeaders = selectedCols.map(col => ({
+      ...col,
+      displayHeader: displayHeaders[col.id]?.trim() || col.label,
+    }));
+
     updateDB(draft => {
       const facilityData = draft.data.facilityData[activeFacilityId] as any;
       if (!facilityData.reportTemplates) {
         facilityData.reportTemplates = {};
       }
-      
-      const id = uuidv4();
       facilityData.reportTemplates[id] = {
         id,
         name: reportName,
-        columns: selectedCols,
+        columns: colsWithHeaders,
         createdAt: new Date().toISOString()
       };
     });
+
+    // Also persist to ltc_report_templates for On Demand picker
+    try {
+      const existing = JSON.parse(localStorage.getItem('ltc_report_templates') || '[]');
+      existing.push({ id, name: reportName, columns: colsWithHeaders, createdAt: new Date().toISOString() });
+      localStorage.setItem('ltc_report_templates', JSON.stringify(existing));
+    } catch {}
     
     alert("Report template saved successfully!");
     setReportName('');
     setAvailableCols(AVAILABLE_COLUMNS);
     setSelectedCols([]);
+    setDisplayHeaders({});
   };
 
   return (
@@ -220,14 +233,21 @@ export const ReportBuilder: React.FC = () => {
                 {selectedCols.map(col => (
                   <div 
                     key={col.id}
-                    onClick={() => toggleSelected(col.id)}
-                    className={`px-3 py-2 text-sm cursor-pointer rounded-md mb-1 ${
+                    className={`px-3 py-1.5 text-sm rounded-md mb-1 flex items-center gap-2 ${
                       selectedSelectedIds.has(col.id) 
                         ? 'bg-indigo-100 text-indigo-900 font-medium' 
                         : 'hover:bg-neutral-100 text-neutral-700'
                     }`}
                   >
-                    {col.label}
+                    <span onClick={() => toggleSelected(col.id)} className="flex-shrink-0 cursor-pointer min-w-[120px]">{col.label}</span>
+                    <input
+                      type="text"
+                      value={displayHeaders[col.id] ?? ''}
+                      onChange={e => setDisplayHeaders(prev => ({ ...prev, [col.id]: e.target.value }))}
+                      placeholder={col.label}
+                      onClick={e => e.stopPropagation()}
+                      className="flex-1 border border-neutral-300 rounded px-2 py-0.5 text-xs focus:ring-indigo-500 focus:border-indigo-500"
+                    />
                   </div>
                 ))}
                 {selectedCols.length === 0 && (

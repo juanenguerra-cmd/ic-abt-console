@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
+import { IpEventModal } from '../ResidentBoard/IpEventModal';
+import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
+import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
 
 const ReportsConsole: React.FC = () => {
   const [activeTab, setActiveTab] = useState('monthly');
@@ -151,33 +154,33 @@ const SurveyPacketsReport: React.FC = () => {
 
 const DailyReport: React.FC = () => {
   const { store } = useFacilityData();
-  const today = new Date().toISOString().split('T')[0];
-  const threeDaysAgo = new Date();
-  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const reportDateObj = useMemo(() => new Date(reportDate + 'T00:00:00'), [reportDate]);
+  const threeDaysBeforeReport = useMemo(() => { const d = new Date(reportDateObj); d.setDate(d.getDate() - 3); return d; }, [reportDateObj]);
 
   const activePrecautions = useMemo(() =>
-    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
+    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType && new Date(ip.createdAt) <= reportDateObj)
       .map(ip => {
         const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
         return { ip, res };
       })
       .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
-    [store.infections, store.residents, store.quarantine]
+    [store.infections, store.residents, store.quarantine, reportDateObj]
   );
 
   const activeAbts = useMemo(() =>
-    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active')
+    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active' && (!a.startDate || new Date(a.startDate) <= reportDateObj))
       .map(a => {
         const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
         return { abt: a, res };
       })
       .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
-    [store.abts, store.residents, store.quarantine]
+    [store.abts, store.residents, store.quarantine, reportDateObj]
   );
 
   const recentAdmissions = useMemo(() =>
     Object.values(store.residents)
-      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo)
+      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysBeforeReport && new Date(r.admissionDate) <= reportDateObj)
       .map((r: Resident) => {
         const hasScreening = (Object.values(store.notes) as ResidentNote[]).some(n =>
           n.residentRef.kind === 'mrn' && n.residentRef.id === r.mrn && n.title?.includes('Admission Screening')
@@ -185,14 +188,20 @@ const DailyReport: React.FC = () => {
         return { res: r, hasScreening };
       })
       .sort((a, b) => (a.res.admissionDate || '').localeCompare(b.res.admissionDate || '')),
-    [store.residents, store.notes, threeDaysAgo]
+    [store.residents, store.notes, threeDaysBeforeReport, reportDateObj]
   );
 
   return (
     <div className="space-y-6">
       <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
         <span className="font-bold text-indigo-900 text-sm">Daily Report</span>
-        <span className="text-indigo-700 text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        <input
+          type="date"
+          value={reportDate}
+          onChange={e => setReportDate(e.target.value)}
+          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+        />
+        <span className="text-indigo-700 text-sm">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
       </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -312,69 +321,97 @@ const DailyReport: React.FC = () => {
 
 const WeeklyReport: React.FC = () => {
   const { store } = useFacilityData();
-  const sevenDaysAgo = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d; }, []);
+  const defaultEnd = new Date().toISOString().split('T')[0];
+  const defaultStart = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; })();
+  const [startDate, setStartDate] = useState(defaultStart);
+  const [endDate, setEndDate] = useState(defaultEnd);
+
+  const startObj = useMemo(() => new Date(startDate + 'T00:00:00'), [startDate]);
+  const endObj = useMemo(() => new Date(endDate + 'T23:59:59'), [endDate]);
 
   const newInfections = useMemo(() =>
     (Object.values(store.infections) as IPEvent[])
-      .filter(ip => new Date(ip.createdAt) >= sevenDaysAgo)
+      .filter(ip => { const d = new Date(ip.createdAt); return d >= startObj && d <= endObj; })
       .map(ip => {
         const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
         return { ip, res };
       })
       .sort((a, b) => b.ip.createdAt.localeCompare(a.ip.createdAt)),
-    [store.infections, store.residents, store.quarantine, sevenDaysAgo]
+    [store.infections, store.residents, store.quarantine, startObj, endObj]
   );
 
   const newAbts = useMemo(() =>
     (Object.values(store.abts) as ABTCourse[])
-      .filter(a => a.startDate && new Date(a.startDate) >= sevenDaysAgo)
+      .filter(a => { const d = new Date(a.startDate || a.createdAt); return d >= startObj && d <= endObj; })
       .map(a => {
         const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
         return { abt: a, res };
       })
       .sort((a, b) => (b.abt.startDate || '').localeCompare(a.abt.startDate || '')),
-    [store.abts, store.residents, store.quarantine, sevenDaysAgo]
+    [store.abts, store.residents, store.quarantine, startObj, endObj]
   );
 
   const vaxActivity = useMemo(() =>
     (Object.values(store.vaxEvents) as VaxEvent[])
-      .filter(v => new Date(v.createdAt) >= sevenDaysAgo)
+      .filter(v => { const d = new Date(v.createdAt); return d >= startObj && d <= endObj; })
       .map(v => {
         const res = v.residentRef.kind === 'mrn' ? store.residents[v.residentRef.id] : store.quarantine[v.residentRef.id];
         return { vax: v, res };
       })
       .sort((a, b) => b.vax.createdAt.localeCompare(a.vax.createdAt)),
-    [store.vaxEvents, store.residents, store.quarantine, sevenDaysAgo]
+    [store.vaxEvents, store.residents, store.quarantine, startObj, endObj]
   );
 
-  const weekStart = sevenDaysAgo.toLocaleDateString();
-  const weekEnd = new Date().toLocaleDateString();
+  const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
+  const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
+
+  const handlePrint = () => window.print();
 
   return (
-    <div className="space-y-6">
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+    <>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .weekly-report-print, .weekly-report-print * { visibility: visible; }
+          .weekly-report-print { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+      <div className="weekly-report-print space-y-6">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 no-print">
         <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
-        <span className="text-indigo-700 text-sm">{weekStart} – {weekEnd}</span>
+        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white" />
+        <span className="text-indigo-500 text-sm">–</span>
+        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white" />
+        <button onClick={handlePrint} className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-50">
+          Print / PDF
+        </button>
+      </div>
+
+      {/* Print header (hidden on screen, visible when printing) */}
+      <div className="hidden print:block text-center mb-4">
+        <div className="text-xl font-bold">Standard of Care</div>
+        <div className="text-sm text-neutral-600">{weekStart} to {weekEnd}</div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
           <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">New Infections (7d)</div>
+          <div className="text-xs text-neutral-500 mt-1">New Infections</div>
         </div>
         <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
           <div className="text-2xl font-bold text-amber-700">{newAbts.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">New ABT Courses (7d)</div>
+          <div className="text-xs text-neutral-500 mt-1">New ABT Courses</div>
         </div>
         <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
           <div className="text-2xl font-bold text-blue-700">{vaxActivity.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">Vax Events (7d)</div>
+          <div className="text-xs text-neutral-500 mt-1">Vax Events</div>
         </div>
       </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
-          <h3 className="text-base font-bold text-red-900">New Infections — 7-Day Lookback ({newInfections.length})</h3>
+          <h3 className="text-base font-bold text-red-900">New Infections — {weekStart} to {weekEnd} ({newInfections.length})</h3>
         </div>
         <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead className="bg-neutral-50">
@@ -390,7 +427,7 @@ const WeeklyReport: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-neutral-200">
             {newInfections.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-neutral-400">No new infections in the last 7 days</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-neutral-400">No new infections in this date range</td></tr>
             )}
             {newInfections.map(({ ip, res }) => (
               <tr key={ip.id}>
@@ -409,7 +446,7 @@ const WeeklyReport: React.FC = () => {
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
-          <h3 className="text-base font-bold text-amber-900">New Antibiotic Starts — 7-Day Lookback ({newAbts.length})</h3>
+          <h3 className="text-base font-bold text-amber-900">New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})</h3>
         </div>
         <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead className="bg-neutral-50">
@@ -426,7 +463,7 @@ const WeeklyReport: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-neutral-200">
             {newAbts.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No new antibiotic courses in the last 7 days</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No new antibiotic courses in this date range</td></tr>
             )}
             {newAbts.map(({ abt, res }) => (
               <tr key={abt.id}>
@@ -446,7 +483,7 @@ const WeeklyReport: React.FC = () => {
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-4 border-b border-neutral-200 bg-blue-50">
-          <h3 className="text-base font-bold text-blue-900">Vaccination Activity — 7-Day Lookback ({vaxActivity.length})</h3>
+          <h3 className="text-base font-bold text-blue-900">Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})</h3>
         </div>
         <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead className="bg-neutral-50">
@@ -461,7 +498,7 @@ const WeeklyReport: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-neutral-200">
             {vaxActivity.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No vaccination activity in the last 7 days</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No vaccination activity in this date range</td></tr>
             )}
             {vaxActivity.map(({ vax, res }) => (
               <tr key={vax.id}>
@@ -477,16 +514,30 @@ const WeeklyReport: React.FC = () => {
         </table>
       </div>
     </div>
+    </>
   );
 };
 
 const OnDemandReport: React.FC = () => {
   const { store } = useFacilityData();
-  const [dataset, setDataset] = useState<'infections' | 'abts' | 'vax' | 'residents'>('infections');
+  const [dataset, setDataset] = useState<'infections' | 'abts' | 'vax' | 'residents' | string>('infections');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [unitFilter, setUnitFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  type EditModal =
+    | { type: 'ip';  recordId: string; residentId: string }
+    | { type: 'abt'; recordId: string; residentId: string }
+    | { type: 'vax'; recordId: string; residentId: string };
+
+  const [editModal, setEditModal] = useState<EditModal | null>(null);
+
+  const savedTemplates = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ltc_report_templates') || '[]') as Array<{ id: string; name: string; columns: Array<{ id: string; label: string; fieldPath: string; displayHeader?: string }> }>;
+    } catch { return []; }
+  }, []);
 
   const units = useMemo(() => {
     const s = new Set<string>();
@@ -494,7 +545,10 @@ const OnDemandReport: React.FC = () => {
     return Array.from(s).sort();
   }, [store.residents]);
 
-  const rows = useMemo(() => {
+  /** Parallel meta array: one entry per display row with the IDs needed for edit modals. */
+  type RowMeta = { recordId: string; residentId: string } | null;
+
+  const { rows, rowMeta } = useMemo(() => {
     const inRange = (dateStr: string | undefined) => {
       if (!dateStr) return true;
       const d = new Date(dateStr);
@@ -507,15 +561,15 @@ const OnDemandReport: React.FC = () => {
       ref.kind === 'mrn' ? store.residents[ref.id] : store.quarantine[ref.id];
 
     if (dataset === 'infections') {
-      return (Object.values(store.infections) as IPEvent[])
-        .filter(ip => {
-          if (!inRange(ip.createdAt)) return false;
-          if (statusFilter !== 'all' && ip.status !== statusFilter) return false;
-          const res = getRes(ip.residentRef);
-          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
-          return true;
-        })
-        .map(ip => {
+      const filtered = (Object.values(store.infections) as IPEvent[]).filter(ip => {
+        if (!inRange(ip.createdAt)) return false;
+        if (statusFilter !== 'all' && ip.status !== statusFilter) return false;
+        const res = getRes(ip.residentRef);
+        if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+        return true;
+      });
+      return {
+        rows: filtered.map(ip => {
           const res = getRes(ip.residentRef);
           return [
             (res as any)?.displayName || '—',
@@ -530,18 +584,20 @@ const OnDemandReport: React.FC = () => {
             ip.organism || '—',
             new Date(ip.createdAt).toLocaleDateString(),
           ];
-        });
+        }),
+        rowMeta: filtered.map(ip => ({ recordId: ip.id, residentId: ip.residentRef.id }) as RowMeta),
+      };
     }
     if (dataset === 'abts') {
-      return (Object.values(store.abts) as ABTCourse[])
-        .filter(a => {
-          if (!inRange(a.startDate || a.createdAt)) return false;
-          if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-          const res = getRes(a.residentRef);
-          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
-          return true;
-        })
-        .map(a => {
+      const filtered = (Object.values(store.abts) as ABTCourse[]).filter(a => {
+        if (!inRange(a.startDate || a.createdAt)) return false;
+        if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+        const res = getRes(a.residentRef);
+        if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+        return true;
+      });
+      return {
+        rows: filtered.map(a => {
           const res = getRes(a.residentRef);
           return [
             (res as any)?.displayName || '—',
@@ -556,18 +612,20 @@ const OnDemandReport: React.FC = () => {
             a.endDate || '—',
             a.cultureCollected ? 'Yes' : 'No',
           ];
-        });
+        }),
+        rowMeta: filtered.map(a => ({ recordId: a.id, residentId: a.residentRef.id }) as RowMeta),
+      };
     }
     if (dataset === 'vax') {
-      return (Object.values(store.vaxEvents) as VaxEvent[])
-        .filter(v => {
-          if (!inRange(v.dateGiven || v.createdAt)) return false;
-          if (statusFilter !== 'all' && v.status !== statusFilter) return false;
-          const res = getRes(v.residentRef);
-          if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
-          return true;
-        })
-        .map(v => {
+      const filtered = (Object.values(store.vaxEvents) as VaxEvent[]).filter(v => {
+        if (!inRange(v.dateGiven || v.createdAt)) return false;
+        if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+        const res = getRes(v.residentRef);
+        if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
+        return true;
+      });
+      return {
+        rows: filtered.map(v => {
           const res = getRes(v.residentRef);
           return [
             (res as any)?.displayName || '—',
@@ -580,16 +638,18 @@ const OnDemandReport: React.FC = () => {
             v.declineReason || '—',
             v.dueDate || '—',
           ];
-        });
+        }),
+        rowMeta: filtered.map(v => ({ recordId: v.id, residentId: v.residentRef.id }) as RowMeta),
+      };
     }
-    // residents
-    return (Object.values(store.residents) as Resident[])
-      .filter(r => {
-        if (!inRange(r.admissionDate || r.createdAt)) return false;
-        if (unitFilter !== 'all' && r.currentUnit !== unitFilter) return false;
-        return true;
-      })
-      .map(r => [
+    // residents (no quick edit)
+    const filtered = (Object.values(store.residents) as Resident[]).filter(r => {
+      if (!inRange(r.admissionDate || r.createdAt)) return false;
+      if (unitFilter !== 'all' && r.currentUnit !== unitFilter) return false;
+      return true;
+    });
+    return {
+      rows: filtered.map(r => [
         r.displayName,
         r.mrn,
         r.currentUnit || '—',
@@ -597,7 +657,9 @@ const OnDemandReport: React.FC = () => {
         r.admissionDate || '—',
         r.attendingMD || '—',
         r.status || '—',
-      ]);
+      ]),
+      rowMeta: filtered.map(() => null as RowMeta),
+    };
   }, [dataset, startDate, endDate, unitFilter, statusFilter, store]);
 
   const HEADERS: Record<string, string[]> = {
@@ -607,6 +669,15 @@ const OnDemandReport: React.FC = () => {
     residents: ['Resident', 'MRN', 'Unit', 'Room', 'Admission Date', 'Attending MD', 'Status'],
   };
 
+  // For saved templates, derive headers from template columns
+  const activeTemplate = dataset.startsWith('tmpl:')
+    ? savedTemplates.find(t => `tmpl:${t.id}` === dataset)
+    : null;
+
+  const currentHeaders: string[] = activeTemplate
+    ? activeTemplate.columns.map(c => c.displayHeader || c.label)
+    : (HEADERS[dataset] || []);
+
   const STATUS_OPTIONS: Record<string, string[]> = {
     infections: ['active', 'resolved', 'historical'],
     abts: ['active', 'completed', 'discontinued'],
@@ -615,8 +686,7 @@ const OnDemandReport: React.FC = () => {
   };
 
   const handleExportCsv = () => {
-    const headers = HEADERS[dataset];
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csvContent = [currentHeaders, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -638,6 +708,8 @@ const OnDemandReport: React.FC = () => {
               <option value="abts">ABT (Antibiotics)</option>
               <option value="vax">VAX (Vaccinations)</option>
               <option value="residents">Residents</option>
+              {savedTemplates.length > 0 && <option disabled>── Saved Templates ──</option>}
+              {savedTemplates.map(t => <option key={t.id} value={`tmpl:${t.id}`}>{t.name}</option>)}
             </select>
           </div>
           <div>
@@ -676,26 +748,75 @@ const OnDemandReport: React.FC = () => {
           <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead className="bg-neutral-50">
               <tr>
-                {HEADERS[dataset].map(h => (
+                {(['infections', 'abts', 'vax'].includes(dataset)) && (
+                  <th className="px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">Edit</th>
+                )}
+                {currentHeaders.map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-neutral-200">
               {rows.length === 0 && (
-                <tr><td colSpan={HEADERS[dataset].length} className="px-4 py-8 text-center text-neutral-400">No records match the selected filters</td></tr>
+                <tr><td colSpan={currentHeaders.length + (['infections', 'abts', 'vax'].includes(dataset) ? 1 : 0)} className="px-4 py-8 text-center text-neutral-400">No records match the selected filters</td></tr>
               )}
-              {rows.map((row, i) => (
-                <tr key={i}>
-                  {row.map((cell, j) => (
-                    <td key={j} className="px-4 py-2 text-neutral-700 whitespace-nowrap">{cell}</td>
-                  ))}
-                </tr>
-              ))}
+              {rows.map((row, i) => {
+                const meta = rowMeta[i];
+                return (
+                  <tr key={i}>
+                    {meta && (['infections', 'abts', 'vax'].includes(dataset)) && (
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={() => {
+                            if (dataset === 'infections') setEditModal({ type: 'ip', recordId: meta.recordId, residentId: meta.residentId });
+                            else if (dataset === 'abts') setEditModal({ type: 'abt', recordId: meta.recordId, residentId: meta.residentId });
+                            else if (dataset === 'vax') setEditModal({ type: 'vax', recordId: meta.recordId, residentId: meta.residentId });
+                          }}
+                          title="Quick edit"
+                          className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                        >
+                          {/* Pencil icon */}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                      </td>
+                    )}
+                    {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="px-3 py-2" />}
+                    {row.map((cell, j) => (
+                      <td key={j} className="px-4 py-2 text-neutral-700 whitespace-nowrap">{cell}</td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Quick-edit modals */}
+      {editModal?.type === 'ip' && (
+        <IpEventModal
+          residentId={editModal.residentId}
+          existingIp={store.infections[editModal.recordId]}
+          onClose={() => setEditModal(null)}
+        />
+      )}
+      {editModal?.type === 'abt' && (
+        <AbtCourseModal
+          residentId={editModal.residentId}
+          existingAbt={store.abts[editModal.recordId]}
+          onClose={() => setEditModal(null)}
+        />
+      )}
+      {editModal?.type === 'vax' && (
+        <VaxEventModal
+          residentId={editModal.residentId}
+          existingVax={store.vaxEvents[editModal.recordId]}
+          onClose={() => setEditModal(null)}
+        />
+      )}
     </div>
   );
 };
