@@ -171,13 +171,31 @@ export function validateCommitGate(db: UnifiedDB): void {
       Object.keys(store.quarantine).filter((id) => id.startsWith("Q:"))
     );
 
-    const checkRef = (ref: ResidentRef, context: string) => {
-      if (ref.kind === "mrn" && !validMrns.has(ref.id)) {
+    const checkRef = (ref: ResidentRef | undefined, context: string) => {
+      // Legacy guard: older snapshots may contain free-form notes that were
+      // not linked to a specific resident. Preserve them without blocking all
+      // future writes/imports.
+      if (!ref && context.startsWith("ResidentNote")) {
+        return;
+      }
+      if (!ref || typeof ref !== "object" || typeof ref.id !== "string" || typeof ref.kind !== "string") {
+        throw new StorageError(
+          `Commit Gate Failed: Invalid residentRef in ${context}`
+        );
+      }
+
+      const refKind = (ref as { kind: string }).kind;
+      if (refKind !== "mrn" && refKind !== "quarantine") {
+        throw new StorageError(
+          `Commit Gate Failed: Unsupported residentRef kind '${refKind}' referenced in ${context}`
+        );
+      }
+      if (refKind === "mrn" && !validMrns.has(ref.id)) {
         throw new StorageError(
           `Commit Gate Failed: Unknown MRN '${ref.id}' referenced in ${context}`
         );
       }
-      if (ref.kind === "quarantine" && !validQIds.has(ref.id)) {
+      if (refKind === "quarantine" && !validQIds.has(ref.id)) {
         throw new StorageError(
           `Commit Gate Failed: Unknown or invalid Q-ID '${ref.id}' referenced in ${context}`
         );
