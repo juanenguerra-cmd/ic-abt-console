@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Save, Syringe, FileText, Calendar, AlertTriangle } from "lucide-react";
+import { X, Save, Syringe, Calendar, AlertTriangle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { VaxEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
@@ -39,6 +39,8 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
 
   // Notes
   const [notes, setNotes] = useState("");
+  const [bulkEntryMode, setBulkEntryMode] = useState(false);
+  const [showBulkToast, setShowBulkToast] = useState(false);
   
   // Extended State (Serialized to Notes)
   const [administrationSource, setAdministrationSource] = useState('in_house');
@@ -49,7 +51,6 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
   const [offerAgainDate, setOfferAgainDate] = useState("");
   const [nextDoseNeeded, setNextDoseNeeded] = useState<'due' | 'scheduled' | 'complete'>('complete');
   const [scheduledDate, setScheduledDate] = useState("");
-  const [consentFormId, setConsentFormId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (existingVax) {
@@ -74,7 +75,6 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
             setOfferAgainDate(ext.offerAgainDate || "");
             setNextDoseNeeded(ext.nextDoseNeeded || 'complete');
             setScheduledDate(ext.scheduledDate || "");
-            setConsentFormId(ext.consentFormId);
             setNotes(existingVax.notes.replace(/\n\n--- EXTENDED DATA ---\n.*/s, ""));
           } else {
             setNotes(existingVax.notes);
@@ -86,10 +86,10 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
     }
   }, [existingVax]);
 
-  const handleSave = () => {
+  const handleSave = async ({ closeOnSuccess = true }: { closeOnSuccess?: boolean } = {}) => {
     if (!vaccine.trim()) {
       alert("Vaccine name is required.");
-      return;
+      return false;
     }
 
     updateDB((draft) => {
@@ -111,8 +111,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
         permanentDeclination,
         offerAgainDate,
         nextDoseNeeded,
-        scheduledDate,
-        consentFormId
+        scheduledDate
       };
 
       const finalNotes = notes.trim() 
@@ -148,7 +147,36 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
       }
     });
 
-    onClose();
+    if (closeOnSuccess) {
+      onClose();
+    }
+
+    return true;
+  };
+
+  const handleSaveAndAddAnother = async () => {
+    const didSave = await handleSave({ closeOnSuccess: false });
+    if (!didSave) return;
+
+    setVaccine("");
+    setVaccineOther("");
+    setStatus("given");
+    setDateGiven("");
+    setDueDate("");
+    setOfferDate("");
+    setDeclineReason("");
+    setAdministrationSource('in_house');
+    setSeriesComplete(undefined);
+    setDeclineReasonOther("");
+    setOfferedBy("");
+    setPermanentDeclination(false);
+    setOfferAgainDate("");
+    setScheduledDate("");
+    setNextDoseNeeded('complete');
+    setNotes("");
+
+    setShowBulkToast(true);
+    setTimeout(() => setShowBulkToast(false), 2500);
   };
 
   return (
@@ -165,6 +193,20 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
         </div>
         
         <div className="p-6 overflow-y-auto flex-1 space-y-8">
+          {!existingVax && (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-neutral-900">New Vaccination Record</h3>
+              <label className="flex items-center gap-2 text-sm text-neutral-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={bulkEntryMode}
+                  onChange={(e) => setBulkEntryMode(e.target.checked)}
+                  className="w-4 h-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Bulk Entry Mode</span>
+              </label>
+            </div>
+          )}
           
           {/* Core Details */}
           <section>
@@ -244,6 +286,19 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
                     <span className="text-sm font-semibold">No - Series complete</span>
                   </label>
                 </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Notes (Optional)
+                </label>
+                <textarea
+                  placeholder="Add any additional narrative notes..."
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm resize-none focus:ring-purple-500 focus:border-purple-500"
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </section>
           )}
@@ -358,58 +413,56 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
             </section>
           )}
 
-          {/* Linkages */}
-          <section>
-            <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
-                <FileText className="w-4 h-4 text-neutral-500" />
-                Linkages
-            </h3>
-            <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Consent Form</label>
-                <div className="flex items-center gap-2">
-                    <input 
-                        type="text" 
-                        value={consentFormId || ""} 
-                        onChange={e => setConsentFormId(e.target.value)} 
-                        placeholder="Enter Document ID or URL"
-                        className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
-                    />
-                    <button className="px-3 py-2 bg-neutral-100 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-200 border border-neutral-200">Upload</button>
-                </div>
-            </div>
-          </section>
-
-          {/* Notes */}
-          <section>
-            <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
-              <FileText className="w-4 h-4 text-neutral-500" />
-              Notes
-            </h3>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Add any additional narrative notes..."
-              className="w-full min-h-[100px] border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500 resize-y"
-            />
-          </section>
+          {status !== 'given' && (
+            <section>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">
+                Notes (Optional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Add any additional narrative notes..."
+                className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500 resize-none"
+                rows={3}
+              />
+            </section>
+          )}
 
         </div>
         
         <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-3 shrink-0">
+          {bulkEntryMode && !existingVax ? (
+            <button
+              onClick={() => {
+                setBulkEntryMode(false);
+                onClose();
+              }}
+              className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-md hover:bg-neutral-200"
+            >
+              Done with Bulk Entry
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            onClick={onClose}
-            className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
+            onClick={bulkEntryMode && !existingVax ? handleSaveAndAddAnother : () => handleSave()}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm font-medium"
           >
             <Save className="w-4 h-4" />
-            Save Vaccination
+            {bulkEntryMode && !existingVax ? 'Save & Add Another' : 'Save Vaccination'}
           </button>
         </div>
+
+        {showBulkToast && (
+          <div className="absolute bottom-20 right-6 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-lg">
+            Vaccination saved! Add another or close when done.
+          </div>
+        )}
       </div>
     </div>
   );
