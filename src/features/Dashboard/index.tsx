@@ -250,6 +250,8 @@ export const Dashboard: React.FC = () => {
           </div>
           <FloorMap 
             layout={filteredLayout} 
+            facilityId={activeFacilityId}
+            unitId={selectedUnit}
             roomStatuses={roomStatuses}
           />
         </div>
