@@ -4,7 +4,7 @@ import {
   InfectionControlAuditItem,
   InfectionControlAuditSession,
 } from "../../domain/models";
-import { AUDIT_CATEGORIES, InfectionControlAuditCategory } from "../../constants/infectionControlAuditTemplates";
+import { InfectionControlAuditCategory } from "../../constants/infectionControlAuditTemplates";
 
 const categoryLabel: Record<InfectionControlAuditCategory, string> = {
   HAND_HYGIENE: "Hand Hygiene",
@@ -59,7 +59,7 @@ const AuditReportPrint: React.FC = () => {
       <div className="max-w-5xl mx-auto space-y-4">
         <header className="border-b pb-3">
           <h1 className="text-2xl font-bold">Infection Control Audit Report</h1>
-          <p className="text-sm">Date: {session.auditDateISO} • Unit: {session.unit} • Shift: {session.shift} • Auditor: {session.auditorName}</p>
+          <p className="text-sm">Date: {session.auditDateISO} • Unit: {session.unit} • Audit Type: {session.auditType} • Shift: {session.shift} • Auditor: {session.auditorName}</p>
         </header>
 
         <section className="grid grid-cols-4 gap-3 text-sm">
@@ -84,41 +84,35 @@ const AuditReportPrint: React.FC = () => {
           )}
         </section>
 
-        {AUDIT_CATEGORIES.map(category => {
-          const rows = items.filter(i => i.category === category);
-          if (!rows.length) return null;
-          return (
-            <section key={category}>
-              <h3 className="font-semibold mt-4 mb-2">{categoryLabel[category]}</h3>
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="bg-neutral-100">
-                    <th className="border p-1 text-left">Question</th>
-                    <th className="border p-1 text-left">Response</th>
-                    <th className="border p-1 text-left">Corrective Action</th>
-                    <th className="border p-1 text-left">Due Date</th>
-                    <th className="border p-1 text-left">Severity</th>
-                    <th className="border p-1 text-left">Completed</th>
-                    <th className="border p-1 text-left">Evidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(item => (
-                    <tr key={item.id}>
-                      <td className="border p-1">{item.questionText}</td>
-                      <td className="border p-1">{item.response}</td>
-                      <td className="border p-1">{item.correctiveAction || "—"}</td>
-                      <td className="border p-1">{item.dueDateISO || "—"}</td>
-                      <td className="border p-1">{item.severity}</td>
-                      <td className="border p-1">{item.completedAt || "—"}</td>
-                      <td className="border p-1">{item.evidenceNote || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          );
-        })}
+        <section key={session.auditType}>
+          <h3 className="font-semibold mt-4 mb-2">{categoryLabel[session.auditType]}</h3>
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-neutral-100">
+                <th className="border p-1 text-left">Question</th>
+                <th className="border p-1 text-left">Response</th>
+                <th className="border p-1 text-left">Corrective Action</th>
+                <th className="border p-1 text-left">Due Date</th>
+                <th className="border p-1 text-left">Severity</th>
+                <th className="border p-1 text-left">Completed</th>
+                <th className="border p-1 text-left">Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id}>
+                  <td className="border p-1">{item.questionText}</td>
+                  <td className="border p-1">{item.response}</td>
+                  <td className="border p-1">{item.correctiveAction || "—"}</td>
+                  <td className="border p-1">{item.dueDateISO || "—"}</td>
+                  <td className="border p-1">{item.severity}</td>
+                  <td className="border p-1">{item.completedAt || "—"}</td>
+                  <td className="border p-1">{item.evidenceNote || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       </div>
     </div>
   );

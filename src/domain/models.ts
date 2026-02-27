@@ -258,10 +258,11 @@ export interface AuditSession {
 }
 
 export type InfectionControlAuditResponse = "UNKNOWN" | "COMPLIANT" | "NON_COMPLIANT" | "NA";
-export type InfectionControlAuditSeverity = "Low" | "Medium" | "High";
+export type InfectionControlAuditSeverity = "LOW" | "MED" | "HIGH";
 
 export interface InfectionControlAuditSession {
   id: string;
+  auditType: "HAND_HYGIENE" | "PPE" | "ISOLATION" | "EBP" | "ENV_CLEANING" | "ANTIBIOTIC_STEWARDSHIP" | "VACCINATION" | "OUTBREAK_PREP";
   auditDateISO: string;
   unit: string;
   shift: string;
