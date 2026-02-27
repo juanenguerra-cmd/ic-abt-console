@@ -34,6 +34,16 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   const [orderedRoomIds, setOrderedRoomIds] = React.useState<string[]>([]);
   const suppressNextClickRef = React.useRef(false);
 
+  // Read global tile size from settings (1–10, default 5)
+  const tileScale = React.useMemo(() => {
+    try {
+      const stored = localStorage.getItem(`ltc_floor_tile_size_global:${facilityId}`);
+      const size = stored ? Number(stored) : 5;
+      // width at size n = 40 + n*12; at size 5 (default) that is 100px → scale = (40 + n*12) / 100
+      return (40 + size * 12) / 100;
+    } catch { return 1; }
+  }, [facilityId]);
+
   const sortedSlots = React.useMemo(
     () => [...layout.rooms].sort((a, b) => a.y - b.y || a.x - b.x),
     [layout.rooms]
@@ -46,9 +56,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
     setOrderedRoomIds(merged);
   }, [facilityId, unitId, currentRoomIds]);
 
-  // Calculate bounding box
-  const maxX = Math.max(...layout.rooms.map(r => r.x + r.w), 0);
-  const maxY = Math.max(...layout.rooms.map(r => r.y + r.h), 0);
+  // Calculate bounding box (scaled by tileScale)
+  const maxX = Math.max(...layout.rooms.map(r => r.x * tileScale + r.w * tileScale), 0);
+  const maxY = Math.max(...layout.rooms.map(r => r.y * tileScale + r.h * tileScale), 0);
   const canvasWidth = Math.max(maxX + 40, 800);
   const canvasHeight = Math.max(maxY + 40, 400);
 
@@ -166,10 +176,10 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                 isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
               } ${draggingRoomId === room.roomId ? 'opacity-60' : ''}`}
               style={{
-                left: `${slot.x + 20}px`,
-                top: `${slot.y + 20}px`,
-                width: `${slot.w}px`,
-                height: `${slot.h}px`,
+                left: `${slot.x * tileScale + 20}px`,
+                top: `${slot.y * tileScale + 20}px`,
+                width: `${slot.w * tileScale}px`,
+                height: `${slot.h * tileScale}px`,
               }}
             >
               {isEditMode && (

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { X, Save, Activity, TestTube, FileText, Link, Shield } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { X, Save, Activity, TestTube, FileText, Link, Shield, AlertTriangle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { ABTCourse, IPEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
@@ -62,6 +62,49 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
   const [xrayResults, setXrayResults] = useState("");
   const [linkedIpEventId, setLinkedIpEventId] = useState("");
 
+  // Guard-rail override acknowledgements
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const [allergyAcknowledged, setAllergyAcknowledged] = useState(false);
+  const [noIndicationAcknowledged, setNoIndicationAcknowledged] = useState(false);
+
+  // G1: Duplicate active ABT detection
+  const duplicateWarning = useMemo(() => {
+    if (!medication.trim()) return null;
+    const medLower = medication.trim().toLowerCase();
+    const duplicate = Object.values(store.abts as Record<string, ABTCourse>).find(
+      (a) =>
+        a.id !== existingAbt?.id &&
+        a.residentRef.id === residentId &&
+        a.status === "active" &&
+        a.medication.toLowerCase() === medLower
+    );
+    return duplicate
+      ? `An active course of "${duplicate.medication}" already exists for this resident (started ${duplicate.startDate || "unknown date"}). Confirm this is intentional.`
+      : null;
+  }, [medication, store.abts, residentId, existingAbt]);
+
+  // G2: Allergy conflict check
+  const allergyWarning = useMemo(() => {
+    const res = store.residents[residentId];
+    if (!res?.allergies?.length || !medication.trim()) return null;
+    const medTokens = medication.trim().toLowerCase().split(/[\s/,]+/);
+    const classTokens = medicationClass ? medicationClass.toLowerCase().split(/[\s/,]+/) : [];
+    const match = res.allergies.find((allergen) => {
+      const aLower = allergen.toLowerCase();
+      return medTokens.some((t) => aLower.includes(t) || t.includes(aLower)) ||
+        classTokens.some((t) => aLower.includes(t) || t.includes(aLower));
+    });
+    return match
+      ? `Possible allergy conflict: resident has a documented allergy to "${match}". Verify with prescriber before saving.`
+      : null;
+  }, [medication, medicationClass, store.residents, residentId]);
+
+  // G3: Missing indication / syndrome category
+  const noIndicationWarning = useMemo(() => {
+    if (indication.trim() || syndromeCategory) return null;
+    return "No indication or syndrome category is documented. Antibiotic stewardship requires a clinical rationale for every course.";
+  }, [indication, syndromeCategory]);
+
   useEffect(() => {
     if (existingAbt?.diagnostics) {
       const dx = existingAbt.diagnostics as any;
@@ -81,6 +124,18 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
     }
     if (startDate && endDate && endDate < startDate) {
       alert("End date cannot be before start date.");
+      return;
+    }
+    if (duplicateWarning && !duplicateAcknowledged) {
+      alert("Please acknowledge the duplicate ABT warning before saving.");
+      return;
+    }
+    if (allergyWarning && !allergyAcknowledged) {
+      alert("Please acknowledge the allergy conflict warning before saving.");
+      return;
+    }
+    if (noIndicationWarning && !noIndicationAcknowledged) {
+      alert("Please acknowledge the missing indication warning before saving.");
       return;
     }
 
@@ -352,6 +407,57 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
           </section>
 
         </div>
+
+        {/* Guard-Rail Warnings */}
+        {(allergyWarning || duplicateWarning || noIndicationWarning) && (
+          <div className="px-6 pb-4 space-y-2 shrink-0">
+            {allergyWarning && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-800">Allergy Conflict</p>
+                    <p className="text-sm text-red-700">{allergyWarning}</p>
+                    <label className="mt-2 flex items-center gap-2 text-sm text-red-800 cursor-pointer">
+                      <input type="checkbox" checked={allergyAcknowledged} onChange={e => setAllergyAcknowledged(e.target.checked)} className="rounded border-red-400 text-red-600 focus:ring-red-500" />
+                      I have verified this with the prescriber and confirm the order is intentional.
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+            {duplicateWarning && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800">Duplicate Active ABT</p>
+                    <p className="text-sm text-amber-700">{duplicateWarning}</p>
+                    <label className="mt-2 flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
+                      <input type="checkbox" checked={duplicateAcknowledged} onChange={e => setDuplicateAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
+                      I confirm this is a separate, intentional course.
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+            {noIndicationWarning && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800">Missing Clinical Indication</p>
+                    <p className="text-sm text-amber-700">{noIndicationWarning}</p>
+                    <label className="mt-2 flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
+                      <input type="checkbox" checked={noIndicationAcknowledged} onChange={e => setNoIndicationAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
+                      I acknowledge the indication is not yet documented and will update the record.
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         
         <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-3 shrink-0">
           <button onClick={onClose} className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium">

@@ -20,15 +20,21 @@ export const SettingsConsole: React.FC = () => {
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
   
-  // Floor tile sizes
-  const [tileSizes, setTileSizes] = useState<Record<string, number>>({});
+  // Global floor tile size (1–10, default 5)
+  const [tileSize, setTileSize] = useState(5);
   useEffect(() => {
-    try { setTileSizes(JSON.parse(localStorage.getItem(`ltc_floor_tile_sizes_v1:${activeFacilityId}`) || '{}')); } catch { setTileSizes({}); }
+    try {
+      const stored = localStorage.getItem(`ltc_floor_tile_size_global:${activeFacilityId}`);
+      if (stored) setTileSize(Number(stored));
+    } catch { setTileSize(5); }
   }, [activeFacilityId]);
-  const saveTileSizes = (sizes: Record<string, number>) => {
-    setTileSizes(sizes);
-    localStorage.setItem(`ltc_floor_tile_sizes_v1:${activeFacilityId}`, JSON.stringify(sizes));
+  const handleTileSizeChange = (size: number) => {
+    setTileSize(size);
+    localStorage.setItem(`ltc_floor_tile_size_global:${activeFacilityId}`, String(size));
   };
+  // Pixel dimensions for the current tile size (same formula as FloorMap)
+  const previewTileW = 40 + tileSize * 12;
+  const previewTileH = 24 + tileSize * 6;
   
   const facility = db.data.facilities.byId[activeFacilityId];
   const [facilityName, setFacilityName] = useState(facility?.name || "");
@@ -176,54 +182,53 @@ export const SettingsConsole: React.FC = () => {
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
           <Map className="h-5 w-5 text-indigo-500 mr-2" />
-          <h3 className="text-lg leading-6 font-medium text-neutral-900">Floor Layout — Room Tile Sizes</h3>
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Floor Layout — Room Tile Size</h3>
         </div>
-        <div className="px-4 py-5 sm:p-6 space-y-4">
-          <p className="text-sm text-neutral-600">Configure the visual tile size for each room on the floor map (1 = smallest, 10 = largest).</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {(() => {
-              // Collect all rooms from residents and stored config
-              const roomSet = new Set<string>();
-              Object.values(store.residents).forEach(r => { if (r.currentRoom) roomSet.add(r.currentRoom); });
-              try {
-                const stored = localStorage.getItem('ltc_facility_rooms_config');
-                if (stored) {
-                  const mapping = JSON.parse(stored);
-                  Object.values(mapping).forEach((roomsStr: any) => {
-                    roomsStr.split(',').map((s: string) => s.trim()).filter(Boolean).forEach((r: string) => roomSet.add(r));
-                  });
-                }
-              } catch {}
-              const rooms = Array.from(roomSet).sort();
-              if (rooms.length === 0) return <p className="text-sm text-neutral-400 col-span-3">No rooms configured yet.</p>;
-              return rooms.map(room => {
-                const size = tileSizes[room] ?? 5;
-                return (
-                  <div key={room} className="flex flex-col gap-2 bg-neutral-50 border border-neutral-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-neutral-700">Room {room}</span>
-                      <span className="text-xs text-neutral-500">{size}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={1}
-                      max={10}
-                      value={size}
-                      onChange={e => saveTileSizes({ ...tileSizes, [room]: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                    {/* Live preview */}
-                    <div className="flex justify-center">
-                      <div
-                        style={{ width: `${size * 8}px`, height: `${size * 8}px` }}
-                        className="bg-indigo-400 rounded-sm transition-all duration-200"
-                        title={`Tile preview: size ${size}`}
-                      />
-                    </div>
-                  </div>
-                );
-              });
-            })()}
+        <div className="px-4 py-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row gap-8 items-start">
+            {/* Slider control */}
+            <div className="flex-1 space-y-3">
+              <p className="text-sm text-neutral-600">
+                Adjust how large each room tile appears on the live floor map. Move the slider to preview the exact size.
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-neutral-500">Small</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={tileSize}
+                  onChange={e => handleTileSizeChange(Number(e.target.value))}
+                  className="flex-1 accent-indigo-600 h-2 cursor-pointer"
+                />
+                <span className="text-xs font-medium text-neutral-500">Large</span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-neutral-400">
+                <span>Size {tileSize} of 10</span>
+                <span>{previewTileW} × {previewTileH} px</span>
+              </div>
+            </div>
+
+            {/* Sample tile preview — actual pixel size */}
+            <div className="flex flex-col items-center gap-2 shrink-0">
+              <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Sample Tile</p>
+              <div
+                className="flex items-center justify-center rounded-xl border border-neutral-200 bg-neutral-100 transition-all duration-200"
+                style={{
+                  width: `${Math.max(previewTileW + 48, 120)}px`,
+                  height: `${Math.max(previewTileH + 48, 96)}px`,
+                }}
+              >
+                <div
+                  style={{ width: `${previewTileW}px`, height: `${previewTileH}px` }}
+                  className="relative flex flex-col items-center justify-center border-2 rounded shadow-sm bg-white border-neutral-300 text-neutral-600 transition-all duration-200 overflow-hidden"
+                >
+                  <span className="text-[9px] font-bold uppercase tracking-tighter opacity-50 leading-none">Room</span>
+                  <span className="font-black leading-none" style={{ fontSize: `${Math.max(10, Math.min(previewTileH * 0.28, 18))}px` }}>1A</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-neutral-400">{previewTileW} × {previewTileH} px</p>
+            </div>
           </div>
         </div>
       </div>
