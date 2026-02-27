@@ -9,6 +9,52 @@ import { CsvMigrationWizard } from "./CsvMigrationWizard";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
+const validateUnifiedDB = (db: unknown): { valid: boolean; error?: string } => {
+  if (!db || typeof db !== "object") {
+    return { valid: false, error: "Invalid database format" };
+  }
+
+  const parsedDB = db as Record<string, unknown>;
+  const data = parsedDB.data as Record<string, unknown> | undefined;
+  if (!data || typeof data !== "object") {
+    return { valid: false, error: "Missing data object" };
+  }
+
+  const facilities = data.facilities as Record<string, unknown> | undefined;
+  if (!facilities || typeof facilities !== "object") {
+    return { valid: false, error: "Invalid facilities structure" };
+  }
+
+  const facilitiesById = facilities.byId as Record<string, unknown> | undefined;
+  const activeFacilityId = facilities.activeFacilityId;
+  if (!facilitiesById || typeof facilitiesById !== "object" || typeof activeFacilityId !== "string" || !activeFacilityId.trim()) {
+    return { valid: false, error: "Invalid facilities structure" };
+  }
+
+  const facilityData = data.facilityData as Record<string, unknown> | undefined;
+  if (!facilityData || typeof facilityData !== "object") {
+    return { valid: false, error: "Missing facilityData object" };
+  }
+
+  const activeFacilityData = facilityData[activeFacilityId] as Record<string, unknown> | undefined;
+  if (!activeFacilityData || typeof activeFacilityData !== "object") {
+    return { valid: false, error: `Missing data for facility: ${activeFacilityId}` };
+  }
+
+  const requiredCollections = ["residents", "staff", "infections", "abts", "vaxEvents", "staffVaxEvents", "fitTestEvents", "notes"];
+  for (const collection of requiredCollections) {
+    const value = activeFacilityData[collection];
+    if (value === undefined || value === null) {
+      return { valid: false, error: `Missing or null collection: ${collection}` };
+    }
+    if (typeof value !== "object") {
+      return { valid: false, error: `Invalid collection type: ${collection}` };
+    }
+  }
+
+  return { valid: true };
+};
+
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -103,23 +149,34 @@ export const SettingsConsole: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
+        let text = "";
         try {
-          const text = e.target?.result as string;
+          text = e.target?.result as string;
           const parsed = JSON.parse(text) as UnifiedDB;
-          if (parsed.schemaVersion !== 'UNIFIED_DB_V2') {
-            alert('Invalid backup file: Schema version does not match.');
+          if (parsed.schemaVersion !== "UNIFIED_DB_V2") {
+            alert("Invalid backup file: Schema version does not match.");
             return;
           }
-          if (restoreConfirm === 'RESTORE') {
+
+          const validation = validateUnifiedDB(parsed);
+          if (!validation.valid) {
+            alert(`Invalid backup file: ${validation.error}`);
+            console.error("Validation failed:", validation.error);
+            return;
+          }
+
+          if (restoreConfirm === "RESTORE") {
             setDB(parsed);
-            alert('Backup restored successfully.');
-            setRestoreConfirm('');
+            alert("Backup restored successfully.");
+            setRestoreConfirm("");
           } else {
-            alert('Please type RESTORE to confirm.');
+            alert("Please type RESTORE to confirm.");
           }
         } catch (error) {
-          alert('Error reading or parsing backup file.');
-          console.error(error);
+          const errorMsg = error instanceof Error ? error.message : "Unknown error";
+          alert(`Error reading or parsing backup file: ${errorMsg}`);
+          console.error("Restore error:", error);
+          console.error("Parsed data preview:", text.substring(0, 500));
         }
       };
       reader.readAsText(file);
