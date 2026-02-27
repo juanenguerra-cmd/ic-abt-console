@@ -16,7 +16,8 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const censusByUnit: Record<string, { total: number; male: number; female: number; unknown: number }> = {};
 
   residents.forEach((resident) => {
-    const unit = resident.currentUnit?.trim() ? resident.currentUnit.trim() : 'Unknown';
+    const trimmedUnit = resident.currentUnit?.trim();
+    const unit = trimmedUnit || 'Unknown';
     const sex = resident.sex?.trim().toLowerCase() || 'unknown';
     if (!censusByUnit[unit]) {
       censusByUnit[unit] = { total: 0, male: 0, female: 0, unknown: 0 };

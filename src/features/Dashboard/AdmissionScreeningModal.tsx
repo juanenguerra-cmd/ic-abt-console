@@ -30,9 +30,13 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
 
   const handlePrint = () => {
     setPrintView(true);
+    const restore = () => {
+      setPrintView(false);
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
     requestAnimationFrame(() => {
       window.print();
-      setPrintView(false);
     });
   };
 

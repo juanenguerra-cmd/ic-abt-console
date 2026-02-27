@@ -41,6 +41,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
     const start = new Date(course.startDate).getTime();
     const end = course.endDate ? new Date(course.endDate).getTime() : Date.now();
     const noteTime = new Date(noteDate).getTime();
+    if (Number.isNaN(start) || Number.isNaN(end) || Number.isNaN(noteTime)) return false;
     return noteTime >= start && noteTime <= end;
   };
 
@@ -55,12 +56,14 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
   const isDueStewardshipReview = (course: ABTCourse) => {
     if (course.status !== 'active' || !course.startDate) return false;
     const ageMs = Date.now() - new Date(course.startDate).getTime();
+    if (Number.isNaN(ageMs)) return false;
     return ageMs >= 48 * 60 * 60 * 1000 && !hasAbtStewardshipNoteInWindow(course);
   };
 
   const isNewAbt = (course: ABTCourse) => {
     if (!course.startDate) return false;
     const ageMs = Date.now() - new Date(course.startDate).getTime();
+    if (Number.isNaN(ageMs)) return false;
     return ageMs >= 0 && ageMs <= 48 * 60 * 60 * 1000;
   };
 

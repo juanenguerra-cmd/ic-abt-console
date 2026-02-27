@@ -21,10 +21,12 @@ const VACCINE_OPTIONS = [
 export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClose }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId } = useFacilityData();
+  const existingVaccineValue = existingVax?.vaccine || "";
+  const isExistingVaccineOther = !!existingVaccineValue && !VACCINE_OPTIONS.includes(existingVaccineValue);
 
   // Core Identity & Status
-  const [vaccine, setVaccine] = useState(existingVax?.vaccine && !VACCINE_OPTIONS.includes(existingVax.vaccine) ? "Other" : (existingVax?.vaccine || ""));
-  const [vaccineOther, setVaccineOther] = useState(existingVax?.vaccine && !VACCINE_OPTIONS.includes(existingVax.vaccine) ? existingVax.vaccine.replace(/^Other:\s*/i, '') : "");
+  const [vaccine, setVaccine] = useState(isExistingVaccineOther ? "Other" : existingVaccineValue);
+  const [vaccineOther, setVaccineOther] = useState(isExistingVaccineOther ? existingVaccineValue.replace(/^Other:\s*/i, '') : "");
   const [status, setStatus] = useState<VaxEvent["status"] | "historical">("given");
 
   // Dates
