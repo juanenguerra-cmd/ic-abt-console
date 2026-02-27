@@ -78,10 +78,10 @@ export const ResidentBoard: React.FC = () => {
     }
   }, [location.state]);
 
-  const residents = Object.values(store.residents) as Resident[];
-  const activeInfections = (Object.values(store.infections) as any[]).filter(i => i.status === 'active');
-  const activeABTs = (Object.values(store.abts) as any[]).filter(a => a.status === 'active');
-  const vaxEvents = Object.values(store.vaxEvents) as any[];
+  const residents = Object.values(store.residents || {}) as Resident[];
+  const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i.status === 'active');
+  const activeABTs = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active');
+  const vaxEvents = Object.values(store.vaxEvents || {}) as any[];
   // Assuming symptom events would be in store, but we don't have them in schema. We'll mock or omit.
   
   // Calculate age
@@ -281,7 +281,7 @@ export const ResidentBoard: React.FC = () => {
     const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
     const oneMonthMs = 30 * 24 * 60 * 60 * 1000;
 
-    const allNotes = (Object.values(store.notes) as any[])
+    const allNotes = (Object.values(store.notes || {}) as any[])
       .filter(n => n.residentRef.kind === "mrn" && n.residentRef.id === selectedResidentId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -332,7 +332,7 @@ export const ResidentBoard: React.FC = () => {
         </div>
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.values(store.quarantine).map(qRes => (
+            {Object.values(store.quarantine || {}).map(qRes => (
               <div key={qRes.tempId} className="bg-white border rounded-xl p-4 shadow-sm border-rose-200">
                 <h4 className="text-lg font-bold text-neutral-900 mb-1">{qRes.displayName || "Unknown Name"}</h4>
                 <p className="text-sm text-neutral-500 mb-2">DOB: {qRes.dob || "Unknown"} ({qRes.dob ? `${getAge(qRes.dob)} yrs` : ""})</p>

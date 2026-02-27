@@ -42,7 +42,7 @@ export const Dashboard: React.FC = () => {
     if (roomLabels.length === 0) {
       // Fallback to all residents' rooms
       const uniqueRooms = new Set<string>();
-      Object.values(store.residents).forEach(r => {
+      Object.values(store.residents || {}).forEach(r => {
         if (r.currentRoom) uniqueRooms.add(r.currentRoom);
       });
       roomLabels = Array.from(uniqueRooms).sort();
@@ -86,9 +86,9 @@ export const Dashboard: React.FC = () => {
 
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};
-    const activeInfections = Object.values(store.infections).filter(ip => ip.status === 'active');
+    const activeInfections = Object.values(store.infections || {}).filter(ip => ip.status === 'active');
     
-    Object.values(store.residents).forEach(res => {
+    Object.values(store.residents || {}).forEach(res => {
       if (res.currentRoom) {
         const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom.replace(/^\d/, ''));
         if (room) {
@@ -124,7 +124,7 @@ export const Dashboard: React.FC = () => {
 
   const units = useMemo(() => {
     const unitSet = new Set<string>();
-    Object.values(store.residents).forEach(r => {
+    Object.values(store.residents || {}).forEach(r => {
       if (r.currentUnit?.trim()) unitSet.add(r.currentUnit.trim());
     });
     return Array.from(unitSet).sort();
@@ -133,7 +133,7 @@ export const Dashboard: React.FC = () => {
   const filteredLayout = useMemo(() => {
     if (selectedUnit === "all") return layout;
     const roomsInUnit = new Set(
-      Object.values(store.residents)
+      Object.values(store.residents || {})
         .filter(r => r.currentUnit === selectedUnit && r.currentRoom)
         .map(r => r.currentRoom!)
     );
@@ -141,11 +141,11 @@ export const Dashboard: React.FC = () => {
   }, [layout, selectedUnit, store.residents]);
 
   // Calculate stats
-  const activeResidents = Object.values(store.residents).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
+  const activeResidents = Object.values(store.residents || {}).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
   const residentCount = activeResidents.length;
-  const activePrecautionsCount = (Object.values(store.infections) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
-  const outbreakCount = (Object.values(store.outbreaks) as any[]).filter(o => o.status !== 'closed').length;
-  const abtCount = (Object.values(store.abts) as any[]).filter(a => a.status === 'active').length;
+  const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
+  const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o.status !== 'closed').length;
+  const abtCount = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
 
   // Audit Center metrics
@@ -160,10 +160,10 @@ export const Dashboard: React.FC = () => {
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-  const recentAdmissions = Object.values(store.residents).filter(r => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
+  const recentAdmissions = Object.values(store.residents || {}).filter(r => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
 
   const residentsNeedingScreeningCount = recentAdmissions.filter(r => {
-    const hasScreeningNote = Object.values(store.notes).some(n => 
+    const hasScreeningNote = Object.values(store.notes || {}).some(n => 
       n.residentRef.kind === 'mrn' && 
       n.residentRef.id === r.mrn && 
       n.title?.includes('Admission Screening')

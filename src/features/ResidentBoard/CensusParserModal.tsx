@@ -11,10 +11,21 @@ const ROOM_ID_PATTERN = /^\d+(?:-[A-Za-z0-9]+)?$/; // e.g. 101, 101-A
 
 export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
   const { updateDB } = useDatabase();
-  const { activeFacilityId } = useFacilityData();
+  const { activeFacilityId, store } = useFacilityData();
   const [rawText, setRawText] = useState("");
   const [results, setResults] = useState<any[] | null>(null);
   const [parserMode, setParserMode] = useState<"census" | "listing">("census");
+  const [conflictsAcknowledged, setConflictsAcknowledged] = useState(false);
+
+  const getMrnConflicts = (rows: any[]) =>
+    rows.filter(p => {
+      if (!p.mrn || !p.name) return false;
+      const existing = store.residents[p.mrn];
+      if (!existing) return false;
+      const existingName = (existing.displayName || "").toLowerCase().replace(/[^a-z]/g, "");
+      const newName = p.name.toLowerCase().replace(/[^a-z]/g, "");
+      return existingName && newName && existingName !== newName;
+    });
 
   const handleParse = () => {
     if (parserMode === "census") {
@@ -305,6 +316,27 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
             </>
           ) : (
             <>
+              {(() => {
+                const mrnConflicts = getMrnConflicts(results || []);
+
+                return mrnConflicts.length > 0 ? (
+                  <div className="bg-amber-50 border border-amber-300 rounded-md p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-amber-800">
+                      <AlertCircle className="w-5 h-5 shrink-0" />
+                      <p className="text-sm font-semibold">{mrnConflicts.length} MRN conflict{mrnConflicts.length > 1 ? "s" : ""} detected</p>
+                    </div>
+                    <ul className="text-xs text-amber-700 space-y-1 pl-7 list-disc">
+                      {mrnConflicts.map((p: any, i: number) => (
+                        <li key={i}>MRN <strong>{p.mrn}</strong>: existing resident "{store.residents[p.mrn]?.displayName}" vs. imported "{p.name}"</li>
+                      ))}
+                    </ul>
+                    <label className="flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
+                      <input type="checkbox" checked={conflictsAcknowledged} onChange={e => setConflictsAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
+                      I acknowledge these conflicts and want to update the existing records
+                    </label>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 p-3 rounded-md border border-emerald-200">
                 <AlertCircle className="w-5 h-5" />
                 <p className="text-sm font-medium">Found {results.length} valid resident records.</p>
@@ -351,14 +383,19 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
-                  onClick={() => setResults(null)}
+                  onClick={() => { setResults(null); setConflictsAcknowledged(false); }}
                   className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50"
                 >
                   Back
                 </button>
                 <button
                   onClick={handleCommit}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  disabled={(() => {
+                    if (!results) return true;
+                    const hasMrnConflicts = getMrnConflicts(results).length > 0;
+                    return hasMrnConflicts && !conflictsAcknowledged;
+                  })()}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Commit to Database
                 </button>
