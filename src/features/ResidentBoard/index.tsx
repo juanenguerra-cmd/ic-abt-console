@@ -240,7 +240,7 @@ export const ResidentBoard: React.FC = () => {
       
       draft.data.facilityData[facilityId].notes[noteId] = {
         id: noteId,
-        residentRef: linkedResidentId ? { kind: "mrn", id: linkedResidentId } : { kind: "mrn", id: "general" },
+        residentRef: linkedResidentId ? { kind: "mrn", id: linkedResidentId } : { kind: "mrn", id: "__GENERAL__" },
         noteType: linkedResidentId ? "general" : "shift",
         body: noteInput,
         createdAt: new Date().toISOString(),

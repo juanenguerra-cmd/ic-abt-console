@@ -49,7 +49,7 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
         <div className="p-6 overflow-y-auto flex-1">
           <div className="mb-4 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 text-sm">
             Total Residents: <strong>{residentCount}</strong>
-            {capacityRate && <> | Occupancy: <strong>{capacityRate}%</strong></>}
+            {capacityRate && <span> | Occupancy: <strong>{capacityRate}%</strong></span>}
           </div>
           <p className="text-xs text-neutral-500 mb-2">Click a row count to view residents filtered by that unit.</p>
           <table className="w-full text-sm text-left text-neutral-600">
