@@ -12,7 +12,7 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
   const [printingResidentId, setPrintingResidentId] = React.useState<string | null>(null);
 
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const notes = Object.values(store.notes) as ResidentNote[];
 
   const threeDaysAgo = new Date();

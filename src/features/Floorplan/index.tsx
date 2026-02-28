@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ArrowLeft } from 'lucide-react';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
-import { FloorLayout } from '../../domain/models';
+import { FloorLayout, Resident } from '../../domain/models';
 
 interface Props {
   onBack: () => void;
@@ -45,7 +45,7 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
 
     if (roomLabels.length === 0) {
       // Fallback to residents' rooms in this unit
-      const residentsInUnit = Object.values(store.residents).filter(r => r.currentUnit === selectedUnitId);
+      const residentsInUnit = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentUnit === selectedUnitId);
       const uniqueRooms = new Set<string>();
       residentsInUnit.forEach(r => {
         if (r.currentRoom) uniqueRooms.add(r.currentRoom);
@@ -95,7 +95,7 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
     // Check for active IP events for these residents
     const activeInfections = Object.values(store.infections).filter(ip => ip.status === 'active');
     
-    Object.values(store.residents).forEach(res => {
+    (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach(res => {
       if (res.currentRoom) {
         const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom.replace(/^\d/, ''));
         if (room) {

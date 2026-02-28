@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { restoreFromPrevAsync } from "../../storage/engine";
-import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map } from "lucide-react";
+import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 import { CsvMigrationWizard } from "./CsvMigrationWizard";
+import { useNavigate } from "react-router-dom";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
@@ -58,6 +59,7 @@ const validateUnifiedDB = (db: unknown): { valid: boolean; error?: string } => {
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
+  const navigate = useNavigate();
   const [dbSize, setDbSize] = useState(0);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -305,6 +307,24 @@ export const SettingsConsole: React.FC = () => {
           >
             <Building2 className="w-4 h-4" />
             Configure Units & Rooms
+          </button>
+        </div>
+      </div>
+
+      {/* Back Office */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
+          <Users className="h-5 w-5 text-indigo-500 mr-2" />
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Back Office</h3>
+        </div>
+        <div className="px-4 py-5 sm:p-6 space-y-4">
+          <p className="text-sm text-neutral-600">Manage historical residents not currently on census.</p>
+          <button
+            onClick={() => navigate('/back-office')}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
+          >
+            <Users className="w-4 h-4" />
+            Go to Back Office
           </button>
         </div>
       </div>

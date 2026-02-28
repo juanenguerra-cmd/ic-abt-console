@@ -30,6 +30,13 @@ export interface Resident {
   identityAliases?: Alias[];
   createdAt: ISO;
   updatedAt: ISO;
+  isHistorical?: boolean;
+  backOfficeOnly?: boolean;
+  historicalSource?: 'manual' | 'csv_import';
+  lastKnownUnit?: string;
+  lastKnownRoom?: string;
+  lastKnownAttendingMD?: string;
+  dischargedAt?: ISO;
 }
 
 export interface QuarantineResident {
@@ -87,6 +94,7 @@ export interface IPEvent {
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
+  resolvedAt?: ISO;
 }
 
 export interface VaxEvent {

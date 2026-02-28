@@ -13,7 +13,7 @@ export const QuarantineLinkModal: React.FC<Props> = ({ quarantineId, onClose }) 
   const { updateDB } = useDatabase();
   
   const qRes = store.quarantine[quarantineId];
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMrn, setSelectedMrn] = useState<string | null>(null);

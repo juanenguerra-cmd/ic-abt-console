@@ -19,6 +19,7 @@ import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
 import AuditReportPrint from "../pages/print/AuditReportPrint";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
+import { BackOfficePage } from "../pages/BackOfficePage";
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -230,6 +231,7 @@ const AppShell = () => {
                 <Route path="/print/audit-report" element={<AuditReportPrint />} />
                 <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
                 <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
+                <Route path="/back-office" element={<PageTransition><BackOfficePage /></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AnimatePresence>

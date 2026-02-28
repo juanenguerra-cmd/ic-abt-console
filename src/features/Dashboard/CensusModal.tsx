@@ -14,7 +14,7 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const navigate = useNavigate();
   const facility = db.data.facilities.byId[activeFacilityId];
 
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const censusByUnit: Record<string, { total: number; male: number; female: number }> = {};
 
   residents.forEach((resident) => {

@@ -26,6 +26,25 @@ export interface Resident {
   identityAliases?: Alias[];
   createdAt: ISO;
   updatedAt: ISO;
+  lastSeenOnCensusAt?: ISO;
+  dischargedAt?: ISO;
+  deactivatedAt?: ISO;
+  dischargeReason?: string;
+  deactivationSnapshot?: {
+    unit: string;
+    room: string;
+    attendingMD: string;
+    admissionDate: string;
+  };
+  primaryDiagnosis?: string;
+  primaryDiagnosisText?: string;
+  payor?: string;
+  isHistorical?: boolean;
+  historicalSource?: 'manual' | 'csv_import';
+  lastKnownUnit?: string;
+  lastKnownRoom?: string;
+  lastKnownAttendingMD?: string;
+  backOfficeOnly?: boolean;
 }
 
 export interface QuarantineResident {
@@ -60,7 +79,8 @@ export interface ABTCourse {
   organismIdentified?: string;
   sensitivitySummary?: string;
   diagnostics?: object;
-  locationSnapshot?: { unit?: string; room?: string };
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO; };
+  prescriber?: string;
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
@@ -79,7 +99,7 @@ export interface IPEvent {
   specimenCollectedDate?: string;
   labResultDate?: string;
   outbreakId?: string;
-  locationSnapshot?: { unit?: string; room?: string };
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO; };
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;

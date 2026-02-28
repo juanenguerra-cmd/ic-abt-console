@@ -220,7 +220,8 @@ const DailyReport: React.FC = () => {
   );
 
   const recentAdmissions = useMemo(() =>
-    Object.values(store.residents)
+    (Object.values(store.residents) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly)
       .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysBeforeReport && new Date(r.admissionDate) <= reportDateObj)
       .map((r: Resident) => {
         const hasScreening = (Object.values(store.notes) as ResidentNote[]).some(n =>
@@ -582,7 +583,7 @@ const OnDemandReport: React.FC = () => {
 
   const units = useMemo(() => {
     const s = new Set<string>();
-    Object.values(store.residents).forEach((r: Resident) => { if (r.currentUnit?.trim()) s.add(r.currentUnit.trim()); });
+    (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach((r: Resident) => { if (r.currentUnit?.trim()) s.add(r.currentUnit.trim()); });
     return Array.from(s).sort();
   }, [store.residents]);
 
@@ -684,7 +685,7 @@ const OnDemandReport: React.FC = () => {
       };
     }
     // residents (no quick edit)
-    const filtered = (Object.values(store.residents) as Resident[]).filter(r => {
+    const filtered = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => {
       if (!inRange(r.admissionDate || r.createdAt)) return false;
       if (unitFilter !== 'all' && r.currentUnit !== unitFilter) return false;
       return true;
@@ -1007,7 +1008,7 @@ const QapiRollup: React.FC = () => {
   );
 
   const activeResidentCount = useMemo(() =>
-    Object.values(store.residents).filter((r: Resident) => r.status === 'Active').length,
+    (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter((r: Resident) => r.status === 'Active').length,
     [store.residents]
   );
 

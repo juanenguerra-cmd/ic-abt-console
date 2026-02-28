@@ -63,7 +63,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   const canvasHeight = Math.max(maxY + 40, 400);
 
   const getRoomTooltip = (roomLabel: string) => {
-    const residents = (Object.values(store.residents) as Resident[]).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
+    const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
     if (residents.length === 0) return `Room ${roomLabel} (Unoccupied)`;
 
     return residents.map(res => {
@@ -207,7 +207,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
               
               {/* Occupied Indicator */}
               {(() => {
-                const occupants = Object.values(store.residents).filter(r => r.currentRoom === (room.label || room.roomId) || r.currentRoom?.replace(/^\d/, '') === (room.label || room.roomId));
+                const occupants = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentRoom === (room.label || room.roomId) || r.currentRoom?.replace(/^\d/, '') === (room.label || room.roomId));
                 if (occupants.length > 0) {
                   return (
                     <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] font-bold px-1 rounded-sm shadow-sm">

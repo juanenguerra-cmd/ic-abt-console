@@ -39,7 +39,7 @@ export const NoteGenerator: React.FC = () => {
     if (incomingType && incomingType in NOTE_TEMPLATES) setNoteType(incomingType as NoteType);
   }, [searchParams, store.residents]);
 
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
 
   const generateNote = () => {
     if (!selectedMrn) {

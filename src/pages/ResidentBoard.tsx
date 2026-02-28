@@ -39,7 +39,7 @@ export function ResidentBoard() {
   };
 
   const allResidents = [
-    ...(Object.values(store.residents) as Resident[]),
+    ...(Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly),
     ...(Object.values(store.quarantine) as QuarantineResident[]).map((q) => ({
       ...q,
       isQuarantine: true,

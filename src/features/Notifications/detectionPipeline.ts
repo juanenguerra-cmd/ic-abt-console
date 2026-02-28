@@ -18,7 +18,7 @@ export const runDetectionPipeline = (
     ...Object.values(store.infections || {}),
     ...Object.values(store.vaxEvents || {}),
     ...Object.values(store.notes || {}),
-    ...Object.values(store.residents || {})
+    ...(Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly)
   ];
 
   let currentMaxEventIso = lastSeen;
@@ -232,7 +232,7 @@ export const runDetectionPipeline = (
     return acc;
   }, {} as Record<string, boolean>);
 
-  Object.values(store.residents || {}).forEach((res: Resident) => {
+  (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach((res: Resident) => {
     if (isNewer(res.updatedAt) || isNewer(res.createdAt) || (res.status === 'Active' && res.admissionDate)) {
       if (res.status === 'Active' && res.admissionDate) {
         const adDate = new Date(res.admissionDate);
@@ -422,7 +422,7 @@ export const runDetectionPipeline = (
       }
     });
 
-    Object.values(store.residents || {}).forEach((res: Resident) => {
+    (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach((res: Resident) => {
       if (res.status === 'Active') {
         if (!fluVaxByResident[res.mrn]) {
           addNotif(

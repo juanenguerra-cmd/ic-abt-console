@@ -1,4 +1,4 @@
-import { FacilityStore, ExportProfile } from "../domain/models";
+import { FacilityStore, ExportProfile, Resident } from "../domain/models";
 
 // Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
@@ -15,7 +15,7 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
   // 1. Select Dataset and Hydrate
   switch (profile.dataset) {
     case "residents":
-      data = Object.values(store.residents);
+      data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
       break;
     case "abts":
       data = Object.values(store.abts).map(abt => {

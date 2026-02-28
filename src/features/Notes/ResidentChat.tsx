@@ -22,7 +22,7 @@ export const ResidentChat: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Filter residents for autocomplete
-  const residents = Object.values(store.residents) as Resident[];
+  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const filteredResidents = residents
     .filter(r => r.displayName.toLowerCase().includes(mentionQuery.toLowerCase()) || r.mrn.includes(mentionQuery))
     .slice(0, 5); // Limit to 5 suggestions

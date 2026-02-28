@@ -28,7 +28,7 @@ export const GlobalSearch: React.FC = () => {
     const out: SearchResult[] = [];
 
     // Search residents
-    (Object.values(store.residents || {}) as Resident[]).forEach(r => {
+    (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach(r => {
       if (
         r.displayName?.toLowerCase().includes(q) ||
         r.mrn?.toLowerCase().includes(q) ||
