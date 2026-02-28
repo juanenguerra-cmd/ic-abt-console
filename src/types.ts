@@ -91,6 +91,7 @@ export interface IPEvent {
   id: string;
   residentRef: ResidentRef;
   status: "active" | "resolved" | "historical";
+  onsetDate?: string;
   infectionCategory?: string;
   infectionSite?: string;
   sourceOfInfection?: string;
@@ -110,11 +111,18 @@ export interface VaxEvent {
   id: string;
   residentRef: ResidentRef;
   vaccine: string;
-  status: "given" | "due" | "overdue" | "declined" | "scheduled" | "contraindicated";
+  status: "given" | "due" | "overdue" | "declined" | "scheduled" | "contraindicated" | "documented-historical";
+  administeredDate?: string;
   dateGiven?: string;
+  dose?: "1st" | "2nd" | "Booster" | "Single";
+  lotNumber?: string;
+  administeredBy?: string;
+  administrationSite?: "In-House" | "Outside Provider" | "Other";
+  source?: "manual-historical" | "csv-import" | "in-app";
   dueDate?: string;
   offerDate?: string;
   declineReason?: string;
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO; };
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;

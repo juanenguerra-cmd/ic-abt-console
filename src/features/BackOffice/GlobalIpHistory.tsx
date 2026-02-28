@@ -40,12 +40,12 @@ export const GlobalIpHistory: React.FC<Props> = ({ onEditIpEvent }) => {
     const matchesType = filterType ? ip.isolationType === filterType : true;
     const matchesStatus = filterStatus ? ip.status === filterStatus : true;
     
-    const eventDate = new Date(ip.createdAt).getTime();
+    const eventDate = new Date(ip.onsetDate || ip.createdAt).getTime();
     const matchesStartDate = startDate ? eventDate >= new Date(startDate).getTime() : true;
     const matchesEndDate = endDate ? eventDate <= new Date(endDate).getTime() + 86400000 : true; // Include end date
 
     return matchesSearch && matchesUnit && matchesType && matchesStatus && matchesStartDate && matchesEndDate;
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }).sort((a, b) => new Date(b.onsetDate || b.createdAt).getTime() - new Date(a.onsetDate || a.createdAt).getTime());
 
   const uniqueUnits = Array.from(new Set(historicalInfections.map(ip => ip.locationSnapshot?.unit).filter(Boolean))) as string[];
   const uniqueTypes = Array.from(new Set(historicalInfections.map(ip => ip.isolationType).filter(Boolean))) as string[];
@@ -150,7 +150,7 @@ export const GlobalIpHistory: React.FC<Props> = ({ onEditIpEvent }) => {
                       {resident?.displayName || 'Unknown'} <br/>
                       <span className="text-xs text-neutral-500 font-normal">{event.residentRef.id}</span>
                     </td>
-                    <td className="px-4 py-3">{new Date(event.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3">{new Date(event.onsetDate || event.createdAt).toLocaleDateString()}</td>
                     <td className="px-4 py-3">{event.isolationType || '-'}</td>
                     <td className="px-4 py-3">{event.organism || '-'}</td>
                     <td className="px-4 py-3">

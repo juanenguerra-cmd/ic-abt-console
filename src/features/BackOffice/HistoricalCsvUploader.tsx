@@ -130,6 +130,7 @@ export const HistoricalCsvUploader: React.FC = () => {
               isolationType: row.data.isolationType,
               organism: row.data.organism,
               status: row.data.status as any || 'resolved',
+              onsetDate: row.data.onsetDate ? new Date(row.data.onsetDate).toISOString() : undefined,
               createdAt: row.data.onsetDate ? new Date(row.data.onsetDate).toISOString() : new Date().toISOString(),
               updatedAt: new Date().toISOString()
             };
@@ -157,7 +158,7 @@ export const HistoricalCsvUploader: React.FC = () => {
               syndromeCategory: row.data.syndrome,
               infectionSource: row.data.sourceOfInfection,
               cultureCollected: row.data.cultureCollected === 'Yes',
-              status: row.data.status as any || 'completed',
+              status: row.data.status as any || 'documented-historical',
               startDate: row.data.startDate ? new Date(row.data.startDate).toISOString() : undefined,
               endDate: row.data.endDate ? new Date(row.data.endDate).toISOString() : undefined,
               createdAt: new Date().toISOString(),
@@ -180,8 +181,10 @@ export const HistoricalCsvUploader: React.FC = () => {
               id,
               residentRef: { kind: 'mrn', id: targetMrn },
               vaccine: row.data.vaccineType,
-              status: row.data.status as any || 'completed',
+              status: row.data.status as any || 'documented-historical',
+              administeredDate: row.data.administeredDate ? new Date(row.data.administeredDate).toISOString() : undefined,
               dateGiven: row.data.administeredDate ? new Date(row.data.administeredDate).toISOString() : undefined,
+              source: "csv-import",
               notes: row.data.notes,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
