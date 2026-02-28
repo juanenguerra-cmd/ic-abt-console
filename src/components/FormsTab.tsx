@@ -5,12 +5,13 @@ import { generateResidentPDF } from '../lib/pdf-generator';
 import { useToast } from '../hooks/useToast';
 import { useFormTemplates } from '../hooks/useFormTemplates';
 import { FormTemplateManager } from './FormTemplateManager';
-import { useDB } from '../context/DBContext';
+import { useDatabase, useFacilityData } from '../app/providers';
 
 export function FormsTab() {
   const { toast } = useToast();
   const { residentForms } = useFormTemplates();
-  const { db, activeFacilityId } = useDB();
+  const { db } = useDatabase();
+  const { activeFacilityId } = useFacilityData();
   const [residentInfo, setResidentInfo] = useState<ResidentInfo>({
     name: '',
     roomNumber: '',
