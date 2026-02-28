@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../app/providers';
-import { Resident, IPEvent } from '../domain/models';
+import { Resident, IPEvent, ABTCourse } from '../domain/models';
 import { Search, Plus, Edit, Activity, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
@@ -8,6 +8,8 @@ import { HistoricalCsvUploader } from '../features/BackOffice/HistoricalCsvUploa
 import { BackOfficeResidentDetail } from '../features/BackOffice/BackOfficeResidentDetail';
 import { HistoricalIpEventModal } from '../features/BackOffice/HistoricalIpEventModal';
 import { GlobalIpHistory } from '../features/BackOffice/GlobalIpHistory';
+import { HistoricalAbtEventModal } from '../features/BackOffice/HistoricalAbtEventModal';
+import { GlobalAbtHistory } from '../features/BackOffice/GlobalAbtHistory';
 
 export const BackOfficePage: React.FC = () => {
   const { store } = useFacilityData();
@@ -16,11 +18,13 @@ export const BackOfficePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResident, setEditingResident] = useState<Resident | null>(null);
-  const [activeTab, setActiveTab] = useState<'residents' | 'ip-history'>('residents');
+  const [activeTab, setActiveTab] = useState<'residents' | 'ip-history' | 'abx-history'>('residents');
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   
   const [showIpModal, setShowIpModal] = useState(false);
   const [editingIpEvent, setEditingIpEvent] = useState<IPEvent | undefined>();
+  const [showAbtModal, setShowAbtModal] = useState(false);
+  const [editingAbtEvent, setEditingAbtEvent] = useState<ABTCourse | undefined>();
   const [prefilledResidentId, setPrefilledResidentId] = useState<string | undefined>();
 
   const [formData, setFormData] = useState({
@@ -153,6 +157,16 @@ export const BackOfficePage: React.FC = () => {
             setEditingIpEvent(event);
             setShowIpModal(true);
           }}
+          onAddAbtEvent={(residentId) => {
+            setPrefilledResidentId(residentId);
+            setEditingAbtEvent(undefined);
+            setShowAbtModal(true);
+          }}
+          onEditAbtEvent={(event) => {
+            setPrefilledResidentId(event.residentRef.id);
+            setEditingAbtEvent(event);
+            setShowAbtModal(true);
+          }}
         />
       ) : (
         <>
@@ -162,6 +176,17 @@ export const BackOfficePage: React.FC = () => {
               <p className="text-neutral-500">Manage historical residents and events.</p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setPrefilledResidentId(undefined);
+                  setEditingAbtEvent(undefined);
+                  setShowAbtModal(true);
+                }}
+                className="flex items-center gap-2 bg-white border border-neutral-300 text-neutral-700 px-4 py-2 rounded-md hover:bg-neutral-50 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add ABX Event
+              </button>
               <button
                 onClick={() => {
                   setPrefilledResidentId(undefined);
@@ -196,6 +221,12 @@ export const BackOfficePage: React.FC = () => {
                 onClick={() => setActiveTab('ip-history')}
               >
                 Global IP History
+              </button>
+              <button
+                className={`px-6 py-3 text-sm font-medium border-b-2 ${activeTab === 'abx-history' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'}`}
+                onClick={() => setActiveTab('abx-history')}
+              >
+                Global ABX History
               </button>
             </nav>
           </div>
@@ -279,6 +310,16 @@ export const BackOfficePage: React.FC = () => {
                 setPrefilledResidentId(event.residentRef.id);
                 setEditingIpEvent(event);
                 setShowIpModal(true);
+              }}
+            />
+          )}
+
+          {activeTab === 'abx-history' && (
+            <GlobalAbtHistory 
+              onEditAbtEvent={(event) => {
+                setPrefilledResidentId(event.residentRef.id);
+                setEditingAbtEvent(event);
+                setShowAbtModal(true);
               }}
             />
           )}
@@ -426,6 +467,13 @@ export const BackOfficePage: React.FC = () => {
           prefilledResidentId={prefilledResidentId}
           existingEvent={editingIpEvent}
           onClose={() => setShowIpModal(false)}
+        />
+      )}
+      {showAbtModal && (
+        <HistoricalAbtEventModal
+          prefilledResidentId={prefilledResidentId}
+          existingEvent={editingAbtEvent}
+          onClose={() => setShowAbtModal(false)}
         />
       )}
     </div>

@@ -66,6 +66,7 @@ export interface ABTCourse {
   status: "active" | "completed" | "discontinued";
   medication: string;
   medicationClass?: string;
+  dose?: string;
   route?: string;
   frequency?: string;
   indication?: string;

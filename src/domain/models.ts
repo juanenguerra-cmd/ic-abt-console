@@ -58,6 +58,7 @@ export interface ABTCourse {
   status: "active" | "completed" | "discontinued";
   medication: string;
   medicationClass?: string;
+  dose?: string;
   route?: string;
   frequency?: string;
   indication?: string;
@@ -72,6 +73,7 @@ export interface ABTCourse {
   sensitivitySummary?: string;
   diagnostics?: object;
   locationSnapshot?: { unit?: string; room?: string };
+  prescriber?: string;
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
