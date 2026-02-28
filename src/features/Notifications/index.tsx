@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Bell, AlertTriangle, Info, CheckCircle2, X, Download } from 'lucide-react';
+import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
@@ -53,11 +53,35 @@ export const useNotifications = () => {
 };
 
 export const NotificationsPage: React.FC = () => {
+  const { store } = useFacilityData();
   const { notifications, historyNotifications, dismissNotification, markAsRead, markAllAsRead } = useNotifications();
   const [activeTab, setActiveTab] = useState<'new' | 'all'>('new');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [unitFilter, setUnitFilter] = useState<string>('all');
+  const [expandedVaxGroups, setExpandedVaxGroups] = useState<Set<string>>(new Set());
+  const [selectedVaxGroups, setSelectedVaxGroups] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
+
+  type GroupResident = {
+    residentId?: string;
+    mrn?: string;
+    name: string;
+    firstName?: string;
+    lastName?: string;
+    unit?: string;
+    room?: string;
+  };
+
+  type GroupedVaxNotification = {
+    id: string;
+    category: 'VAX_GAP';
+    statusBucket: 'Overdue' | 'Due';
+    vaccine: string;
+    title: string;
+    residents: GroupResident[];
+    notifications: AppNotification[];
+    latestCreatedAtISO: string;
+  };
 
   const getIcon = (category: string) => {
     switch (category) {
@@ -143,6 +167,96 @@ export const NotificationsPage: React.FC = () => {
     .filter(n => unitFilter === 'all' || n.unit === unitFilter)
     .sort((a, b) => new Date(b.createdAtISO).getTime() - new Date(a.createdAtISO).getTime());
 
+  const groupedVaxNotifications = useMemo<GroupedVaxNotification[]>(() => {
+    if (!store) return [];
+
+    const groups = new Map<string, GroupedVaxNotification>();
+    const vaxNotifications = displayList.filter(n => n.category === 'VAX_GAP');
+
+    vaxNotifications.forEach(notif => {
+      const vax = notif.refs?.vaxId ? store.vaxEvents?.[notif.refs.vaxId] : undefined;
+      const resident = notif.residentId ? store.residents?.[notif.residentId] : undefined;
+
+      if (resident && (resident.isHistorical || resident.backOfficeOnly || resident.status === 'Discharged' || resident.status === 'Deceased')) {
+        return;
+      }
+
+      const statusBucket: 'Overdue' | 'Due' = vax?.status === 'overdue' ? 'Overdue' : 'Due';
+      const vaccine = vax?.vaccine || 'Unknown Vaccine';
+      const residentName = resident?.displayName || notif.message.split(' is due for ')[0] || 'Unknown Resident';
+      const residentRecord: GroupResident = {
+        residentId: notif.residentId,
+        mrn: resident?.mrn,
+        name: residentName,
+        firstName: resident?.firstName,
+        lastName: resident?.lastName,
+        unit: resident?.currentUnit || notif.unit,
+        room: resident?.currentRoom || notif.room,
+      };
+
+      const key = `${statusBucket.toLowerCase()}::${vaccine.toLowerCase()}`;
+      const existing = groups.get(key);
+
+      if (!existing) {
+        groups.set(key, {
+          id: `vax-group-${key}`,
+          category: 'VAX_GAP',
+          statusBucket,
+          vaccine,
+          title: `Vaccine ${statusBucket} — ${vaccine}`,
+          residents: [residentRecord],
+          notifications: [notif],
+          latestCreatedAtISO: notif.createdAtISO,
+        });
+        return;
+      }
+
+      const hasResident = existing.residents.some(r => r.residentId && r.residentId === residentRecord.residentId);
+      if (!hasResident) {
+        existing.residents.push(residentRecord);
+      }
+      existing.notifications.push(notif);
+      if (new Date(notif.createdAtISO).getTime() > new Date(existing.latestCreatedAtISO).getTime()) {
+        existing.latestCreatedAtISO = notif.createdAtISO;
+      }
+    });
+
+    const sortResidents = (a: GroupResident, b: GroupResident) => {
+      const aHasLocation = Boolean(a.unit || a.room);
+      const bHasLocation = Boolean(b.unit || b.room);
+
+      if (aHasLocation || bHasLocation) {
+        const unitCompare = (a.unit || '').localeCompare(b.unit || '', undefined, { numeric: true, sensitivity: 'base' });
+        if (unitCompare !== 0) return unitCompare;
+        const roomCompare = (a.room || '').localeCompare(b.room || '', undefined, { numeric: true, sensitivity: 'base' });
+        if (roomCompare !== 0) return roomCompare;
+      }
+
+      const aLast = a.lastName || '';
+      const bLast = b.lastName || '';
+      const lastCompare = aLast.localeCompare(bLast, undefined, { sensitivity: 'base' });
+      if (lastCompare !== 0) return lastCompare;
+
+      const aFirst = a.firstName || a.name;
+      const bFirst = b.firstName || b.name;
+      return aFirst.localeCompare(bFirst, undefined, { sensitivity: 'base' });
+    };
+
+    return Array.from(groups.values())
+      .map(group => ({
+        ...group,
+        residents: group.residents.sort(sortResidents),
+      }))
+      .sort((a, b) => {
+        if (a.statusBucket !== b.statusBucket) {
+          return a.statusBucket === 'Overdue' ? -1 : 1;
+        }
+        return a.vaccine.localeCompare(b.vaccine, undefined, { sensitivity: 'base' });
+      });
+  }, [displayList, store]);
+
+  const nonVaxDisplayList = displayList.filter(n => n.category !== 'VAX_GAP');
+
   const uniqueCategories = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.category)));
   const uniqueUnits = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.unit).filter(Boolean)));
 
@@ -180,6 +294,101 @@ export const NotificationsPage: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const toggleVaxGroupExpanded = (groupId: string) => {
+    setExpandedVaxGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const toggleVaxGroupSelected = (groupId: string) => {
+    setSelectedVaxGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllVaxGroups = () => {
+    setSelectedVaxGroups(new Set(groupedVaxNotifications.map(group => group.id)));
+  };
+
+  const handleClearVaxSelection = () => {
+    setSelectedVaxGroups(new Set());
+  };
+
+  const handlePrintSelected = () => {
+    const selectedGroups = groupedVaxNotifications.filter(group => selectedVaxGroups.has(group.id));
+    if (selectedGroups.length === 0) return;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=1100');
+    if (!printWindow) return;
+
+    const body = selectedGroups.map(group => `
+      <section class="group">
+        <h2>${group.title}</h2>
+        <div class="meta">Count: ${group.residents.length}</div>
+        <ul>
+          ${group.residents.map(resident => `<li>
+            <strong>${resident.name}</strong>
+            ${resident.mrn ? `<div class="sub">MRN: ${resident.mrn}</div>` : ''}
+            ${(resident.unit || resident.room) ? `<div class="sub">Location: ${resident.unit || 'Unknown'}${resident.room ? ` - ${resident.room}` : ''}</div>` : ''}
+          </li>`).join('')}
+        </ul>
+      </section>
+    `).join('');
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Notifications & Recommendations</title>
+          <style>
+            @page { margin: 0.5in; }
+            body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 12px; }
+            h1 { margin: 0 0 4px; font-size: 22px; }
+            .printed-at { margin-bottom: 16px; color: #4b5563; font-size: 11px; }
+            .group { margin-bottom: 16px; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; }
+            h2 { margin: 0 0 6px; font-size: 16px; }
+            .meta { margin-bottom: 8px; font-size: 12px; color: #374151; }
+            ul { margin: 0; padding-left: 18px; }
+            li { margin-bottom: 8px; }
+            .sub { margin-left: 8px; color: #4b5563; font-size: 11px; }
+          </style>
+        </head>
+        <body>
+          <h1>Notifications & Recommendations</h1>
+          <div class="printed-at">Printed: ${new Date().toLocaleString()}</div>
+          ${body}
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const markGroupedVaxAsRead = (group: GroupedVaxNotification) => {
+    group.notifications.filter(n => n.status === 'unread').forEach(n => markAsRead(n.id));
+  };
+
+  const dismissGroupedVax = (group: GroupedVaxNotification) => {
+    group.notifications.forEach(n => dismissNotification(n.id));
   };
 
   return (
@@ -249,7 +458,127 @@ export const NotificationsPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4 max-w-4xl mx-auto">
-              {displayList.map(notif => {
+              {groupedVaxNotifications.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm text-amber-800 font-medium">
+                    Grouped vaccine notifications: {groupedVaxNotifications.length}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={handleSelectAllVaxGroups}
+                      className="px-3 py-1.5 text-xs font-medium bg-white border border-amber-200 rounded-md hover:bg-amber-100"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      onClick={handleClearVaxSelection}
+                      className="px-3 py-1.5 text-xs font-medium bg-white border border-amber-200 rounded-md hover:bg-amber-100"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={handlePrintSelected}
+                      disabled={selectedVaxGroups.size === 0}
+                      className="px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-50 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print selected
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {groupedVaxNotifications.map(group => {
+                const isExpanded = expandedVaxGroups.has(group.id);
+                const isSelected = selectedVaxGroups.has(group.id);
+                const isRead = group.notifications.every(n => n.status !== 'unread');
+
+                return (
+                  <div
+                    key={group.id}
+                    className={`p-4 rounded-lg border ${getBgColor('VAX_GAP', isRead)} transition-all hover:shadow-md`}
+                    data-testid={`notification-item-${group.id}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleVaxGroupSelected(group.id)}
+                        className="mt-1 h-4 w-4 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                        aria-label={`Select ${group.title}`}
+                      />
+                      <div className="shrink-0 mt-1">{getIcon('VAX_GAP')}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">warning</span>
+                          <h3 className="text-sm font-bold text-neutral-900">{group.title}</h3>
+                          <span className="text-xs bg-white border border-amber-300 text-amber-800 font-semibold px-2 py-0.5 rounded-full">{group.residents.length}</span>
+                        </div>
+                        <p className="text-sm text-neutral-700 mb-2">{group.residents.length} resident{group.residents.length === 1 ? '' : 's'} in this vaccine {group.statusBucket.toLowerCase()} group.</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-neutral-500">
+                          <span>Detected: {new Date(group.latestCreatedAtISO).toLocaleString()}</span>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            onClick={() => toggleVaxGroupExpanded(group.id)}
+                            className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-xs font-medium transition-colors flex items-center gap-1"
+                          >
+                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            {isExpanded ? 'Collapse Residents' : 'Expand Residents'}
+                          </button>
+                          {!isRead && (
+                            <button
+                              onClick={() => markGroupedVaxAsRead(group)}
+                              className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-xs font-medium transition-colors"
+                            >
+                              Mark as Read
+                            </button>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-3 bg-white/60 rounded border border-neutral-200 p-3">
+                            <p className="text-xs font-semibold text-neutral-700 mb-2">Residents</p>
+                            <ul className="text-xs text-neutral-700 space-y-2">
+                              {group.residents.map((resident, idx) => (
+                                <li key={`${group.id}-${resident.residentId || resident.mrn || idx}`} className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
+                                    {resident.residentId ? (
+                                      <button
+                                        onClick={() => handleViewResident(resident.residentId)}
+                                        className="font-medium text-indigo-600 hover:text-indigo-800 hover:underline text-left"
+                                      >
+                                        {resident.name}
+                                      </button>
+                                    ) : (
+                                      <span className="font-medium">{resident.name}</span>
+                                    )}
+                                  </div>
+                                  {resident.mrn && <span className="ml-3 text-neutral-500">MRN: {resident.mrn}</span>}
+                                  {(resident.unit || resident.room) && (
+                                    <span className="ml-3 text-neutral-500">Location: {resident.unit || 'Unknown'}{resident.room ? ` - ${resident.room}` : ''}</span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => dismissGroupedVax(group)}
+                        className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-white/50 rounded-md transition-colors"
+                        title="Dismiss completely"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {nonVaxDisplayList.map(notif => {
                 const isRead = notif.status === 'read' || notif.status === 'dismissed';
                 const typeLabel = getTypeLabel(notif.category);
                 return (
