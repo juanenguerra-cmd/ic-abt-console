@@ -7,21 +7,43 @@ const BASE_TEMPLATE = `
     <meta charset="utf-8" />
     <title>Resident Consent Forms</title>
     <style>
-      body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #111827; margin: 20px; }
-      .form-page { page-break-after: always; margin-bottom: 24px; }
+      @page { size: letter; margin: 1in; }
+      body { font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #000; margin: 0; }
+      .form-page { page-break-after: always; break-after: page; }
       .form-page:last-child { page-break-after: auto; }
-      .outlined-header { border: 1px solid #111827; padding: 12px; margin-bottom: 16px; }
-      .outlined-header.centered { text-align: center; }
-      .outlined-header .left { text-align: left; }
-      h1 { font-size: 16pt; margin: 6px 0; font-weight: 700; }
-      h2 { font-size: 14pt; text-align: center; margin: 14px 0 10px; font-weight: 700; }
-      h3 { font-size: 12pt; margin: 12px 0 6px; font-weight: 700; }
-      p { margin: 6px 0; }
-      ul { margin: 6px 0 10px 20px; }
-      table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; }
-      th, td { border: 1px solid #111827; padding: 8px; vertical-align: top; text-align: left; }
-      .divider { text-align: center; letter-spacing: 0.5px; margin: 18px 0; }
-      .signature-row { margin-top: 20px; }
+      h1, h2, h3, p { margin: 0; }
+      .pain-resident-line { margin-bottom: 16px; }
+      .pain-title { color: #1e3a8a; text-align: center; font-size: 16pt; font-weight: 700; margin-bottom: 6px; }
+      .pain-subtitle { text-align: center; font-size: 14pt; font-weight: 400; margin-bottom: 12px; }
+      .section-title { font-size: 12pt; font-weight: 700; margin: 12px 0 6px; }
+      .icon { font-weight: 700; margin-right: 4px; }
+      .icon-success { color: #10b981; }
+      .icon-warning { color: #f59e0b; }
+      .icon-star { color: #fbbf24; }
+      .icon-info { color: #3b82f6; }
+      .icon-leaf { color: #22c55e; }
+      .body-copy { line-height: 1.5; margin-bottom: 6px; }
+      .list { margin: 6px 0 8px 20px; line-height: 1.6; }
+      .list li { margin-bottom: 2px; }
+      table { border-collapse: collapse; width: 100%; margin: 8px 0 10px; font-size: 10pt; }
+      th, td { border: 1px solid #000; padding: 8px; vertical-align: top; text-align: left; }
+      th { background: #f3f4f6; }
+      .form-divider { margin: 10px 0; border: 0; border-top: 1px solid #000; }
+      .pain-footer { margin-top: 16px; }
+      .vax-header { text-align: center; font-weight: 700; }
+      .vax-title { font-size: 14pt; font-weight: 700; text-align: center; margin: 8px 0; }
+      .resident-name-row { margin: 10px 0 14px; }
+      .underlined-heading { font-size: 12pt; font-weight: 700; text-decoration: underline; margin: 8px 0 4px; }
+      .consent-paragraph { line-height: 1.5; margin-bottom: 8px; }
+      .signature-block { margin: 12px 0 16px; }
+      .signature-line-row { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 2px; }
+      .signature-line { flex: 1; border-bottom: 1px solid #000; min-height: 30px; }
+      .signature-date { width: 15ch; border-bottom: 1px solid #000; min-height: 30px; }
+      .signature-caption { display: flex; gap: 16px; font-size: 10pt; }
+      .signature-caption-label { flex: 1; }
+      .signature-caption-date { width: 15ch; text-align: right; }
+      .asterisk-divider { margin: 16px 0; text-align: center; letter-spacing: 0.4px; }
+      .vax-footer { margin-top: 10px; font-size: 10pt; font-style: italic; }
     </style>
   </head>
   <body>
@@ -58,13 +80,14 @@ export function generateResidentPDF(
 
   const html = BASE_TEMPLATE.replace('{{content}}', renderedForms.join('\n'));
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${residentInfo.name || 'resident'}-forms.html`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const printWindow = window.open('', '_blank', 'width=900,height=1100');
+  if (!printWindow) {
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
