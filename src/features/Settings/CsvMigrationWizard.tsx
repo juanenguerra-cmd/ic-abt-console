@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../../app/providers";
+import { ABTCourse, Resident, VaxEvent } from "../../domain/models";
 import { getMigrationTemplate, MigrationDatasetType } from "../../lib/migration/csvTemplates";
 import {
   buildAutoMapping,
@@ -10,6 +11,8 @@ import {
   importMappedRows,
   parseCsv,
 } from "../../lib/migration/csvImport";
+import { parseRawAbtOrderListing, RawAbtStagingRow } from "../../parsers/rawAbtOrderListingParser";
+import { parseRawVaxList, RawVaxStagingRow } from "../../parsers/rawVaxListParser";
 
 const DATASET_LABELS: Record<MigrationDatasetType, string> = {
   ABT: "ABT",
@@ -28,12 +31,72 @@ export const CsvMigrationWizard: React.FC = () => {
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
   const [importErrors, setImportErrors] = useState<{ rowNumber: number; message: string }[]>([]);
+  const [importMode, setImportMode] = useState<"CSV" | "RAW">("CSV");
+  const [rawAbtText, setRawAbtText] = useState("");
+  const [rawVaxText, setRawVaxText] = useState("");
+  const [rawAbtRows, setRawAbtRows] = useState<RawAbtStagingRow[]>([]);
+  const [rawVaxRows, setRawVaxRows] = useState<RawVaxStagingRow[]>([]);
+  const [vaxTypeSelection, setVaxTypeSelection] = useState("Influenza");
+  const [vaxStatusSelection, setVaxStatusSelection] = useState<"Vaccinated" | "Historical" | "Refused">("Vaccinated");
 
   const fields = useMemo(() => getDatasetFields(datasetType), [datasetType]);
+  const residents = useMemo(() => Object.values(store.residents || {}) as Resident[], [store.residents]);
   const unmappedColumns = useMemo(
     () => mapping.filter((item) => !item.mappedField).map((item) => item.column),
     [mapping]
   );
+
+
+  const hasRawErrors = useMemo(() => {
+    if (datasetType === "ABT") return rawAbtRows.some((row) => row.status === "ERROR" && !row.skip);
+    if (datasetType === "VAX") return rawVaxRows.some((row) => row.status === "ERROR" && !row.skip);
+    return false;
+  }, [datasetType, rawAbtRows, rawVaxRows]);
+
+  const applyAbtDuplicateMarking = (rowsToCheck: RawAbtStagingRow[]): RawAbtStagingRow[] => {
+    const existingAbts = Object.values(store.abts || {}) as ABTCourse[];
+    return rowsToCheck.map((row) => {
+      const duplicate = existingAbts.find((abt) => {
+        const med = (abt.medication || "").trim().toLowerCase();
+        const route = (abt.route || "").trim().toLowerCase();
+        const start = (abt.startDate || "").slice(0, 10);
+        return (
+          abt.residentRef.id === row.mrn &&
+          med === (row.medicationName || row.orderSummaryRaw).trim().toLowerCase() &&
+          start === row.startDate &&
+          route === (row.routeNormalized || "Other").toLowerCase()
+        );
+      });
+
+      if (!duplicate) return row;
+      return {
+        ...row,
+        status: "NEEDS_REVIEW",
+        skip: true,
+        warnings: [...row.warnings, `Possible duplicate: ${duplicate.medication} (${(duplicate.startDate || "").slice(0, 10)})`],
+      };
+    });
+  };
+
+  const applyVaxDuplicateMarking = (rowsToCheck: RawVaxStagingRow[]): RawVaxStagingRow[] => {
+    const existingVax = Object.values(store.vaxEvents || {}) as VaxEvent[];
+    return rowsToCheck.map((row) => {
+      const duplicate = existingVax.find(
+        (event) =>
+          event.residentRef.id === row.mrn &&
+          (event.vaccine || "").toLowerCase() === row.vaccineType.toLowerCase() &&
+          (event.dateGiven || "").slice(0, 10) === row.eventDate &&
+          event.status === row.eventStatus
+      );
+      if (!duplicate) return row;
+      return {
+        ...row,
+        status: "NEEDS_REVIEW",
+        skip: true,
+        warnings: [...row.warnings, `Possible duplicate: ${duplicate.vaccine} (${(duplicate.dateGiven || "").slice(0, 10)})`],
+      };
+    });
+  };
 
   const downloadTemplate = (type: MigrationDatasetType) => {
     const { filename, csv } = getMigrationTemplate(type);
@@ -101,6 +164,108 @@ export const CsvMigrationWizard: React.FC = () => {
     setImportErrors(summary.errors);
   };
 
+  const parseRawImport = () => {
+    if (datasetType === "ABT") {
+      const parsed = parseRawAbtOrderListing(rawAbtText).map((row) => {
+        const residentByMrn = residents.find((resident) => resident.mrn === row.mrn);
+        return {
+          ...row,
+          prescriber: residentByMrn?.attendingMD || residentByMrn?.lastKnownAttendingMD || "",
+        };
+      });
+      setRawAbtRows(applyAbtDuplicateMarking(parsed));
+      return;
+    }
+
+    if (datasetType === "VAX") {
+      const parsed = parseRawVaxList(rawVaxText, vaxTypeSelection, vaxStatusSelection);
+      setRawVaxRows(applyVaxDuplicateMarking(parsed));
+    }
+  };
+
+  const commitRawImport = () => {
+    if (hasRawErrors) {
+      alert("Cannot commit while unskipped error rows exist.");
+      return;
+    }
+
+    let imported = 0;
+    let skipped = 0;
+    let duplicatesSkipped = 0;
+    let errorsSkipped = 0;
+
+    updateDB((draft) => {
+      const facility = draft.data.facilityData[activeFacilityId];
+      facility.abts = facility.abts || {};
+      facility.vaxEvents = facility.vaxEvents || {};
+
+      if (datasetType === "ABT") {
+        rawAbtRows.forEach((row) => {
+          if (row.skip || row.status === "ERROR") {
+            skipped += 1;
+            if (row.status === "ERROR") errorsSkipped += 1;
+            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
+            return;
+          }
+
+          const id = uuidv4();
+          facility.abts[id] = {
+            id,
+            residentRef: { kind: "mrn", id: row.mrn },
+            status: row.orderStatusRaw.toLowerCase().includes("complete") ? "completed" : "active",
+            medication: row.medicationName || row.orderSummaryRaw,
+            dose: row.dose || undefined,
+            route: row.routeNormalized || row.routeRaw || undefined,
+            frequency: row.frequencyNormalized || row.frequencyRaw || undefined,
+            indication: row.indicationRaw || undefined,
+            infectionSource: row.sourceOfInfection || undefined,
+            syndromeCategory: row.syndrome || undefined,
+            startDate: row.startDate || undefined,
+            endDate: row.endDate || undefined,
+            prescriber: row.prescriber || undefined,
+            notes: row.endDateWasComputed ? "End date computed from extracted duration." : undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          imported += 1;
+        });
+      }
+
+      if (datasetType === "VAX") {
+        rawVaxRows.forEach((row) => {
+          if (row.skip || row.status === "ERROR") {
+            skipped += 1;
+            if (row.status === "ERROR") errorsSkipped += 1;
+            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
+            return;
+          }
+
+          const id = uuidv4();
+          facility.vaxEvents[id] = {
+            id,
+            residentRef: { kind: "mrn", id: row.mrn },
+            vaccine: row.vaccineType,
+            status: row.eventStatus as VaxEvent["status"],
+            administeredDate: row.eventDate,
+            dateGiven: row.eventDate,
+            source: "csv-import",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          imported += 1;
+        });
+      }
+    });
+
+    alert(`RAW import complete.\nImported: ${imported}\nSkipped: ${skipped}\nDuplicates skipped: ${duplicatesSkipped}\nErrors skipped: ${errorsSkipped}`);
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === "ERROR") return <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">❌ Error</span>;
+    if (status === "NEEDS_REVIEW") return <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">⚠ Needs review</span>;
+    return <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">✅ Parsed</span>;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -127,6 +292,14 @@ export const CsvMigrationWizard: React.FC = () => {
         </button>
       </div>
 
+      {(datasetType === "ABT" || datasetType === "VAX") && (
+        <div className="flex gap-2">
+          <button onClick={() => setImportMode("CSV")} className={`px-3 py-1.5 rounded-md text-sm ${importMode === "CSV" ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-700"}`}>CSV Mapper</button>
+          <button onClick={() => setImportMode("RAW")} className={`px-3 py-1.5 rounded-md text-sm ${importMode === "RAW" ? "bg-indigo-600 text-white" : "bg-neutral-100 text-neutral-700"}`}>RAW Import</button>
+        </div>
+      )}
+
+      {importMode === "CSV" && (
       <div className="border border-neutral-200 rounded-md p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <select
@@ -181,6 +354,106 @@ export const CsvMigrationWizard: React.FC = () => {
           className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
         />
       </div>
+      )}
+
+      {importMode === "RAW" && (datasetType === "ABT" || datasetType === "VAX") && (
+        <div className="border border-neutral-200 rounded-md p-4 space-y-3">
+          {datasetType === "VAX" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select value={vaxTypeSelection} onChange={(event) => setVaxTypeSelection(event.target.value)} className="border border-neutral-300 rounded-md p-2 text-sm">
+                <option>Influenza</option>
+                <option>COVID-19</option>
+                <option>Pneumococcal</option>
+                <option>Shingles</option>
+                <option>Other</option>
+              </select>
+              <select value={vaxStatusSelection} onChange={(event) => setVaxStatusSelection(event.target.value as "Vaccinated" | "Historical" | "Refused")} className="border border-neutral-300 rounded-md p-2 text-sm">
+                <option>Vaccinated</option>
+                <option>Historical</option>
+                <option>Refused</option>
+              </select>
+            </div>
+          )}
+
+          <textarea
+            value={datasetType === "ABT" ? rawAbtText : rawVaxText}
+            onChange={(event) => (datasetType === "ABT" ? setRawAbtText(event.target.value) : setRawVaxText(event.target.value))}
+            placeholder={datasetType === "ABT" ? "Paste Order Listing Report raw text" : "Paste VAX raw list lines"}
+            rows={8}
+            className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
+          />
+          <div className="flex gap-2">
+            <button onClick={parseRawImport} className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700">Parse</button>
+            <button
+              onClick={() => {
+                if (datasetType === "ABT") {
+                  setRawAbtText("");
+                  setRawAbtRows([]);
+                } else {
+                  setRawVaxText("");
+                  setRawVaxRows([]);
+                }
+              }}
+              className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700"
+            >
+              Clear
+            </button>
+            <button onClick={commitRawImport} disabled={hasRawErrors} className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm">Commit Import</button>
+          </div>
+
+          {datasetType === "ABT" && rawAbtRows.length > 0 && (
+            <div className="overflow-x-auto border border-neutral-200 rounded-md">
+              <table className="min-w-full text-xs">
+                <thead className="bg-neutral-50">
+                  <tr>
+                    <th className="px-2 py-1">Status</th><th className="px-2 py-1">Skip</th><th className="px-2 py-1">MRN</th><th className="px-2 py-1">Name</th><th className="px-2 py-1">Medication</th><th className="px-2 py-1">Start</th><th className="px-2 py-1">End</th><th className="px-2 py-1">Route</th><th className="px-2 py-1">Frequency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawAbtRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                      <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, skip: event.target.checked } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.mrn} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, mrn: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.residentNameRaw} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, residentNameRaw: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.medicationName} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, medicationName: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.startDate} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, startDate: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.endDate} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, endDate: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.routeNormalized} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, routeNormalized: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.frequencyNormalized} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, frequencyNormalized: event.target.value } : item))} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {datasetType === "VAX" && rawVaxRows.length > 0 && (
+            <div className="overflow-x-auto border border-neutral-200 rounded-md">
+              <table className="min-w-full text-xs">
+                <thead className="bg-neutral-50">
+                  <tr>
+                    <th className="px-2 py-1">Status</th><th className="px-2 py-1">Skip</th><th className="px-2 py-1">MRN</th><th className="px-2 py-1">Name</th><th className="px-2 py-1">Vaccine</th><th className="px-2 py-1">Event status</th><th className="px-2 py-1">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rawVaxRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                      <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, skip: event.target.checked } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.mrn} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, mrn: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.residentNameRaw} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, residentNameRaw: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.vaccineType} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, vaccineType: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.eventStatus} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, eventStatus: event.target.value } : item))} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.eventDate} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, eventDate: event.target.value } : item))} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {mapping.length > 0 && (
         <div className="border border-neutral-200 rounded-md p-4 space-y-4">
