@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ResidentNote } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, Users, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Send, User, Users, X, Upload, Plus, Trash2, FileText, Settings, Map, Printer, Inbox, ArrowLeft, Tag, ExternalLink } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
 import { IpEventModal } from "./IpEventModal";
@@ -20,12 +20,17 @@ export const ResidentBoard: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { db, updateDB } = useDatabase();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showUndo } = useUndoToast();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
-  const [filterAbtOnly, setFilterAbtOnly] = useState(false);
-  const [filterUnit, setFilterUnit] = useState<string>("");
+  const [filterAbtOnly, setFilterAbtOnly] = useState(() => searchParams.get('abtActive') === 'true');
+  const [filterUnit, setFilterUnit] = useState<string>(() => searchParams.get('unit') || "");
+  const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
+  const [filterLast24h, setFilterLast24h] = useState(() => searchParams.get('last24h') === 'true');
+  const [filterNeedsReview, setFilterNeedsReview] = useState(() => searchParams.get('needsReview') === 'true');
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -58,10 +63,27 @@ export const ResidentBoard: React.FC = () => {
   const [cursorPos, setCursorPos] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Read unit filter from navigation state (e.g. from Dashboard census click)
+  // Sync filter state to URL search params
+  const updateFilters = (updates: Record<string, string | null>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      Object.entries(updates).forEach(([key, val]) => {
+        if (val === null || val === '' || val === 'false') {
+          next.delete(key);
+        } else {
+          next.set(key, val);
+        }
+      });
+      return next;
+    }, { replace: true });
+  };
+
+  // Read filters from navigation state (from Dashboard Work Queue cards etc.)
   useEffect(() => {
     const state = location.state as { 
       filterUnit?: string;
+      onPrecautions?: boolean;
+      abtActive?: boolean;
       selectedResidentId?: string;
       openProfile?: boolean;
       openModal?: 'abt' | 'ip' | 'vax';
@@ -69,7 +91,11 @@ export const ResidentBoard: React.FC = () => {
     } | null;
     
     if (state) {
-      if (state.filterUnit) setFilterUnit(state.filterUnit);
+      const paramUpdates: Record<string, string | null> = {};
+      if (state.filterUnit) { setFilterUnit(state.filterUnit); paramUpdates.unit = state.filterUnit; }
+      if (state.onPrecautions) { setFilterOnPrecautions(true); paramUpdates.onPrecautions = 'true'; }
+      if (state.abtActive) { setFilterAbtOnly(true); paramUpdates.abtActive = 'true'; }
+      if (Object.keys(paramUpdates).length > 0) updateFilters(paramUpdates);
       if (state.selectedResidentId) {
         setSelectedResidentId(state.selectedResidentId);
         if (state.openProfile) setShowProfileModal(true);
@@ -85,16 +111,17 @@ export const ResidentBoard: React.FC = () => {
   const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i.status === 'active');
   const activeABTs = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active');
   const vaxEvents = Object.values(store.vaxEvents || {}) as any[];
-  // Assuming symptom events would be in store, but we don't have them in schema. We'll mock or omit.
+  const today = new Date().toISOString().split('T')[0];
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   
   // Calculate age
   const getAge = (dob?: string) => {
     if (!dob) return "?";
     const birthDate = new Date(dob);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    const todayDate = new Date();
+    let age = todayDate.getFullYear() - birthDate.getFullYear();
+    const m = todayDate.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && todayDate.getDate() < birthDate.getDate())) {
       age--;
     }
     return age;
@@ -124,11 +151,26 @@ export const ResidentBoard: React.FC = () => {
         if (!hasAbt) return false;
       }
 
+      if (filterOnPrecautions) {
+        const hasIP = activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === r.mrn && (i.isolationType || i.ebp));
+        if (!hasIP) return false;
+      }
+
+      if (filterLast24h) {
+        const updatedAt = (r as any).updatedAt || r.admissionDate || '';
+        if (!updatedAt || updatedAt < twentyFourHoursAgo) return false;
+      }
+
+      if (filterNeedsReview) {
+        const dueAbt = activeABTs.find(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn && a.reviewDate && a.reviewDate <= today);
+        if (!dueAbt) return false;
+      }
+
       if (filterUnit && r.currentUnit?.trim() !== filterUnit) return false;
 
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, activeABTs, filterUnit]);
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo]);
 
   // Group by Unit
   // The prompt asks for Unit 2, Unit 3, Unit 4. We'll group dynamically based on currentUnit.
@@ -387,42 +429,96 @@ export const ResidentBoard: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
       {/* Top Bar */}
-      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0" role="toolbar" aria-label="Resident board controls">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-neutral-900">Resident Board</h1>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" aria-hidden="true" />
-            <input 
-              type="search"
-              aria-label="Search residents by name, MRN, or room"
-              placeholder="Search name, MRN, room..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-64"
-            />
-          </div>
+      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex flex-wrap items-center gap-3 shrink-0" role="toolbar" aria-label="Resident board controls">
+        <h1 className="text-xl font-bold text-neutral-900 shrink-0">Resident Board</h1>
+        <div className="relative shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" aria-hidden="true" />
+          <input 
+            type="search"
+            aria-label="Search residents by name, MRN, or room"
+            placeholder="Search name, MRN, room..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-56"
+          />
+        </div>
+
+        {/* IC-first filter toggles */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => { const v = !filterOnPrecautions; setFilterOnPrecautions(v); updateFilters({ onPrecautions: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterOnPrecautions ? 'bg-amber-100 border-amber-400 text-amber-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterOnPrecautions}
+          >
+            On Precautions
+          </button>
+          <button
+            onClick={() => { const v = !filterLast24h; setFilterLast24h(v); updateFilters({ last24h: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterLast24h ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterLast24h}
+          >
+            Changed 24h
+          </button>
+          <button
+            onClick={() => { const v = !filterAbtOnly; setFilterAbtOnly(v); updateFilters({ abtActive: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterAbtOnly ? 'bg-emerald-100 border-emerald-400 text-emerald-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterAbtOnly}
+          >
+            ABT Active
+          </button>
+          <button
+            onClick={() => { const v = !filterNeedsReview; setFilterNeedsReview(v); updateFilters({ needsReview: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterNeedsReview ? 'bg-purple-100 border-purple-400 text-purple-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterNeedsReview}
+          >
+            Needs Review
+          </button>
+          <button
+            onClick={() => { const v = !filterActiveOnly; setFilterActiveOnly(v); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterActiveOnly ? 'bg-sky-100 border-sky-400 text-sky-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterActiveOnly}
+          >
+            Active Only
+          </button>
           {filterUnit && (
-            <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+            <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium border border-indigo-300">
               Unit: {filterUnit}
-              <button onClick={() => setFilterUnit("")} aria-label={`Remove unit filter: ${filterUnit}`} className="ml-1 hover:text-indigo-900">
+              <button onClick={() => { setFilterUnit(""); updateFilters({ unit: null }); }} aria-label={`Remove unit filter: ${filterUnit}`} className="ml-0.5 hover:text-indigo-900">
                 <X className="w-3 h-3" />
               </button>
             </div>
           )}
+          {(filterOnPrecautions || filterLast24h || filterAbtOnly || filterNeedsReview || filterActiveOnly || filterUnit) && (
+            <button
+              onClick={() => {
+                setFilterOnPrecautions(false);
+                setFilterLast24h(false);
+                setFilterAbtOnly(false);
+                setFilterNeedsReview(false);
+                setFilterActiveOnly(false);
+                setFilterUnit("");
+                setSearchParams({}, { replace: true });
+              }}
+              className="px-2.5 py-1 rounded-full text-xs font-medium border border-neutral-300 text-neutral-500 hover:bg-neutral-50"
+            >
+              Clear all
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2 ml-auto shrink-0">
           <button 
             onClick={() => setShowCensusModal(true)}
             aria-label="Upload or update census file"
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"
           >
             <Upload className="w-4 h-4" aria-hidden="true" />
-            Update Census
+            Census
           </button>
           <button 
             onClick={() => setView('quarantine')}
             aria-label="View quarantine inbox"
-            className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors"
           >
             <Inbox className="w-4 h-4" aria-hidden="true" />
             Quarantine
@@ -430,7 +526,7 @@ export const ResidentBoard: React.FC = () => {
           <button 
             onClick={() => setView('report')}
             aria-label="View shift report"
-            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
             <FileText className="w-4 h-4" aria-hidden="true" />
             Shift Report
@@ -438,34 +534,26 @@ export const ResidentBoard: React.FC = () => {
           <button 
             onClick={() => setShowSettingsModal(true)}
             aria-label="Board settings"
-            className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+            className="p-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md hover:bg-neutral-200 transition-colors"
           >
             <Settings className="w-4 h-4" aria-hidden="true" />
-            Settings
           </button>
-          <div className="h-6 w-px bg-neutral-300 mx-1" aria-hidden="true"></div>
-          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
-            <input 
-              type="checkbox"
-              aria-label="Filter: active residents only"
-              checked={filterActiveOnly}
-              onChange={e => setFilterActiveOnly(e.target.checked)}
-              className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Active Only
-          </label>
-          <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
-            <input 
-              type="checkbox"
-              aria-label="Filter: residents on antibiotic therapy only"
-              checked={filterAbtOnly}
-              onChange={e => setFilterAbtOnly(e.target.checked)}
-              className="rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            ABT Only
-          </label>
         </div>
       </div>
+
+      {/* Link-out banners for B4 */}
+      {filterOnPrecautions && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center gap-3 shrink-0 text-sm text-amber-800">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>Showing residents on active precautions.</span>
+          <button onClick={() => navigate('/outbreaks')} className="ml-auto flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium underline">
+            <ExternalLink className="w-3 h-3" /> Open Outbreak Manager
+          </button>
+          <button onClick={() => navigate('/audit-center')} className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium underline">
+            <ExternalLink className="w-3 h-3" /> Open Audit Center
+          </button>
+        </div>
+      )}
 
       {/* Main Layout: 4 Columns */}
       <div className="flex flex-1 overflow-hidden">
@@ -477,12 +565,12 @@ export const ResidentBoard: React.FC = () => {
                 icon={<Users className="w-16 h-16 text-neutral-300" />}
                 title="No residents on the board"
                 description={
-                  searchQuery || filterActiveOnly || filterAbtOnly || filterUnit
+                  searchQuery || filterActiveOnly || filterAbtOnly || filterUnit || filterOnPrecautions || filterLast24h || filterNeedsReview
                     ? "No residents match your current filters. Try clearing the filters above."
                     : "Upload a census file to populate the board, or add residents manually through Settings."
                 }
                 action={
-                  !searchQuery && !filterActiveOnly && !filterAbtOnly && !filterUnit ? (
+                  !searchQuery && !filterActiveOnly && !filterAbtOnly && !filterUnit && !filterOnPrecautions && !filterLast24h && !filterNeedsReview ? (
                     <button
                       onClick={() => setShowCensusModal(true)}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"

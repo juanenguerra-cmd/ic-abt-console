@@ -9,6 +9,7 @@ import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
 import { FloorMap } from "../features/Heatmap/FloorMap";
 import { ResidentChat } from "../features/Notes";
+import { ShiftLogPage } from "../features/Notes/ShiftLogPage";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
@@ -220,7 +221,7 @@ const AppShell = () => {
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
-                <Route path="/chat" element={<PageTransition><div className="p-6"><ResidentChat /></div></PageTransition>} />
+                <Route path="/chat" element={<PageTransition><ShiftLogPage /></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />

@@ -65,6 +65,10 @@ export const runDetectionPipeline = (
     const id = `${ruleId}_${residentId || unitOverride || 'facility'}_${refId}_${dateBucket}`;
     if (store.notifications?.[id]) return; // Already exists
 
+    // Check permanent dismissal: build ruleKey without dateBucket
+    const ruleKey = [ruleId, residentId || unitOverride || 'facility', refId].join('_');
+    if ((store.dismissedRuleKeys || []).includes(ruleKey)) return; // Permanently dismissed
+
     const { unit, room, name } = residentId ? getResDetails(residentId) : { unit: unitOverride, room: undefined, name: undefined };
     detected.push({
       id,

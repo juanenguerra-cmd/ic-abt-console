@@ -18,6 +18,15 @@ export const useNotifications = () => {
     updateDB(draft => {
       const facilityData = draft.data.facilityData[activeFacilityId];
       if (facilityData.notifications && facilityData.notifications[id]) {
+        const notif = facilityData.notifications[id];
+        // Build the rule key (without dateBucket) for permanent suppression
+        const ruleKey = [notif.ruleId, notif.residentId || notif.unit || 'facility', notif.refs?.abtId || notif.refs?.ipId || notif.refs?.vaxId || notif.refs?.noteId || ''].join('_');
+        if (!facilityData.dismissedRuleKeys) {
+          facilityData.dismissedRuleKeys = [];
+        }
+        if (!facilityData.dismissedRuleKeys.includes(ruleKey)) {
+          facilityData.dismissedRuleKeys.push(ruleKey);
+        }
         facilityData.notifications[id].status = 'dismissed';
       }
     });
@@ -47,7 +56,7 @@ export const useNotifications = () => {
 
   const allNotifications = Object.values(store.notifications || {});
   const notifications = allNotifications.filter(n => n.status === 'unread');
-  const historyNotifications = allNotifications.filter(n => n.status === 'read' || n.status === 'dismissed');
+  const historyNotifications = allNotifications.filter(n => n.status === 'read');
 
   return { notifications, historyNotifications, dismissNotification, markAsRead, markAllAsRead };
 };

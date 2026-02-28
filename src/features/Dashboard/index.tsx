@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck } from 'lucide-react';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
@@ -114,6 +114,10 @@ export const Dashboard: React.FC = () => {
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [showOutbreakModal, setShowOutbreakModal] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string>("all");
+  const [tileSize, setTileSize] = useState<number>(() => {
+    const stored = localStorage.getItem(`ltc_floor_tile_size_global:${activeFacilityId}`);
+    return stored ? Math.min(10, Math.max(1, parseInt(stored, 10))) : 5;
+  });
 
   React.useEffect(() => {
     if ((location.state as { openModal?: string } | null)?.openModal === 'precautions') {
@@ -143,11 +147,17 @@ export const Dashboard: React.FC = () => {
 
   // Calculate stats
   const activeResidents = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
-  const residentCount = activeResidents.length;
+  // Refined census: exclude residents with unit === 'unknown'
+  const residentCount = activeResidents.filter(r => r.currentUnit?.toLowerCase() !== 'unknown').length;
   const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
   const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o.status !== 'closed').length;
   const abtCount = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active').length;
   const qCount = Object.keys(store.quarantine).length;
+
+  // Today's work queue counts
+  const today = new Date().toISOString().split('T')[0];
+  const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n.status === 'unread').length;
+  const abtNeedsReviewCount = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active' && a.reviewDate && a.reviewDate <= today).length;
 
   // Audit Center metrics
   const thirtyDaysAgo = new Date();
@@ -212,17 +222,19 @@ export const Dashboard: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-neutral-500">Active Outbreaks</p>
                 <p className="text-2xl font-bold text-neutral-900">{outbreakCount}</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
               </div>
               <div className="p-2 bg-orange-50 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-orange-600" />
               </div>
             </div>
           </div>
-          <div onClick={() => setShowScreeningModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+          <div onClick={() => navigate('/notifications', { state: { category: 'ADMISSION_SCREENING' } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-neutral-500">Admission Screening</p>
                 <p className="text-2xl font-bold text-neutral-900">{residentsNeedingScreeningCount}</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Needs screening</p>
               </div>
               <div className="p-2 bg-emerald-50 rounded-lg">
                 <FileText className="w-5 h-5 text-emerald-600" />
@@ -234,6 +246,7 @@ export const Dashboard: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-neutral-500">Active ABTs</p>
                 <p className="text-2xl font-bold text-neutral-900">{abtCount}</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
               </div>
               <div className="p-2 bg-amber-50 rounded-lg">
                 <Inbox className="w-5 h-5 text-amber-600" />
@@ -279,24 +292,110 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Today's IC Work Queue */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
+          <h2 className="text-lg font-bold text-neutral-900 mb-4">Today's IC Work Queue</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <button
+              onClick={() => navigate('/notifications')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-left group"
+            >
+              <div className="p-2 bg-red-50 rounded-lg shrink-0">
+                <Bell className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xl font-bold text-neutral-900">{newNotificationsCount}</p>
+                <p className="text-xs font-medium text-neutral-600">New alerts / positives</p>
+                <p className="text-xs text-neutral-400">Open Notifications →</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-indigo-400 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => navigate('/resident-board', { state: { onPrecautions: true } })}
+              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-amber-300 hover:bg-amber-50 transition-colors text-left group"
+            >
+              <div className="p-2 bg-amber-50 rounded-lg shrink-0">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xl font-bold text-neutral-900">{activePrecautionsCount}</p>
+                <p className="text-xs font-medium text-neutral-600">Active precautions</p>
+                <p className="text-xs text-neutral-400">Open Resident Board →</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-amber-400 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => navigate('/outbreaks')}
+              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-orange-300 hover:bg-orange-50 transition-colors text-left group"
+            >
+              <div className="p-2 bg-orange-50 rounded-lg shrink-0">
+                <AlertCircle className="w-5 h-5 text-orange-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xl font-bold text-neutral-900">{outbreakCount}</p>
+                <p className="text-xs font-medium text-neutral-600">Outbreak tasks due</p>
+                <p className="text-xs text-neutral-400">Open Outbreak Manager →</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-orange-400 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => navigate('/resident-board', { state: { abtActive: true } })}
+              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors text-left group"
+            >
+              <div className="p-2 bg-emerald-50 rounded-lg shrink-0">
+                <Activity className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xl font-bold text-neutral-900">{abtNeedsReviewCount}</p>
+                <p className="text-xs font-medium text-neutral-600">ABT reviews due</p>
+                <p className="text-xs text-neutral-400">Open Resident Board →</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-emerald-400 shrink-0" />
+            </button>
+          </div>
+        </div>
+
         <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-neutral-900">Live Floor Map</h2>
-            {units.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-neutral-500" />
-                <select
-                  value={selectedUnit}
-                  onChange={e => setSelectedUnit(e.target.value)}
-                  className="border border-neutral-300 rounded-md px-2 py-1 text-sm focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="all">All Units</option>
-                  {units.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
+            <div className="flex items-center gap-4">
+              {units.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-neutral-500" />
+                  <select
+                    value={selectedUnit}
+                    onChange={e => setSelectedUnit(e.target.value)}
+                    className="border border-neutral-300 rounded-md px-2 py-1 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="all">All Units</option>
+                    {units.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="flex items-center gap-2" title="Tile size (1–10)">
+                <SlidersHorizontal className="w-4 h-4 text-neutral-400" />
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={tileSize}
+                  onChange={e => {
+                    const val = parseInt(e.target.value, 10);
+                    setTileSize(val);
+                    localStorage.setItem(`ltc_floor_tile_size_global:${activeFacilityId}`, String(val));
+                  }}
+                  className="w-24 accent-indigo-600"
+                  aria-label="Floor map tile size"
+                />
+                <span className="text-xs text-neutral-500 w-4 text-center">{tileSize}</span>
               </div>
-            )}
+            </div>
           </div>
           <FloorMap 
+            key={tileSize}
             layout={filteredLayout} 
             facilityId={activeFacilityId}
             unitId={selectedUnit}
