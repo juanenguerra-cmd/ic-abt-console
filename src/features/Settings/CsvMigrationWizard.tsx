@@ -187,6 +187,7 @@ export const CsvMigrationWizard: React.FC = () => {
             residentRef: { kind: "mrn", id: row.data.mrn },
             status: row.data.status as ABTCourse["status"],
             medication: row.data.medicationName,
+            medicationClass: row.data.medicationClass || undefined,
             dose: row.data.dose || undefined,
             route: row.data.route || undefined,
             frequency: row.data.frequency || undefined,
@@ -453,6 +454,7 @@ export const CsvMigrationWizard: React.FC = () => {
                     <th className="px-2 py-1">MRN</th>
                     <th className="px-2 py-1">Resident</th>
                     <th className="px-2 py-1">Medication</th>
+                    <th className="px-2 py-1">Medication Class</th>
                     <th className="px-2 py-1">Dose</th>
                     <th className="px-2 py-1">Route</th>
                     <th className="px-2 py-1">Frequency</th>
@@ -477,6 +479,7 @@ export const CsvMigrationWizard: React.FC = () => {
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.mrn} onChange={(event) => updateAbtCsvRow(row.rowId, "mrn", event.target.value)} /></td>
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.residentName} onChange={(event) => updateAbtCsvRow(row.rowId, "residentName", event.target.value)} /></td>
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationName} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationName", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationClass} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationClass", event.target.value)} /></td>
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.dose} onChange={(event) => updateAbtCsvRow(row.rowId, "dose", event.target.value)} /></td>
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.route} onChange={(event) => updateAbtCsvRow(row.rowId, "route", event.target.value)} /></td>
                       <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.frequency} onChange={(event) => updateAbtCsvRow(row.rowId, "frequency", event.target.value)} /></td>

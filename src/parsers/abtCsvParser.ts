@@ -7,6 +7,7 @@ export interface AbtCsvRowData {
   mrn: string;
   residentName: string;
   medicationName: string;
+  medicationClass: string;
   dose: string;
   route: string;
   frequency: string;
@@ -37,12 +38,13 @@ const FIELD_ALIASES: Record<keyof AbtCsvRowData, string[]> = {
   mrn: ["mrn", "medicalrecordnumber", "residentmrn", "id"],
   residentName: ["residentname", "name", "resident", "patientname"],
   medicationName: ["medication", "medicationname", "drug", "antibiotic", "order"],
+  medicationClass: ["medicationclass", "drugclass", "antibioticclass", "class"],
   dose: ["dose", "dosage", "strength"],
   route: ["route", "administrationroute"],
   frequency: ["frequency", "schedule", "sig"],
   startDate: ["startdate", "started", "start"],
   endDate: ["enddate", "ended", "stopdate", "stop"],
-  indication: ["indication", "reason", "diagnosis", "infectionsource"],
+  indication: ["indication", "reason", "reasonforuse", "diagnosis", "dx", "infectionsource", "sourceofinfection", "indicationcategory"],
   status: ["status", "orderstatus", "coursestatus"],
 };
 
@@ -84,6 +86,17 @@ const toDateOnly = (input: string): string => {
 };
 
 const normalizeMedicationText = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const normalizeResidentName = (residentName: string, mrn: string): string => {
+  if (!residentName) return "";
+  let cleaned = residentName.replace(/\([^)]*\)/g, "").trim();
+  if (mrn) {
+    const mrnRegex = new RegExp(`\\b${escapeRegExp(mrn)}\\b`, "gi");
+    cleaned = cleaned.replace(mrnRegex, "").replace(/\s{2,}/g, " ").trim();
+  }
+  return cleaned;
+};
 
 const normalizeAbtStatus = (value: string): string => {
   const lowered = value.trim().toLowerCase();
@@ -139,6 +152,7 @@ export const evaluateAbtStagingRow = (rowId: string, data: AbtCsvRowData, existi
 
   const normalizedData: AbtCsvRowData = {
     ...data,
+    residentName: normalizeResidentName(data.residentName, data.mrn),
     startDate: toDateOnly(data.startDate),
     endDate: toDateOnly(data.endDate),
     status: normalizeAbtStatus(data.status),
@@ -186,6 +200,7 @@ export const parseAbtCsvToStaging = (csvText: string, existingAbts: ABTCourse[])
       mrn: pickValue(row, "mrn"),
       residentName: pickValue(row, "residentName"),
       medicationName: pickValue(row, "medicationName"),
+      medicationClass: pickValue(row, "medicationClass"),
       dose: pickValue(row, "dose"),
       route: pickValue(row, "route"),
       frequency: pickValue(row, "frequency"),
