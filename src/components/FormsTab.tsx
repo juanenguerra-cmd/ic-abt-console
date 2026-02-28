@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { FileText, Download, Settings } from 'lucide-react';
+import { FileText, Download, Settings, Pill, Syringe } from 'lucide-react';
 import { ResidentInfo } from '../types/forms';
 import { generateResidentPDF } from '../lib/pdf-generator';
 import { useToast } from '../hooks/useToast';
 import { useFormTemplates } from '../hooks/useFormTemplates';
 import { FormTemplateManager } from './FormTemplateManager';
+import { useDB } from '../context/DBContext';
 
 export function FormsTab() {
   const { toast } = useToast();
   const { residentForms } = useFormTemplates();
+  const { db, activeFacilityId } = useDB();
   const [residentInfo, setResidentInfo] = useState<ResidentInfo>({
     name: '',
     roomNumber: '',
@@ -57,12 +59,21 @@ export function FormsTab() {
       return;
     }
 
-    generateResidentPDF(residentInfo, selectedForms);
+    const facilityName = db.data.facilities.byId[activeFacilityId]?.name || '{{ Facility name }}';
+    generateResidentPDF(residentInfo, selectedForms, residentForms, facilityName);
 
     toast({
       title: 'PDF Generated',
       description: `Generated ${selectedForms.length} form(s) for ${residentInfo.name}`,
     });
+  };
+
+
+
+  const getFormIcon = (icon?: string) => {
+    if (icon === 'pill') return <Pill className="h-4 w-4 text-indigo-600" />;
+    if (icon === 'syringe') return <Syringe className="h-4 w-4 text-indigo-600" />;
+    return <FileText className="h-4 w-4 text-indigo-600" />;
   };
 
   const isFormValid = residentInfo.name.trim() && selectedForms.length > 0;
@@ -165,7 +176,7 @@ export function FormsTab() {
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-indigo-600" />
+                    {getFormIcon(form.icon)}
                     <span className="font-medium text-sm">{form.name}</span>
                   </div>
                   <p className="text-xs text-neutral-500 mt-1">{form.description}</p>

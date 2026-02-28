@@ -10,4 +10,6 @@ export interface FormTemplate {
   name: string;
   description: string;
   category: 'resident';
+  icon?: 'file-text' | 'pill' | 'syringe';
+  templateContent?: string;
 }
