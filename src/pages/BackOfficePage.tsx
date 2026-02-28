@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../app/providers';
-import { Resident, IPEvent, ABTCourse } from '../domain/models';
+import { Resident, IPEvent, ABTCourse, VaxEvent } from '../domain/models';
 import { Search, Plus, Edit, Activity, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +11,8 @@ import { HistoricalIpEventModal } from '../features/BackOffice/HistoricalIpEvent
 import { GlobalIpHistory } from '../features/BackOffice/GlobalIpHistory';
 import { HistoricalAbtEventModal } from '../features/BackOffice/HistoricalAbtEventModal';
 import { GlobalAbtHistory } from '../features/BackOffice/GlobalAbtHistory';
+import { HistoricalVaxEventModal } from '../features/BackOffice/HistoricalVaxEventModal';
+import { GlobalVaxHistory } from '../features/BackOffice/GlobalVaxHistory';
 
 export const BackOfficePage: React.FC = () => {
   const { store } = useFacilityData();
@@ -19,7 +21,7 @@ export const BackOfficePage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResident, setEditingResident] = useState<Resident | null>(null);
-  const [activeTab, setActiveTab] = useState<'residents' | 'ip-history' | 'abx-history'>('residents');
+  const [activeTab, setActiveTab] = useState<'residents' | 'ip-history' | 'abx-history' | 'vax-history'>('residents');
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   
   const [showIpModal, setShowIpModal] = useState(false);
@@ -27,6 +29,8 @@ export const BackOfficePage: React.FC = () => {
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [editingAbtEvent, setEditingAbtEvent] = useState<ABTCourse | undefined>();
   const [prefilledResidentId, setPrefilledResidentId] = useState<string | undefined>();
+  const [showVaxModal, setShowVaxModal] = useState(false);
+  const [editingVaxEvent, setEditingVaxEvent] = useState<VaxEvent | undefined>();
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -168,6 +172,16 @@ export const BackOfficePage: React.FC = () => {
             setEditingAbtEvent(event);
             setShowAbtModal(true);
           }}
+          onAddVaxEvent={(residentId) => {
+            setPrefilledResidentId(residentId);
+            setEditingVaxEvent(undefined);
+            setShowVaxModal(true);
+          }}
+          onEditVaxEvent={(event) => {
+            setPrefilledResidentId(event.residentRef.id);
+            setEditingVaxEvent(event);
+            setShowVaxModal(true);
+          }}
         />
       ) : (
         <>
@@ -177,6 +191,17 @@ export const BackOfficePage: React.FC = () => {
               <p className="text-neutral-500">Manage historical residents and events.</p>
             </div>
             <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setPrefilledResidentId(undefined);
+                  setEditingVaxEvent(undefined);
+                  setShowVaxModal(true);
+                }}
+                className="flex items-center gap-2 bg-white border border-neutral-300 text-neutral-700 px-4 py-2 rounded-md hover:bg-neutral-50 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add VAX Event
+              </button>
               <button
                 onClick={() => {
                   setPrefilledResidentId(undefined);
@@ -228,6 +253,12 @@ export const BackOfficePage: React.FC = () => {
                 onClick={() => setActiveTab('abx-history')}
               >
                 Global ABX History
+              </button>
+              <button
+                className={`px-6 py-3 text-sm font-medium border-b-2 ${activeTab === 'vax-history' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'}`}
+                onClick={() => setActiveTab('vax-history')}
+              >
+                Global VAX History
               </button>
             </nav>
           </div>
@@ -322,6 +353,16 @@ export const BackOfficePage: React.FC = () => {
                 setPrefilledResidentId(event.residentRef.id);
                 setEditingAbtEvent(event);
                 setShowAbtModal(true);
+              }}
+            />
+          )}
+
+          {activeTab === 'vax-history' && (
+            <GlobalVaxHistory
+              onEditVaxEvent={(event) => {
+                setPrefilledResidentId(event.residentRef.id);
+                setEditingVaxEvent(event);
+                setShowVaxModal(true);
               }}
             />
           )}
@@ -476,6 +517,13 @@ export const BackOfficePage: React.FC = () => {
           prefilledResidentId={prefilledResidentId}
           existingEvent={editingAbtEvent}
           onClose={() => setShowAbtModal(false)}
+        />
+      )}
+      {showVaxModal && (
+        <HistoricalVaxEventModal
+          prefilledResidentId={prefilledResidentId}
+          existingEvent={editingVaxEvent}
+          onClose={() => setShowVaxModal(false)}
         />
       )}
     </div>

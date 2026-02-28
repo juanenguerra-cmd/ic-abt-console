@@ -18,7 +18,7 @@ export const HistoricalIpEventModal: React.FC<Props> = ({ onClose, prefilledResi
   const [precautionType, setPrecautionType] = useState(existingEvent?.isolationType || 'Contact');
   const [infectionType, setInfectionType] = useState(existingEvent?.infectionSite || '');
   const [organism, setOrganism] = useState(existingEvent?.organism || '');
-  const [onsetDate, setOnsetDate] = useState(existingEvent?.createdAt ? new Date(existingEvent.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+  const [onsetDate, setOnsetDate] = useState(existingEvent?.onsetDate ? new Date(existingEvent.onsetDate).toISOString().split('T')[0] : (existingEvent?.createdAt ? new Date(existingEvent.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]));
   const [resolutionDate, setResolutionDate] = useState(existingEvent?.resolvedAt ? new Date(existingEvent.resolvedAt).toISOString().split('T')[0] : '');
   const [unit, setUnit] = useState(existingEvent?.locationSnapshot?.unit || '');
   const [room, setRoom] = useState(existingEvent?.locationSnapshot?.room || '');
@@ -66,7 +66,8 @@ export const HistoricalIpEventModal: React.FC<Props> = ({ onClose, prefilledResi
         organism: organism,
         locationSnapshot: { unit, room },
         notes: fullNotes,
-        createdAt: new Date(onsetDate).toISOString(),
+        onsetDate: new Date(onsetDate).toISOString(),
+        createdAt: existingEvent?.createdAt || new Date(onsetDate).toISOString(),
         updatedAt: new Date().toISOString(),
         resolvedAt: resolutionDate ? new Date(resolutionDate).toISOString() : undefined,
       };

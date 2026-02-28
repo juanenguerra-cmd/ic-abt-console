@@ -8,6 +8,12 @@ import { FileText } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
 
+
+const residentLabel = (res: any) => {
+  if (!res?.displayName) return '—';
+  return (res.backOfficeOnly || res.isHistorical || res.status === 'Discharged') ? `${res.displayName} (Historical)` : res.displayName;
+};
+
 const ReportsConsole: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -142,7 +148,7 @@ const SurveyPacketsReport: React.FC = () => {
             )}
             {activePrecautions.map(({ ip, res }) => (
               <tr key={ip.id}>
-                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{ip.infectionCategory || '—'}</td>
@@ -177,7 +183,7 @@ const SurveyPacketsReport: React.FC = () => {
             )}
             {activeAbts.map(({ abt, res }) => (
               <tr key={abt.id}>
-                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.medication}</td>
@@ -270,7 +276,7 @@ const DailyReport: React.FC = () => {
             )}
             {activePrecautions.map(({ ip, res }) => (
               <tr key={ip.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
@@ -307,7 +313,7 @@ const DailyReport: React.FC = () => {
             )}
             {activeAbts.map(({ abt, res }) => (
               <tr key={abt.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
@@ -373,12 +379,12 @@ const WeeklyReport: React.FC = () => {
 
   const newInfections = useMemo(() =>
     (Object.values(store.infections) as IPEvent[])
-      .filter(ip => { const d = new Date(ip.createdAt); return d >= startObj && d <= endObj; })
+      .filter(ip => { const d = new Date(ip.onsetDate || ip.createdAt); return d >= startObj && d <= endObj; })
       .map(ip => {
         const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
         return { ip, res };
       })
-      .sort((a, b) => b.ip.createdAt.localeCompare(a.ip.createdAt)),
+      .sort((a, b) => (b.ip.onsetDate || b.ip.createdAt).localeCompare(a.ip.onsetDate || a.ip.createdAt)),
     [store.infections, store.residents, store.quarantine, startObj, endObj]
   );
 
@@ -395,12 +401,12 @@ const WeeklyReport: React.FC = () => {
 
   const vaxActivity = useMemo(() =>
     (Object.values(store.vaxEvents) as VaxEvent[])
-      .filter(v => { const d = new Date(v.createdAt); return d >= startObj && d <= endObj; })
+      .filter(v => { const d = new Date(v.administeredDate || v.dateGiven || v.createdAt); return d >= startObj && d <= endObj; })
       .map(v => {
         const res = v.residentRef.kind === 'mrn' ? store.residents[v.residentRef.id] : store.quarantine[v.residentRef.id];
         return { vax: v, res };
       })
-      .sort((a, b) => b.vax.createdAt.localeCompare(a.vax.createdAt)),
+      .sort((a, b) => (b.vax.administeredDate || b.vax.dateGiven || b.vax.createdAt).localeCompare(a.vax.administeredDate || a.vax.dateGiven || a.vax.createdAt)),
     [store.vaxEvents, store.residents, store.quarantine, startObj, endObj]
   );
 
@@ -473,13 +479,13 @@ const WeeklyReport: React.FC = () => {
             )}
             {newInfections.map(({ ip, res }) => (
               <tr key={ip.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
                 <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{ip.status}</span></td>
                 <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
-                <td className="px-4 py-2 text-neutral-500">{new Date(ip.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-2 text-neutral-500">{new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
@@ -509,7 +515,7 @@ const WeeklyReport: React.FC = () => {
             )}
             {newAbts.map(({ abt, res }) => (
               <tr key={abt.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
@@ -544,11 +550,11 @@ const WeeklyReport: React.FC = () => {
             )}
             {vaxActivity.map(({ vax, res }) => (
               <tr key={vax.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{(res as any)?.displayName || '—'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{vax.vaccine}</td>
                 <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${vax.status === 'given' ? 'bg-green-100 text-green-800' : vax.status === 'declined' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-800'}`}>{vax.status}</span></td>
-                <td className="px-4 py-2 text-neutral-500">{vax.dateGiven || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{vax.administeredDate || vax.dateGiven || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{vax.declineReason || '—'}</td>
               </tr>
             ))}
@@ -587,6 +593,7 @@ const OnDemandReport: React.FC = () => {
     return Array.from(s).sort();
   }, [store.residents]);
 
+
   /** Parallel meta array: one entry per display row with the IDs needed for edit modals. */
   type RowMeta = { recordId: string; residentId: string } | null;
 
@@ -604,7 +611,7 @@ const OnDemandReport: React.FC = () => {
 
     if (dataset === 'infections') {
       const filtered = (Object.values(store.infections) as IPEvent[]).filter(ip => {
-        if (!inRange(ip.createdAt)) return false;
+        if (!inRange(ip.onsetDate || ip.createdAt)) return false;
         if (statusFilter !== 'all' && ip.status !== statusFilter) return false;
         const res = getRes(ip.residentRef);
         if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
@@ -614,7 +621,7 @@ const OnDemandReport: React.FC = () => {
         rows: filtered.map(ip => {
           const res = getRes(ip.residentRef);
           return [
-            (res as any)?.displayName || '—',
+            residentLabel(res),
             (res as any)?.mrn || '—',
             (res as any)?.currentUnit || ip.locationSnapshot?.unit || '—',
             (res as any)?.currentRoom || ip.locationSnapshot?.room || '—',
@@ -624,7 +631,7 @@ const OnDemandReport: React.FC = () => {
             ip.isolationType || '—',
             ip.ebp ? 'Yes' : 'No',
             ip.organism || '—',
-            new Date(ip.createdAt).toLocaleDateString(),
+            new Date(ip.onsetDate || ip.createdAt).toLocaleDateString(),
           ];
         }),
         rowMeta: filtered.map(ip => ({ recordId: ip.id, residentId: ip.residentRef.id }) as RowMeta),
@@ -642,7 +649,7 @@ const OnDemandReport: React.FC = () => {
         rows: filtered.map(a => {
           const res = getRes(a.residentRef);
           return [
-            (res as any)?.displayName || '—',
+            residentLabel(res),
             (res as any)?.mrn || '—',
             (res as any)?.currentUnit || a.locationSnapshot?.unit || '—',
             (res as any)?.currentRoom || a.locationSnapshot?.room || '—',
@@ -660,7 +667,7 @@ const OnDemandReport: React.FC = () => {
     }
     if (dataset === 'vax') {
       const filtered = (Object.values(store.vaxEvents) as VaxEvent[]).filter(v => {
-        if (!inRange(v.dateGiven || v.createdAt)) return false;
+        if (!inRange(v.administeredDate || v.dateGiven || v.createdAt)) return false;
         if (statusFilter !== 'all' && v.status !== statusFilter) return false;
         const res = getRes(v.residentRef);
         if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
@@ -670,13 +677,13 @@ const OnDemandReport: React.FC = () => {
         rows: filtered.map(v => {
           const res = getRes(v.residentRef);
           return [
-            (res as any)?.displayName || '—',
+            residentLabel(res),
             (res as any)?.mrn || '—',
             (res as any)?.currentUnit || '—',
             (res as any)?.currentRoom || '—',
             v.vaccine,
             v.status,
-            v.dateGiven || '—',
+            v.administeredDate || v.dateGiven || '—',
             v.declineReason || '—',
             v.dueDate || '—',
           ];
@@ -723,7 +730,7 @@ const OnDemandReport: React.FC = () => {
   const STATUS_OPTIONS: Record<string, string[]> = {
     infections: ['active', 'resolved', 'historical'],
     abts: ['active', 'completed', 'discontinued'],
-    vax: ['given', 'declined', 'contraindicated', 'due', 'overdue'],
+    vax: ['given', 'declined', 'contraindicated', 'documented-historical', 'due', 'overdue'],
     residents: [],
   };
 
@@ -980,7 +987,7 @@ const QapiRollup: React.FC = () => {
   const infectionsByCategory = useMemo(() => {
     const map: Record<string, number> = {};
     (Object.values(store.infections) as IPEvent[]).forEach(ip => {
-      if (inMonth(ip.createdAt)) {
+      if (inMonth(ip.onsetDate || ip.createdAt)) {
         const cat = ip.infectionCategory || 'Unknown';
         map[cat] = (map[cat] || 0) + 1;
       }
@@ -992,7 +999,7 @@ const QapiRollup: React.FC = () => {
   const infectionsByUnit = useMemo(() => {
     const map: Record<string, number> = {};
     (Object.values(store.infections) as IPEvent[]).forEach(ip => {
-      if (inMonth(ip.createdAt)) {
+      if (inMonth(ip.onsetDate || ip.createdAt)) {
         const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
         const unit = ip.locationSnapshot?.unit || (res as any)?.currentUnit || 'Unknown';
         map[unit] = (map[unit] || 0) + 1;
