@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Bell, AlertTriangle, Info, CheckCircle2, X } from 'lucide-react';
+import { Bell, AlertTriangle, Info, CheckCircle2, X, Download } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
@@ -146,6 +146,42 @@ export const NotificationsPage: React.FC = () => {
   const uniqueCategories = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.category)));
   const uniqueUnits = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.unit).filter(Boolean)));
 
+  const handleExportCSV = () => {
+    if (displayList.length === 0) return;
+
+    const headers = ['Category', 'Type', 'Title', 'Message', 'Unit', 'Room', 'Detected At', 'Status'];
+    
+    const escapeCSV = (value: string | undefined | null) => {
+      if (!value) return '""';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = displayList.map(notif => [
+      escapeCSV(notif.category),
+      escapeCSV(getTypeLabel(notif.category)),
+      escapeCSV(getTitle(notif.category)),
+      escapeCSV(notif.message),
+      escapeCSV(notif.unit),
+      escapeCSV(notif.room),
+      escapeCSV(new Date(notif.createdAtISO).toLocaleString()),
+      escapeCSV(notif.status)
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `notifications_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100 p-6">
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 flex flex-col h-full overflow-hidden">
@@ -193,6 +229,14 @@ export const NotificationsPage: React.FC = () => {
                 Mark All Read
               </button>
             )}
+            <button
+              onClick={handleExportCSV}
+              disabled={displayList.length === 0}
+              className="px-3 py-1.5 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-50 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
           </div>
         </div>
         

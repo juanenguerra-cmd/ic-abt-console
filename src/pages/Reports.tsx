@@ -1,6 +1,6 @@
 import React from "react";
 import { useDB } from "../context/DBContext";
-import { Activity, Download, FileText } from "lucide-react";
+import { Activity, Download, FileText, Bell } from "lucide-react";
 
 export function Reports() {
   const { store } = useDB();
@@ -87,6 +87,27 @@ export function Reports() {
               className="w-full inline-flex justify-center items-center px-4 py-2 border border-neutral-300 shadow-sm text-sm font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50"
             >
               <FileText className="mr-2 h-4 w-4" /> Generate PDF
+            </button>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0 bg-indigo-100 rounded-md p-3">
+                <Bell className="h-6 w-6 text-indigo-600" />
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-medium text-neutral-900">Notifications Export</h3>
+                <p className="mt-1 text-sm text-neutral-500">Export filtered notifications and alerts.</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-neutral-50 px-6 py-4 border-t border-neutral-200">
+            <button
+              onClick={() => window.location.href = '/notifications'}
+              className="w-full inline-flex justify-center items-center px-4 py-2 border border-neutral-300 shadow-sm text-sm font-medium rounded-md text-neutral-700 bg-white hover:bg-neutral-50"
+            >
+              <Bell className="mr-2 h-4 w-4" /> Go to Notifications
             </button>
           </div>
         </div>
