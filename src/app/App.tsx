@@ -224,6 +224,7 @@ const AppShell = () => {
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
+                <Route path="/reports/forms" element={<PageTransition><ReportsConsole /></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><InfectionControlAuditCenter /></PageTransition>} />
                 <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
                 <Route path="/print/audit-report" element={<AuditReportPrint />} />

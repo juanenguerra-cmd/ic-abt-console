@@ -4,9 +4,35 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
+import { FileText } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { FormsTab } from '../../components/FormsTab';
 
 const ReportsConsole: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('monthly');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const formsRoute = '/reports/forms';
+  const [activeTab, setActiveTab] = useState(location.pathname === formsRoute ? 'forms' : 'monthly');
+
+  useEffect(() => {
+    if (location.pathname === formsRoute) {
+      setActiveTab('forms');
+    } else if (activeTab === 'forms') {
+      setActiveTab('monthly');
+    }
+  }, [location.pathname, activeTab]);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'forms') {
+      navigate(formsRoute);
+      return;
+    }
+
+    if (location.pathname === formsRoute) {
+      navigate('/reports');
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -14,39 +40,46 @@ const ReportsConsole: React.FC = () => {
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button 
             data-testid="survey-tab-button"
-            onClick={() => setActiveTab('survey')}
+            onClick={() => handleTabChange('survey')}
             className={`${activeTab === 'survey' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Survey Packets
           </button>
           <button 
             data-testid="soc-tab-button"
-            onClick={() => setActiveTab('daily')}
+            onClick={() => handleTabChange('daily')}
             className={`${activeTab === 'daily' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Daily Report
           </button>
           <button 
             data-testid="weekly-tab-button"
-            onClick={() => setActiveTab('weekly')}
+            onClick={() => handleTabChange('weekly')}
             className={`${activeTab === 'weekly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Weekly Report
           </button>
           <button 
             data-testid="monthly-analytics-tab-button"
-            onClick={() => setActiveTab('monthly')}
+            onClick={() => handleTabChange('monthly')}
             className={`${activeTab === 'monthly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Monthly Analytics
           </button>
           <button 
             data-testid="qapi-tab-button"
-            onClick={() => setActiveTab('qapi')}
+            onClick={() => handleTabChange('qapi')}
             className={`${activeTab === 'qapi' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             QAPI Rollup
           </button>
           <button 
             data-testid="ondemand-tab-button"
-            onClick={() => setActiveTab('ondemand')}
+            onClick={() => handleTabChange('ondemand')}
             className={`${activeTab === 'ondemand' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             On Demand
+          </button>
+          <button
+            data-testid="forms-tab-button"
+            onClick={() => handleTabChange('forms')}
+            className={`${activeTab === 'forms' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95 inline-flex items-center gap-2`}>
+            <FileText className="h-4 w-4" />
+            Forms
           </button>
         </nav>
       </div>
@@ -58,6 +91,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'monthly' && <MonthlyAnalytics />}
         {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
+        {activeTab === 'forms' && <FormsTab />}
       </div>
     </div>
   );
