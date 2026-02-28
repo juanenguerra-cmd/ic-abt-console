@@ -11,6 +11,7 @@ import {
   importMappedRows,
   parseCsv,
 } from "../../lib/migration/csvImport";
+import { AbtCsvStagingRow, evaluateAbtStagingRow, parseAbtCsvToStaging } from "../../parsers/abtCsvParser";
 import { parseRawAbtOrderListing, RawAbtStagingRow } from "../../parsers/rawAbtOrderListingParser";
 import { parseRawVaxList, RawVaxStagingRow } from "../../parsers/rawVaxListParser";
 
@@ -38,6 +39,7 @@ export const CsvMigrationWizard: React.FC = () => {
   const [rawVaxRows, setRawVaxRows] = useState<RawVaxStagingRow[]>([]);
   const [vaxTypeSelection, setVaxTypeSelection] = useState("Influenza");
   const [vaxStatusSelection, setVaxStatusSelection] = useState<"Vaccinated" | "Historical" | "Refused">("Vaccinated");
+  const [abtCsvRows, setAbtCsvRows] = useState<AbtCsvStagingRow[]>([]);
 
   const fields = useMemo(() => getDatasetFields(datasetType), [datasetType]);
   const residents = useMemo(() => Object.values(store.residents || {}) as Resident[], [store.residents]);
@@ -52,6 +54,11 @@ export const CsvMigrationWizard: React.FC = () => {
     if (datasetType === "VAX") return rawVaxRows.some((row) => row.status === "ERROR" && !row.skip);
     return false;
   }, [datasetType, rawAbtRows, rawVaxRows]);
+  const existingAbts = useMemo(() => Object.values(store.abts || {}) as ABTCourse[], [store.abts]);
+  const hasAbtCsvErrors = useMemo(
+    () => abtCsvRows.some((row) => row.status === "ERROR" && !row.skip),
+    [abtCsvRows]
+  );
 
   const applyAbtDuplicateMarking = (rowsToCheck: RawAbtStagingRow[]): RawAbtStagingRow[] => {
     const existingAbts = Object.values(store.abts || {}) as ABTCourse[];
@@ -111,6 +118,22 @@ export const CsvMigrationWizard: React.FC = () => {
   };
 
   const parseCurrentCsv = (rawCsv: string) => {
+    if (datasetType === "ABT") {
+      try {
+        const parsedRows = parseAbtCsvToStaging(rawCsv, existingAbts);
+        if (!parsedRows.length) {
+          alert("CSV is missing headers or data rows.");
+          return;
+        }
+        setAbtCsvRows(parsedRows);
+        setImportErrors([]);
+      } catch (error) {
+        console.error("Failed to parse ABT CSV:", error);
+        alert("Failed to parse ABT CSV.");
+      }
+      return;
+    }
+
     const parsed = parseCsv(rawCsv);
     if (!parsed.headers.length || !parsed.rows.length) {
       alert("CSV is missing headers or data rows.");
@@ -135,6 +158,54 @@ export const CsvMigrationWizard: React.FC = () => {
   };
 
   const handleImport = () => {
+    if (datasetType === "ABT") {
+      if (!abtCsvRows.length) {
+        alert("Upload ABT CSV and parse it first.");
+        return;
+      }
+      if (hasAbtCsvErrors) {
+        alert("Cannot commit while unskipped error rows exist.");
+        return;
+      }
+
+      let imported = 0;
+      let skipped = 0;
+
+      updateDB((draft) => {
+        const facility = draft.data.facilityData[activeFacilityId];
+        facility.abts = facility.abts || {};
+
+        abtCsvRows.forEach((row) => {
+          if (row.skip || row.status === "ERROR") {
+            skipped += 1;
+            return;
+          }
+
+          const id = uuidv4();
+          facility.abts[id] = {
+            id,
+            residentRef: { kind: "mrn", id: row.data.mrn },
+            status: row.data.status as ABTCourse["status"],
+            medication: row.data.medicationName,
+            medicationClass: row.data.medicationClass || undefined,
+            dose: row.data.dose || undefined,
+            route: row.data.route || undefined,
+            frequency: row.data.frequency || undefined,
+            indication: row.data.indication || undefined,
+            startDate: row.data.startDate || undefined,
+            endDate: row.data.endDate || undefined,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          imported += 1;
+        });
+      });
+
+      alert(`ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}`);
+      setAbtCsvRows([]);
+      return;
+    }
+
     if (!rows.length || !mapping.length) {
       alert("Upload or paste CSV and parse it first.");
       return;
@@ -263,7 +334,18 @@ export const CsvMigrationWizard: React.FC = () => {
   const statusBadge = (status: string) => {
     if (status === "ERROR") return <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">❌ Error</span>;
     if (status === "NEEDS_REVIEW") return <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">⚠ Needs review</span>;
+    if (status === "DUPLICATE") return <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700">🟣 Duplicate</span>;
     return <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">✅ Parsed</span>;
+  };
+
+  const updateAbtCsvRow = (rowId: string, field: keyof AbtCsvStagingRow["data"], value: string) => {
+    setAbtCsvRows((prev) =>
+      prev.map((row) =>
+        row.rowId === rowId
+          ? evaluateAbtStagingRow(rowId, { ...row.data, [field]: value }, existingAbts)
+          : row
+      )
+    );
   };
 
   return (
@@ -301,6 +383,11 @@ export const CsvMigrationWizard: React.FC = () => {
 
       {importMode === "CSV" && (
       <div className="border border-neutral-200 rounded-md p-4 space-y-3">
+        {datasetType === "ABT" && (
+          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+            Upload CSV → Parse → Review/Edit in Preview → Commit Import. Nothing is saved until Commit Import.
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <select
             value={datasetType}
@@ -331,9 +418,10 @@ export const CsvMigrationWizard: React.FC = () => {
           </button>
           <button
             onClick={handleImport}
-            className="sm:col-span-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700"
+            className="sm:col-span-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:bg-neutral-300"
+            disabled={datasetType === "ABT" && hasAbtCsvErrors}
           >
-            Import CSV
+            {datasetType === "ABT" ? "Commit Import" : "Import CSV"}
           </button>
         </div>
         <input
@@ -353,6 +441,67 @@ export const CsvMigrationWizard: React.FC = () => {
           rows={6}
           className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
         />
+
+        {datasetType === "ABT" && abtCsvRows.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-neutral-900">Parsed Items Preview</h4>
+            <div className="overflow-x-auto border border-neutral-200 rounded-md">
+              <table className="min-w-full text-xs">
+                <thead className="bg-neutral-50">
+                  <tr>
+                    <th className="px-2 py-1">Status</th>
+                    <th className="px-2 py-1">Skip</th>
+                    <th className="px-2 py-1">MRN</th>
+                    <th className="px-2 py-1">Resident</th>
+                    <th className="px-2 py-1">Medication</th>
+                    <th className="px-2 py-1">Medication Class</th>
+                    <th className="px-2 py-1">Dose</th>
+                    <th className="px-2 py-1">Route</th>
+                    <th className="px-2 py-1">Frequency</th>
+                    <th className="px-2 py-1">Start</th>
+                    <th className="px-2 py-1">End</th>
+                    <th className="px-2 py-1">Indication</th>
+                    <th className="px-2 py-1">Course Status</th>
+                    <th className="px-2 py-1">Flags</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {abtCsvRows.map((row) => (
+                    <tr key={row.rowId} className={row.skip ? "opacity-60 bg-neutral-50" : ""}>
+                      <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                      <td className="px-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={row.skip}
+                          onChange={(event) => setAbtCsvRows((prev) => prev.map((item) => item.rowId === row.rowId ? { ...item, skip: event.target.checked } : item))}
+                        />
+                      </td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.mrn} onChange={(event) => updateAbtCsvRow(row.rowId, "mrn", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.residentName} onChange={(event) => updateAbtCsvRow(row.rowId, "residentName", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationName} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationName", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationClass} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationClass", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.dose} onChange={(event) => updateAbtCsvRow(row.rowId, "dose", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.route} onChange={(event) => updateAbtCsvRow(row.rowId, "route", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.frequency} onChange={(event) => updateAbtCsvRow(row.rowId, "frequency", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.startDate} onChange={(event) => updateAbtCsvRow(row.rowId, "startDate", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.endDate} onChange={(event) => updateAbtCsvRow(row.rowId, "endDate", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.indication} onChange={(event) => updateAbtCsvRow(row.rowId, "indication", event.target.value)} /></td>
+                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.status} onChange={(event) => updateAbtCsvRow(row.rowId, "status", event.target.value)} /></td>
+                      <td className="px-2 py-1 max-w-xs">
+                        {row.errors.concat(row.warnings).join("; ")}
+                        {row.duplicateMatch && (
+                          <div className="text-[10px] text-purple-700 mt-1">
+                            Match: {row.duplicateMatch.medication} ({row.duplicateMatch.startDate}) [{row.duplicateMatch.status}]
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
       )}
 
@@ -455,7 +604,7 @@ export const CsvMigrationWizard: React.FC = () => {
         </div>
       )}
 
-      {mapping.length > 0 && (
+      {datasetType !== "ABT" && mapping.length > 0 && (
         <div className="border border-neutral-200 rounded-md p-4 space-y-4">
           <div>
             <h4 className="text-sm font-semibold text-neutral-900 mb-2">Mapping Summary</h4>
