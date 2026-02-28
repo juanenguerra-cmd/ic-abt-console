@@ -347,6 +347,19 @@ export interface Facility {
   updatedAt: ISO;
 }
 
+export interface ShiftLogEntry {
+  id: string;
+  facilityId: string;
+  createdAtISO: string;
+  shift: 'Day' | 'Night';
+  unit?: string;
+  tags: Array<'Outbreak' | 'Isolation' | 'Lab' | 'ABT' | 'Supply' | 'Education'>;
+  priority: 'FYI' | 'Action Needed';
+  body: string;
+  residentRefs?: Array<{ mrn: string; name: string }>;
+  outbreakRef?: { id: string; name: string };
+}
+
 export interface AppNotification {
   id: string;
   facilityId: string;
@@ -387,6 +400,8 @@ export interface FacilityStore {
   infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
   notifications: Record<string, AppNotification>;
+  shiftLog?: Record<string, ShiftLogEntry>;
+  dismissedRuleKeys?: string[];
   notificationMeta?: {
     lastDetectionRunAtISO?: string;
     lastSeenEventAtISO?: string;
