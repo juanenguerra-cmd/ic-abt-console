@@ -32,16 +32,16 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
     category: 'resident',
     icon: 'pill',
     templateContent: `<article class="form-page pain-medication-form">
-  <div class="outlined-header">
-    <p><strong>Resident name:</strong> {{residentName}} &nbsp;&nbsp; <strong>Unit:</strong> {{unit}} &nbsp;&nbsp; <strong>Room:</strong> {{room}}</p>
-    <h1>Pain Medications: Understanding the Risks and Benefits</h1>
-    <h2>An Educational Guide for Nursing Home Residents and Families</h2>
-  </div>
+  <p class="pain-resident-line">Resident name: {{residentName}}&nbsp;&nbsp; Unit: {{unit}}&nbsp;&nbsp; Room: {{room}}</p>
+  <h1 class="pain-title">Pain Medications: Understanding the Risks and Benefits</h1>
+  <h2 class="pain-subtitle">An Educational Guide for Nursing Home Residents and Families</h2>
 
-  <h3>☑️ Why Pain Management Is Important</h3>
-  <p>Pain affects your ability to move, rest, and enjoy daily life. Managing pain can improve comfort, function, and quality of life.</p>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-success">✅</span>Why Pain Management Is Important</h3>
+  <p class="body-copy">Pain affects your ability to move, rest, and enjoy daily life. Managing pain can improve comfort, function, and quality of life.</p>
 
-  <h3>⚠️ Common Pain Medications</h3>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-warning">🔶</span>Common Pain Medications</h3>
   <table>
     <thead>
       <tr><th>Type</th><th>Examples</th><th>Purpose</th></tr>
@@ -50,60 +50,63 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
       <tr><td>Acetaminophen</td><td>Tylenol</td><td>Mild pain, fever</td></tr>
       <tr><td>NSAIDs</td><td>Ibuprofen, Naproxen</td><td>Arthritis, inflammation</td></tr>
       <tr><td>Opioids</td><td>Oxycodone, Morphine</td><td>Moderate to severe pain</td></tr>
-      <tr><td>Adjuvants</td><td>Gabapentin, Amitriptyline</td><td>Nerve or chronic pain</td></tr>
+      <tr><td>Adjuvants</td><td>Gabapentin,<br/>Amitriptyline</td><td>Nerve or chronic pain</td></tr>
     </tbody>
   </table>
 
-  <h3>✓ Benefits of Pain Medication</h3>
-  <ul>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-star">⭐</span>Benefits of Pain Medication</h3>
+  <ul class="list">
     <li>Improves comfort and sleep</li>
     <li>Enhances mobility and activity</li>
-    <li>Supports mood and overall well-being</li>
+    <li>Supports mood and emotional well-being</li>
     <li>Helps with healing and participation in therapy</li>
   </ul>
 
-  <h3>⚠️ Potential Risks &amp; Side Effects</h3>
-  <p><strong>All Medications:</strong></p>
-  <ul>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-warning">🔶</span>Potential Risks &amp; Side Effects</h3>
+  <p class="body-copy"><strong>All Medications:</strong></p>
+  <ul class="list">
     <li>Drowsiness, dizziness, constipation</li>
     <li>Nausea or upset stomach</li>
     <li>Dry mouth or confusion</li>
   </ul>
-
-  <p><strong>Opioids Specific:</strong></p>
-  <ul>
+  <p class="body-copy"><strong>Opioids Specific:</strong></p>
+  <ul class="list">
     <li>Risk of dependency or addiction</li>
     <li>Breathing problems (in overdose)</li>
     <li>Interactions with sedatives or alcohol</li>
   </ul>
-
-  <p><strong>NSAIDs Specific:</strong></p>
-  <ul>
+  <p class="body-copy"><strong>NSAIDs Specific:</strong></p>
+  <ul class="list">
     <li>Stomach bleeding or ulcers</li>
     <li>Kidney problems</li>
     <li>Increased blood pressure or heart risks</li>
   </ul>
 
-  <h3>ℹ️ What You Can Do</h3>
-  <ul>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-info">🔵</span>What You Can Do</h3>
+  <ul class="list">
     <li>Tell staff if you're in pain or have side effects</li>
     <li>Take medication as directed</li>
     <li>Ask questions before starting or changing any medications</li>
     <li>Participate in non-drug therapy options</li>
   </ul>
 
-  <h3>🌿 Non-Medication Options</h3>
-  <ul>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-leaf">🌿</span>Non-Medication Options</h3>
+  <ul class="list">
     <li>Heat/cold therapy</li>
     <li>Physical therapy/exercise</li>
     <li>Massage or repositioning</li>
     <li>Relaxation/music therapy</li>
   </ul>
 
-  <h3>🤝 Our Commitment</h3>
-  <p>We will monitor your pain, adjust treatments, and work with you and your family to keep you safe, informed, and comfortable.</p>
+  <hr class="form-divider"/>
+  <h3 class="section-title"><span class="icon icon-info">🔵</span>Our Commitment</h3>
+  <p class="body-copy">We will monitor your pain, adjust treatments, and work with you and your family to keep you safe, informed, and comfortable.</p>
 
-  <p class="signature-row"><strong>Provided to Resident/Representative:</strong> _______________________________ &nbsp;&nbsp; <strong>By:</strong> __________________</p>
+  <p class="pain-footer">Provided to Resident/Representative: _________________________________&nbsp;&nbsp; By: __________</p>
 </article>`,
   },
   {
@@ -113,42 +116,76 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
     category: 'resident',
     icon: 'syringe',
     templateContent: `<article class="form-page vaccine-consent-form">
-  <div class="outlined-header centered">
-    <p>{{facilityName}}</p>
-    <h1>CONSENT FOR PNEUMOCOCCAL/INFLUENZA VACCINE ADMINISTRATION</h1>
-    <p class="left"><strong>Resident's Name:</strong> {{residentName}}</p>
+  <p class="vax-header">{{facilityName}}</p>
+  <p class="vax-header">CONSENT FOR PNEUMOCOCCAL/INFLUENZA VACCINE ADMINISTRATION</p>
+
+  <p class="resident-name-row">Resident's Name: {{residentName}}</p>
+
+  <h2 class="vax-title">PNEUMOCOCCAL VACCINE</h2>
+
+  <h3 class="underlined-heading">Pneumococcal Consent</h3>
+  <p class="consent-paragraph">I have read, or had explained to me, the Vaccine Information Statements about pneumococcal vaccination. I understand the benefits and risks of the vaccination as described. The CDC recommends PCV15, PCV20, or PCV21 for adults 50 years and older who have not had a pneumococcal vaccine or are unsure of their vaccine history. If PCV15 was received, PPSV23 is given in 1 year and immunization is complete. If PCV20 or PCV21 is administered, no additional vaccination is recommended.</p>
+
+  <h3 class="underlined-heading">Pneumococcal Acceptance</h3>
+  <p class="consent-paragraph">I request that the pneumococcal vaccination as explained above be given to me (or the person named above for whom I authorized to make this request).</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Recipient (or Designated representative)</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
   </div>
 
-  <h2>PNEUMOCOCCAL VACCINE</h2>
+  <h3 class="underlined-heading">Pneumococcal Refusal</h3>
+  <p class="consent-paragraph">I have decided to decline that the pneumococcal vaccination as explained above be given to me (or the person named above for whom I am authorized to make this request).</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Recipient (or Designated representative)</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
 
-  <h3>Pneumococcal Consent</h3>
-  <p>I have read, or had explained to me, the Vaccine Information Statements about pneumococcal vaccination. I understand the benefits and risks of the vaccination as described. The CDC recommends PCV15, PCV20, or PCV21 for adults 50 years and older who have not had a pneumococcal vaccine or are unsure of their vaccine history. If PCV15 was received, PPSV23 is given in 1 year and immunization is complete. If PCV20 or PCV21 is administered, no additional vaccination is recommended.</p>
-  <p>☐ I consent to pneumococcal vaccination as described above.</p>
-  <p>_______________________________________________ &nbsp;&nbsp; ______________<br/>Signature of Recipient (or Designated representative)&nbsp;&nbsp;&nbsp;&nbsp;Date</p>
+  <p class="asterisk-divider">***********************************************************************</p>
 
-  <h3>Pneumococcal Acceptance</h3>
-  <p>I request that the pneumococcal vaccination as explained above be given to me (or the person named above for whom I authorized to make this request).</p>
-  <p>_______________________________________________ &nbsp;&nbsp; ______________<br/>Signature of Recipient (or Designated representative)&nbsp;&nbsp;&nbsp;&nbsp;Date</p>
+  <h2 class="vax-title">INFLUENZA VACCINE</h2>
 
-  <h3>Pneumococcal Refusal</h3>
-  <p>I have decided to decline that the pneumococcal vaccination as explained above be given to me (or the person named above for whom I am authorized to make this request).</p>
-  <p>_______________________________________________ &nbsp;&nbsp; ______________<br/>Signature of Recipient (or Designated representative)&nbsp;&nbsp;&nbsp;&nbsp;Date</p>
+  <h3 class="underlined-heading">Influenza Consent</h3>
+  <p class="consent-paragraph">I have read, or had explained to me, the Vaccine Information Statement about influenza vaccination. I understand the benefits and risks of the vaccination as described. I request that the influenza vaccination be given to me (or the person named above for whom I am authorized to make this request).</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Recipient (or Designated representative)</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
 
-  <p class="divider">**********************************************************************</p>
+  <h3 class="underlined-heading">Influenza Refusal</h3>
+  <p class="consent-paragraph">I have decided to decline that the influenza vaccination as explained above be given to me (or the person named above for whom I am authorized to make this request).</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Recipient (or Designated representative)</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
 
-  <h2>INFLUENZA VACCINE</h2>
-
-  <h3>Influenza Consent</h3>
-  <p>I have read, or had explained to me, the Vaccine Information Statement about influenza vaccination. I understand the benefits and risks of the vaccination as described. I request that the influenza vaccination be given to me (or the person named above for whom I am authorized to make this request).</p>
-  <p>_______________________________________________ &nbsp;&nbsp; ______________<br/>Signature of Recipient (or Designated representative)&nbsp;&nbsp;&nbsp;&nbsp;Date</p>
-
-  <h3>Influenza Refusal</h3>
-  <p>I have decided to decline that the influenza vaccination as explained above be given to me (or the person named above for whom I am authorized to make this request).</p>
-  <p>_______________________________________________ &nbsp;&nbsp; ______________<br/>Signature of Recipient (or Designated representative)&nbsp;&nbsp;&nbsp;&nbsp;Date</p>
-
-  <p><em>This authorization is in effect until revocation by the above signed party. This consent will be used annually during review of vaccinations and to administer influenza vaccine yearly.</em></p>
+  <p class="vax-footer">This authorization is in effect until revocation by the above signed party. This consent will be used annually during review of vaccinations and to administer influenza vaccine yearly.</p>
 </article>`,
   },
+
 ];
 
 export function useFormTemplates() {
