@@ -5,6 +5,7 @@ import { Search, Plus, Edit, Activity, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useNavigate } from 'react-router-dom';
 import { HistoricalCsvUploader } from '../features/BackOffice/HistoricalCsvUploader';
+import { HistoricalResidentCsvUploader } from '../features/BackOffice/HistoricalResidentCsvUploader';
 import { BackOfficeResidentDetail } from '../features/BackOffice/BackOfficeResidentDetail';
 import { HistoricalIpEventModal } from '../features/BackOffice/HistoricalIpEventModal';
 import { GlobalIpHistory } from '../features/BackOffice/GlobalIpHistory';
@@ -233,6 +234,7 @@ export const BackOfficePage: React.FC = () => {
 
           {activeTab === 'residents' && (
             <>
+              <HistoricalResidentCsvUploader />
               <HistoricalCsvUploader />
 
               <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">

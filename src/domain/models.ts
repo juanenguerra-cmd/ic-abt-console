@@ -32,7 +32,7 @@ export interface Resident {
   updatedAt: ISO;
   isHistorical?: boolean;
   backOfficeOnly?: boolean;
-  historicalSource?: 'manual' | 'csv_import';
+  historicalSource?: 'manual' | 'csv_import' | 'csv-import';
   lastKnownUnit?: string;
   lastKnownRoom?: string;
   lastKnownAttendingMD?: string;
