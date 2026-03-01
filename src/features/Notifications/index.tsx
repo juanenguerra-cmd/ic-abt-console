@@ -14,22 +14,12 @@ export const useNotifications = () => {
     runDetectionPipeline(store, activeFacilityId, updateDB);
   }, [store, activeFacilityId, updateDB]);
 
-  const dismissNotification = (id: string) => {
+  const clearNotification = (id: string) => {
     updateDB(draft => {
       const facilityData = draft.data.facilityData[activeFacilityId];
       if (facilityData.notifications && facilityData.notifications[id]) {
-        const notif = facilityData.notifications[id];
-        // Build the rule key (without dateBucket) for permanent suppression
-        const ruleKey = [notif.ruleId, notif.residentId || notif.unit || 'facility', notif.refs?.abtId || notif.refs?.ipId || notif.refs?.vaxId || notif.refs?.noteId || ''].join('_');
-        if (!facilityData.dismissedRuleKeys) {
-          facilityData.dismissedRuleKeys = [];
-        }
-        if (!facilityData.dismissedRuleKeys.includes(ruleKey)) {
-          facilityData.dismissedRuleKeys.push(ruleKey);
-        }
-        // Delete the record entirely — dismissed notifications have no storage value.
-        // The dismissedRuleKeys entry above is the only persistent artifact needed to
-        // prevent the detection pipeline from re-firing this same rule.
+        // Intentionally clear the notification without writing any dismissal
+        // metadata so this action does not persist suppression state.
         delete facilityData.notifications[id];
       }
     });
@@ -61,12 +51,12 @@ export const useNotifications = () => {
   const notifications = allNotifications.filter(n => n.status === 'unread');
   const historyNotifications = allNotifications.filter(n => n.status === 'read');
 
-  return { notifications, historyNotifications, dismissNotification, markAsRead, markAllAsRead };
+  return { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead };
 };
 
 export const NotificationsPage: React.FC = () => {
   const { store } = useFacilityData();
-  const { notifications, historyNotifications, dismissNotification, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead } = useNotifications();
   const [activeTab, setActiveTab] = useState<'new' | 'all'>('new');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [unitFilter, setUnitFilter] = useState<string>('all');
@@ -404,7 +394,17 @@ export const NotificationsPage: React.FC = () => {
   };
 
   const dismissGroupedVax = (group: GroupedVaxNotification) => {
-    group.notifications.forEach(n => dismissNotification(n.id));
+    const selectedGroups = groupedVaxNotifications.filter(vaxGroup => selectedVaxGroups.has(vaxGroup.id));
+
+    if (selectedGroups.length > 0) {
+      selectedGroups.forEach(vaxGroup => {
+        vaxGroup.notifications.forEach(n => clearNotification(n.id));
+      });
+      setSelectedVaxGroups(new Set());
+      return;
+    }
+
+    group.notifications.forEach(n => clearNotification(n.id));
   };
 
   return (
@@ -676,7 +676,7 @@ export const NotificationsPage: React.FC = () => {
                       </div>
                     </div>
                     <button 
-                      onClick={() => dismissNotification(notif.id)}
+                      onClick={() => clearNotification(notif.id)}
                       className="shrink-0 p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-white/50 rounded-md transition-colors"
                       title="Dismiss completely"
                     >
