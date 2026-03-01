@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { UnifiedDB, FacilityStore } from "../domain/models";
-import { loadDB, saveDB, createEmptyDB } from "../services/db";
+import { loadDB, saveDB, createEmptyDB } from "../storage/engine";
 
 interface DBContextType {
   db: UnifiedDB;
@@ -21,13 +21,14 @@ export function DBProvider({ children }: { children: ReactNode }) {
   const updateDB = (updater: (draft: UnifiedDB) => void) => {
     const nextDb = JSON.parse(JSON.stringify(db)) as UnifiedDB; // Simple deep clone
     updater(nextDb);
-    const success = saveDB(nextDb);
-    if (success) {
+    try {
+      saveDB(nextDb);
       setDb(nextDb);
-    } else {
-      console.error("Failed to commit DB update.");
+      return true;
+    } catch (e) {
+      console.error("Failed to commit DB update.", e);
+      return false;
     }
-    return success;
   };
 
   const activeFacilityId = db.data.facilities.activeFacilityId;
