@@ -168,17 +168,17 @@ _Target: safe for internal pilot use with one test facility_
 - [x] **G3** Missing indication soft-block banner (`AbtCourseModal.tsx`)
 - [x] **G4** 14-day ABT stewardship escalation rule (`detectionPipeline.ts`)
 - [x] **G5** Active IP event without isolation type alert (`detectionPipeline.ts`)
-- [ ] **G7** Enforce daily auto-backup with "last backup" header badge
-- [ ] **G8** Lightweight mutation audit log (user, action, entity, timestamp)
-- [ ] **G9** Sanitise freetext before Gemini prompt construction
+- [x] **G7** Enforce daily auto-backup with "last backup" header badge
+- [x] **G8** Lightweight mutation audit log (user, action, entity, timestamp)
+- [x] **G9** Sanitise freetext before Gemini prompt construction
 
 ### Phase 2 — Next 30 Days: High-Value Clinical Enhancements
 _Target: useful for daily IC workflow without manual spreadsheets_
 
-- [ ] **E1** Days-of-Therapy calculator + Dashboard DOT tile
-- [ ] **E2** Vaccination coverage dashboard gauges (resident + staff)
-- [ ] **E6** Line list auto-generation (CSV/print) from active IP events
-- [ ] **E7** Audit corrective-action overdue alert in detection pipeline
+- [x] **E1** Days-of-Therapy calculator + Dashboard DOT tile
+- [x] **E2** Vaccination coverage dashboard gauges (resident + staff)
+- [x] **E6** Line list auto-generation (CSV/print) from active IP events
+- [x] **E7** Audit corrective-action overdue alert in detection pipeline
 - [ ] Flu/COVID-19 season dashboard banner with coverage %
 - [ ] DOT trend chart (rolling 30-day) in Reports → Analytics tab
 

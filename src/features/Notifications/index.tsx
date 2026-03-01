@@ -106,6 +106,7 @@ export const NotificationsPage: React.FC = () => {
       case 'DEVICE_LINK': return <Info className="w-5 h-5 text-blue-500" />;
       case 'ABT_STEWARDSHIP': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
       case 'DEVICE_REVIEW': return <AlertTriangle className="w-5 h-5 text-orange-500" />;
+      case 'AUDIT_OVERDUE': return <AlertTriangle className="w-5 h-5 text-red-600" />;
       default: return <Bell className="w-5 h-5 text-neutral-500" />;
     }
   };
@@ -122,6 +123,7 @@ export const NotificationsPage: React.FC = () => {
       case 'DEVICE_LINK': return 'bg-blue-50 border-blue-200';
       case 'ABT_STEWARDSHIP': return 'bg-orange-50 border-orange-200';
       case 'DEVICE_REVIEW': return 'bg-orange-50 border-orange-200';
+      case 'AUDIT_OVERDUE': return 'bg-red-50 border-red-200';
       default: return 'bg-white border-neutral-200';
     }
   };
@@ -137,6 +139,7 @@ export const NotificationsPage: React.FC = () => {
       case 'DEVICE_LINK': return 'Device Link Detected';
       case 'ABT_STEWARDSHIP': return 'ABT Stewardship Time-Out Due';
       case 'DEVICE_REVIEW': return 'Device Necessity Review Due';
+      case 'AUDIT_OVERDUE': return 'Corrective Action Overdue';
       default: return 'Notification';
     }
   };
@@ -152,6 +155,7 @@ export const NotificationsPage: React.FC = () => {
       case 'DEVICE_LINK': return 'info';
       case 'ABT_STEWARDSHIP': return 'warning';
       case 'DEVICE_REVIEW': return 'warning';
+      case 'AUDIT_OVERDUE': return 'alert';
       default: return 'info';
     }
   };

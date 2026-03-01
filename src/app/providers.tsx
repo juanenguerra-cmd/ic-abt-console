@@ -1,11 +1,20 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { UnifiedDB, FacilityStore } from "../domain/models";
+import { UnifiedDB, FacilityStore, MutationLogEntry } from "../domain/models";
 import { loadDBAsync, saveDBAsync, restoreFromPrevAsync, StorageError, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 
+const MAX_MUTATION_LOG_ENTRIES = 500;
+
+interface MutationMeta {
+  action: MutationLogEntry['action'];
+  entityType: string;
+  entityId: string;
+  who?: string;
+}
+
 interface DatabaseContextType {
   db: UnifiedDB;
-  updateDB: (updater: (draft: UnifiedDB) => void) => void;
+  updateDB: (updater: (draft: UnifiedDB) => void, meta?: MutationMeta) => void;
   setDB: (db: UnifiedDB) => void;
   error: string | null;
 }
@@ -57,7 +66,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  const updateDB = useCallback((updater: (draft: UnifiedDB) => void) => {
+  const updateDB = useCallback((updater: (draft: UnifiedDB) => void, meta?: MutationMeta) => {
     if (!db) return;
 
     try {
@@ -69,6 +78,27 @@ export function AppProviders({ children }: { children: ReactNode }) {
       // Create a deep clone to act as our draft
       const nextDb = JSON.parse(JSON.stringify(db)) as UnifiedDB;
       updater(nextDb);
+
+      // G8: Append mutation log entry to every active facility store.
+      if (meta) {
+        const entry: MutationLogEntry = {
+          timestamp: new Date().toISOString(),
+          who: meta.who ?? 'unknown',
+          action: meta.action,
+          entityType: meta.entityType,
+          entityId: meta.entityId,
+        };
+        const activeFacilityId = nextDb.data.facilities.activeFacilityId;
+        const facilityStore = nextDb.data.facilityData[activeFacilityId];
+        if (facilityStore) {
+          if (!facilityStore.mutationLog) facilityStore.mutationLog = [];
+          facilityStore.mutationLog.push(entry);
+          // Cap at MAX_MUTATION_LOG_ENTRIES to prevent unbounded growth
+          if (facilityStore.mutationLog.length > MAX_MUTATION_LOG_ENTRIES) {
+            facilityStore.mutationLog = facilityStore.mutationLog.slice(-MAX_MUTATION_LOG_ENTRIES);
+          }
+        }
+      }
 
       // Optimistically update React state immediately so the UI feels instant.
       setDb(nextDb);

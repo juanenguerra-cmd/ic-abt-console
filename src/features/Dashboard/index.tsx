@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
@@ -184,6 +184,34 @@ export const Dashboard: React.FC = () => {
   
   const capacityRate = facility.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
 
+  // E1: Days-of-Therapy (DOT) calculator
+  const nowForDot = new Date();
+  const totalDotDays = (Object.values(store.abts || {}) as any[]).reduce((sum: number, abt: any) => {
+    if (abt.status !== 'active' || !abt.startDate) return sum;
+    const start = new Date(abt.startDate);
+    const days = Math.max(0, Math.floor((nowForDot.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    return sum + days;
+  }, 0);
+  // DOT per 1,000 resident-days (rolling 30-day denominator = residentCount * 30)
+  const dotPer1000 = residentCount > 0 ? ((totalDotDays / (residentCount * 30)) * 1000).toFixed(1) : null;
+
+  // E2: Vaccination coverage (residents)
+  const residentVaxByMrn: Record<string, Set<string>> = {};
+  (Object.values(store.vaxEvents || {}) as any[]).forEach((vax: any) => {
+    if (vax.status === 'given' && vax.residentRef?.id) {
+      if (!residentVaxByMrn[vax.residentRef.id]) residentVaxByMrn[vax.residentRef.id] = new Set();
+      residentVaxByMrn[vax.residentRef.id].add((vax.vaccine || '').toLowerCase().split(' ')[0]);
+    }
+  });
+  const residentVaxTotal = (Object.values(store.vaxEvents || {}) as any[]).filter((v: any) => v.residentRef?.kind === 'mrn').length;
+  const residentVaxGiven = (Object.values(store.vaxEvents || {}) as any[]).filter((v: any) => v.residentRef?.kind === 'mrn' && v.status === 'given').length;
+  const residentVaxCoverage = residentVaxTotal > 0 ? Math.round((residentVaxGiven / residentVaxTotal) * 100) : null;
+
+  // E2: Vaccination coverage (staff)
+  const staffVaxTotal = Object.values(store.staffVaxEvents || {}).length;
+  const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v.status === 'given').length;
+  const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
+
   return (
     <>
       <div className="p-6 space-y-6">
@@ -287,6 +315,69 @@ export const Dashboard: React.FC = () => {
               </div>
               <div className="p-2 bg-red-50 rounded-lg">
                 <ClipboardCheck className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* E1: DOT Calculator & E2: Vaccination Coverage */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div onClick={() => navigate('/resident-board', { state: { abtActive: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Days of Therapy (DOT)</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-bold text-neutral-900">{totalDotDays}</p>
+                  <span className="text-xs text-neutral-500">days total</span>
+                </div>
+                {dotPer1000 !== null && (
+                  <p className="text-xs text-neutral-500 mt-0.5">{dotPer1000} DOT / 1,000 resident-days</p>
+                )}
+              </div>
+              <div className="p-2 bg-emerald-50 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Resident Vax Coverage</p>
+                {residentVaxCoverage !== null ? (
+                  <>
+                    <p className="text-2xl font-bold text-neutral-900">{residentVaxCoverage}%</p>
+                    <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${residentVaxCoverage >= 80 ? 'bg-emerald-500' : residentVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${residentVaxCoverage}%` }} />
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-0.5">{residentVaxGiven} of {residentVaxTotal} doses given</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-400 mt-1">No data</p>
+                )}
+              </div>
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Shield className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/staff')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-neutral-500">Staff Vax Coverage</p>
+                {staffVaxCoverage !== null ? (
+                  <>
+                    <p className="text-2xl font-bold text-neutral-900">{staffVaxCoverage}%</p>
+                    <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${staffVaxCoverage >= 80 ? 'bg-emerald-500' : staffVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${staffVaxCoverage}%` }} />
+                    </div>
+                    <p className="text-xs text-neutral-400 mt-0.5">{staffVaxGiven} of {staffVaxTotal} doses given</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-400 mt-1">No data</p>
+                )}
+              </div>
+              <div className="p-2 bg-indigo-50 rounded-lg">
+                <Shield className="w-5 h-5 text-indigo-600" />
               </div>
             </div>
           </div>
