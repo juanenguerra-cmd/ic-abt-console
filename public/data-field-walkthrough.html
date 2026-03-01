@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Data Field Walkthrough Table</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: Inter, Arial, sans-serif; margin: 24px; color: #111827; background: #f9fafb; }
+      h1 { margin: 0 0 8px; }
+      p { margin: 0 0 16px; color: #4b5563; }
+      .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+      .section h2 { margin-top: 0; font-size: 18px; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+      th { background: #eef2ff; color: #1e3a8a; }
+      .small { font-size: 12px; color: #6b7280; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Data Field Walkthrough Table</h1>
+    <p>Plain-language view of information collected by category for care operations, compliance, and reporting.</p>
+
+    <div class="section">
+      <h2>Resident</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>MRN, name, DOB, sex</td><td>Resident Board / Profile</td><td>Resident identity and demographic context</td></tr>
+        <tr><td>Unit, room, attending physician, admission date</td><td>Resident Board / Profile</td><td>Daily clinical location and responsibility</td></tr>
+        <tr><td>Status, diagnosis, allergies, cognitive status</td><td>Resident Profile</td><td>Care planning and risk context</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>IP Events</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Infection type/site/source, onset date, status</td><td>IP Event modal</td><td>Infection surveillance timeline</td></tr>
+        <tr><td>Specimen/lab dates and organism</td><td>IP Event modal</td><td>Clinical follow-up and evidence</td></tr>
+        <tr><td>Outbreak link, device/NHSN indicators</td><td>IP Event + NHSN panel</td><td>Outbreak grouping and quality checks</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>ABT / Antibiotics</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Medication, dose, route, frequency, start/end</td><td>ABT Course modal</td><td>Stewardship monitoring</td></tr>
+        <tr><td>Indication, infection source, syndrome category</td><td>ABT Course modal</td><td>Appropriateness and trend review</td></tr>
+        <tr><td>Culture/organism/sensitivity, prescriber, notes</td><td>ABT Course modal</td><td>Microbiology-informed decisions</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Vaccination</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Vaccine name, status, date given/due</td><td>Vaccine modal</td><td>Gap and due-date management</td></tr>
+        <tr><td>Dose, lot number, administered by/site/source</td><td>Vaccine modal / Back Office</td><td>Traceability and documentation quality</td></tr>
+        <tr><td>Decline reason and notes</td><td>Vaccine modal</td><td>Re-offer planning and compliance context</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Line List</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Resident, symptom class, onset date, symptoms</td><td>Notifications / Add to Line List</td><td>Cluster detection and tracking</td></tr>
+        <tr><td>Fever, isolation, test/provider notified</td><td>Line list workflow</td><td>Triage and escalation</td></tr>
+        <tr><td>Disposition, notes, source link</td><td>Line list workflow</td><td>Action traceability</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Staff</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Staff profile and employment status</td><td>Staff page</td><td>Workforce coordination</td></tr>
+        <tr><td>Staff vaccine records</td><td>Staff page (vaccine actions)</td><td>Immunization compliance</td></tr>
+        <tr><td>Fit test records and next due date</td><td>Staff page (fit test actions)</td><td>PPE readiness and safety</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Outbreaks</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Outbreak title, pathogen, status, start/end dates</td><td>Outbreaks page</td><td>Episode-level response tracking</td></tr>
+        <tr><td>Case records and exposure records</td><td>Outbreak case/exposure panels</td><td>Case counting and monitoring</td></tr>
+        <tr><td>Daily status counts and operational notes</td><td>Outbreak daily status panel</td><td>Leadership and unit briefings</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Audits</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Audit session type/date/unit/shift/auditor</td><td>Infection Control Audit Center</td><td>Compliance session tracking</td></tr>
+        <tr><td>Question responses, severity, corrective action, due date</td><td>Infection Control Audit Center</td><td>Quality improvement follow-through</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Notifications</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Category, message, status, time</td><td>Notifications page</td><td>Prioritized alert management</td></tr>
+        <tr><td>Resident/unit/room context</td><td>Notifications page</td><td>Fast routing to action</td></tr>
+        <tr><td>Action completion details</td><td>Add to Line List workflow</td><td>Close-loop accountability</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Shift Log</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Shift, unit, priority, tags, handoff note body</td><td>Notes &gt; Shift Log</td><td>Shift-to-shift communication</td></tr>
+        <tr><td>Optional resident and outbreak references</td><td>Notes &gt; Shift Log</td><td>Case continuity and investigation follow-up</td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Survey Packets</h2>
+      <table>
+        <tr><th>Information Collected</th><th>Where Found</th><th>Purpose</th></tr>
+        <tr><td>Packet title, date, creator, facility</td><td>Survey Packet Builder</td><td>Survey packet identification</td></tr>
+        <tr><td>Included sections and source references</td><td>Survey Packet Builder</td><td>Organized survey-ready documentation</td></tr>
+        <tr><td>Generated date and notes</td><td>Survey Packet Builder</td><td>Audit-ready history</td></tr>
+      </table>
+    </div>
+
+    <p class="small">Tip: Keep this page open during workflow reviews. It is designed for non-technical users and leadership walkthroughs.</p>
+  </body>
+</html>

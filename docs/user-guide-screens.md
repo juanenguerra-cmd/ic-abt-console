@@ -117,3 +117,17 @@ This guide explains what each major screen does and when to use it.
 
 ## Quick Navigation Tip
 If your deployment includes global search, use it to jump quickly to residents or records rather than navigating screen-by-screen.
+
+---
+
+## 12) Data Field Walkthrough / Data Dictionary
+**Purpose:** Provide a complete field-by-field reference for all system entities and events.
+
+**Use it to:**
+- Review what information is collected in each category using plain language.
+- Prepare survey walkthroughs and leadership reviews with a non-technical table format.
+- Verify where information is entered and why it is collected.
+
+**Reference:** See [Information Collected Library](./data-field-reference.md).
+
+**In-app quick action:** Open **Data Field Walkthrough Table (New Window)** from the User Guide page.
