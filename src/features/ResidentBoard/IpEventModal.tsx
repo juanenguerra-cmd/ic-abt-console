@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { IPEvent, Outbreak } from "../../domain/models";
+import { IPEvent, ABTCourse, Outbreak } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
+import { checkCauti, checkCdiffLabId, NhsnResult } from "../../utils/nhsnCriteria";
+import { NhsnCriteriaPanel } from "../../components/NhsnCriteriaPanel";
 
 interface Props {
   residentId: string;
@@ -223,6 +225,44 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     ? EBP_ORGANISM_SUGGESTIONS 
     : (protocol === "isolation" && infectionCategory && ["MRSA", "VRE", "ESBL", "CRE", "C. diff"].includes(infectionCategory) ? [infectionCategory] : []);
 
+  // NHSN live evaluation
+  const nhsnResult = useMemo((): NhsnResult | null => {
+    const effectiveCategory = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
+    const isUti = /uti|cauti/i.test(effectiveCategory);
+    const isGi = /\bgi\b|c\.?\s*diff/i.test(effectiveCategory);
+    const hasCdiffOrganism = infectionTags.some(t => /diff/i.test(t));
+
+    if (!isUti && !(isGi && hasCdiffOrganism)) return null;
+
+    const allIpEvents = Object.values(store.infections) as IPEvent[];
+    const residentObj = residentId.startsWith("Q:") ? null : store.residents[residentId];
+    const abts = Object.values(store.abts) as ABTCourse[];
+
+    const syntheticIp: IPEvent = {
+      id: existingIp?.id ?? '__preview__',
+      residentRef: residentId.startsWith("Q:")
+        ? { kind: 'quarantine', id: residentId }
+        : { kind: 'mrn', id: residentId },
+      status,
+      onsetDate: onsetDate || undefined,
+      infectionCategory: effectiveCategory || undefined,
+      organism: infectionTags.join(', ') || undefined,
+      specimenCollectedDate: specimenCollectedDate || undefined,
+      labResultDate: labResultDate || undefined,
+      deviceTypes,
+      notes,
+      isolationType: isolationTypes.join(', ') || undefined,
+      createdAt: existingIp?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isUti) {
+      return checkCauti(syntheticIp, abts, residentObj ?? { mrn: residentId, displayName: '', createdAt: '', updatedAt: '' });
+    }
+    return checkCdiffLabId(syntheticIp, allIpEvents);
+  }, [infectionCategory, infectionCategoryOther, infectionTags, onsetDate, specimenCollectedDate,
+      labResultDate, deviceTypes, notes, isolationTypes, status, store, residentId, existingIp]);
+
   const handleSave = () => {
     if (specimenCollectedDate && labResultDate && labResultDate < specimenCollectedDate) {
       alert("Lab result date cannot be before specimen collected date.");
@@ -264,14 +304,24 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         ? notes.trim() + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
         : `--- EXTENDED DATA ---\n${JSON.stringify(extData)}`;
 
+      const effectiveCat = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
+      const verdictToBoolean = (v: string | undefined): boolean | null | undefined => {
+        if (!v) return undefined;
+        if (v === 'meets') return true;
+        if (v === 'does_not_meet') return false;
+        return null;
+      };
+
       facility.infections[ipId] = {
         id: ipId,
         residentRef,
         status,
+        onsetDate: onsetDate || undefined,
         infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
         infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
         sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
         isolationType: isolationTypes.join(", ") || undefined,
+        deviceTypes: deviceTypes.length > 0 ? deviceTypes : undefined,
         ebp: protocol === "ebp",
         organism: infectionTags.join(", ") || undefined,
         specimenCollectedDate: specimenCollectedDate || undefined,
@@ -279,6 +329,12 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         outbreakId: outbreakId || undefined,
         locationSnapshot,
         notes: finalNotes,
+        nhsnCautiMet: (nhsnResult && /uti|cauti/i.test(effectiveCat))
+          ? verdictToBoolean(nhsnResult.verdict)
+          : undefined,
+        nhsnCdiffLabIdMet: (nhsnResult && /\bgi\b|c\.?\s*diff/i.test(effectiveCat))
+          ? verdictToBoolean(nhsnResult.verdict)
+          : undefined,
         createdAt: existingIp?.createdAt || now,
         updatedAt: now,
       };
@@ -599,6 +655,16 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
               </select>
             </div>
           </section>
+
+          {/* NHSN Surveillance Criteria Panel */}
+          {nhsnResult && (
+            <section>
+              <NhsnCriteriaPanel
+                result={nhsnResult}
+                title={/uti|cauti/i.test(infectionCategory === "Other" ? infectionCategoryOther : infectionCategory) ? "NHSN LTC CAUTI Criteria" : "NHSN LTC C. diff LabID Criteria"}
+              />
+            </section>
+          )}
 
           {/* Notes */}
           <section>

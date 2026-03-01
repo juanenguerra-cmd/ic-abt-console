@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
+import { useRole } from "../../context/RoleContext";
+import { UserRole } from "../../types/roles";
 import { restoreFromPrevAsync } from "../../storage/engine";
-import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users } from "lucide-react";
+import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
@@ -60,6 +62,7 @@ const validateUnifiedDB = (db: unknown): { valid: boolean; error?: string } => {
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
+  const { role, setRole, can } = useRole();
   const navigate = useNavigate();
   const [dbSize, setDbSize] = useState(0);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
@@ -324,6 +327,37 @@ export const SettingsConsole: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Role Management — Admin only */}
+      {can('*') && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-5 sm:px-6 border-b border-neutral-200 bg-neutral-50 flex items-center">
+            <Shield className="h-5 w-5 text-indigo-500 mr-2" />
+            <h3 className="text-lg leading-6 font-medium text-neutral-900">Role Management</h3>
+          </div>
+          <div className="px-4 py-5 sm:p-6 space-y-4">
+            <p className="text-sm text-neutral-600">Set the active user role for this session. Changing the role restricts access to features accordingly.</p>
+            <div className="flex flex-wrap gap-3">
+              {(['Viewer', 'Nurse', 'ICLead', 'Admin'] as UserRole[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRole(r)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors active:scale-95 ${
+                    role === r
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-neutral-500">
+              Current role: <strong>{role}</strong>. Viewer = read-only; Nurse = add/edit residents &amp; shift log; ICLead = + outbreaks, audits, exports; Admin = full access.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Back Office */}
       <div className="bg-white shadow rounded-lg overflow-hidden">

@@ -1,16 +1,16 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
+import { RoleProvider } from "../context/RoleContext";
+import { RoleGuard, NotAuthorisedPage } from "./guards/RoleGuard";
+import { LS_LAST_ACTIVE_TS, IDLE_THRESHOLD_MS, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
 import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
-import { FloorMap } from "../features/Heatmap/FloorMap";
-import { LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { Floorplan } from "../features/Floorplan";
-import { ResidentChat } from "../features/Notes";
 import { ShiftLogPage } from "../features/Notes/ShiftLogPage";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
@@ -23,6 +23,7 @@ import AuditReportPrint from "../pages/print/AuditReportPrint";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
+import { AntibiogramPage } from "../pages/AntibiogramPage";
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -126,6 +127,38 @@ const AppShell = () => {
       setLastBackupLabel('No backup');
     }
   }, []);
+
+  // G6: Idle PIN lock — re-engage lock screen on route change when user has been idle
+  React.useEffect(() => {
+    if (isPrintRoute || isLocked) return;
+    const lastActiveStr = localStorage.getItem(LS_LAST_ACTIVE_TS);
+    if (lastActiveStr) {
+      const lastActiveMs = parseInt(lastActiveStr, 10);
+      if (!isNaN(lastActiveMs)) {
+        const elapsed = Date.now() - lastActiveMs;
+        if (elapsed > IDLE_THRESHOLD_MS) {
+          setIsLocked(true);
+          return;
+        }
+      }
+    }
+    // Reset the activity timestamp on each route navigation
+    localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
+  }, [location, isPrintRoute, isLocked]);
+
+  // G6: Track user activity (clicks/keystrokes) to reset the idle timer
+  React.useEffect(() => {
+    if (isPrintRoute) return;
+    const updateActivity = () => {
+      localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
+    };
+    window.addEventListener("click", updateActivity, { passive: true });
+    window.addEventListener("keydown", updateActivity, { passive: true });
+    return () => {
+      window.removeEventListener("click", updateActivity);
+      window.removeEventListener("keydown", updateActivity);
+    };
+  }, [isPrintRoute]);
 
   React.useEffect(() => {
     if (!isFacilitySwitcherOpen) return;
@@ -266,6 +299,7 @@ const AppShell = () => {
             <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
             <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
             <SidebarLink to="/reports" icon={FileText} label="Reports" />
+            <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />
             <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />
             <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />
             <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />
@@ -290,15 +324,17 @@ const AppShell = () => {
                 <Route path="/chat" element={<PageTransition><ShiftLogPage /></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
-                <Route path="/outbreaks" element={<PageTransition><OutbreakManager /></PageTransition>} />
-                <Route path="/reports" element={<PageTransition><ReportsConsole /></PageTransition>} />
-                <Route path="/reports/forms" element={<PageTransition><ReportsConsole /></PageTransition>} />
-                <Route path="/audit-center" element={<PageTransition><InfectionControlAuditCenter /></PageTransition>} />
+                <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />
+                <Route path="/reports" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
+                <Route path="/reports/forms" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
+                <Route path="/reports/antibiogram" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AntibiogramPage /></RoleGuard></PageTransition>} />
+                <Route path="/audit-center" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><InfectionControlAuditCenter /></RoleGuard></PageTransition>} />
                 <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
                 <Route path="/print/audit-report" element={<AuditReportPrint />} />
                 <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
-                <Route path="/settings" element={<PageTransition><div className="p-6"><SettingsConsole /></div></PageTransition>} />
+                <Route path="/settings" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><div className="p-6"><SettingsConsole /></div></RoleGuard></PageTransition>} />
                 <Route path="/back-office" element={<PageTransition><BackOfficePage /></PageTransition>} />
+                <Route path="/not-authorised" element={<PageTransition><div className="p-6"><NotAuthorisedPage /></div></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AnimatePresence>
@@ -335,11 +371,13 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AppProviders>
-        <BrowserRouter>
-          <UndoToastProvider>
-            <AppShell />
-          </UndoToastProvider>
-        </BrowserRouter>
+        <RoleProvider>
+          <BrowserRouter>
+            <UndoToastProvider>
+              <AppShell />
+            </UndoToastProvider>
+          </BrowserRouter>
+        </RoleProvider>
       </AppProviders>
     </ErrorBoundary>
   );
