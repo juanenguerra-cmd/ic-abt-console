@@ -5,6 +5,8 @@
 
 export type ISO = string;
 
+export type { UserRole } from '../types';
+
 export type ResidentRef =
   | { kind: "mrn"; id: string }
   | { kind: "quarantine"; id: string };
@@ -515,6 +517,8 @@ export interface MutationLogEntry {
 }
 
 export interface FacilityStore {
+  /** Current user role for RBAC. Defaults to 'Nurse' when absent. */
+  currentRole?: UserRole;
   residents: Record<string, Resident>;
   quarantine: Record<string, QuarantineResident>;
   abts: Record<string, ABTCourse>;

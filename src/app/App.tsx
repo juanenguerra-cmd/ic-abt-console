@@ -5,6 +5,7 @@ import { RoleProvider } from "../context/RoleContext";
 import { RoleGuard, NotAuthorisedPage } from "./guards/RoleGuard";
 import { LS_LAST_ACTIVE_TS, IDLE_THRESHOLD_MS, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { RoleProvider } from "../context/RoleContext";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
