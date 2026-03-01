@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer } from 'lucide-react';
+import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer, ClipboardList } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
+import { AddToLineListModal } from './AddToLineListModal';
 
 export const useNotifications = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -62,6 +63,8 @@ export const NotificationsPage: React.FC = () => {
   const [unitFilter, setUnitFilter] = useState<string>('all');
   const [expandedVaxGroups, setExpandedVaxGroups] = useState<Set<string>>(new Set());
   const [selectedVaxGroups, setSelectedVaxGroups] = useState<Set<string>>(new Set());
+  const [lineListModalNotif, setLineListModalNotif] = useState<AppNotification | null>(null);
+  const [lineListSavedId, setLineListSavedId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   type GroupResident = {
@@ -665,6 +668,21 @@ export const NotificationsPage: React.FC = () => {
                             Open Record
                           </button>
                         )}
+                        {notif.action === 'add_to_line_list' && !notif.actedAt && (
+                          <button
+                            onClick={() => setLineListModalNotif(notif)}
+                            className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs font-medium transition-colors flex items-center gap-1"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" />
+                            Add to Line List
+                          </button>
+                        )}
+                        {notif.actedAt && (
+                          <span className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-md text-xs font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Added to Line List
+                          </span>
+                        )}
                         {!isRead && (
                           <button 
                             onClick={() => markAsRead(notif.id)}
@@ -689,6 +707,27 @@ export const NotificationsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Add to Line List modal */}
+      {lineListModalNotif && (
+        <AddToLineListModal
+          notification={lineListModalNotif}
+          onClose={() => setLineListModalNotif(null)}
+          onSaved={() => {
+            setLineListSavedId(lineListModalNotif.id);
+            setLineListModalNotif(null);
+            setTimeout(() => setLineListSavedId(null), 4000);
+          }}
+        />
+      )}
+
+      {/* Success toast */}
+      {lineListSavedId && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-emerald-600 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Line list entry saved successfully.
+        </div>
+      )}
     </div>
   );
 };

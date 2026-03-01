@@ -401,6 +401,69 @@ export interface ShiftLogEntry {
   outbreakRef?: { id: string; name: string };
 }
 
+// ─── Line List enums & types ──────────────────────────────────────────────────
+
+export type SymptomClass = 'resp' | 'gi';
+
+export type RespSymptomTag =
+  | 'cough'
+  | 'fever'
+  | 'shortness_of_breath'
+  | 'sore_throat'
+  | 'runny_nose'
+  | 'congestion'
+  | 'body_aches'
+  | 'loss_of_smell_taste'
+  | 'chills'
+  | 'fatigue';
+
+export type GISymptomTag =
+  | 'diarrhea'
+  | 'nausea'
+  | 'vomiting'
+  | 'stomach_cramping'
+  | 'loss_of_appetite'
+  | 'fever';
+
+export type SymptomTag = RespSymptomTag | GISymptomTag;
+
+export type LineListDisposition = 'monitoring' | 'hospital_transfer' | 'resolved' | 'other';
+
+/** Structured payload carried on LINE_LIST_REVIEW notifications that recommend line listing. */
+export interface LineListNotificationPayload {
+  residentId: string;
+  symptomClass: SymptomClass;
+  detectedAt: ISO;
+  sourceEventId?: string;
+  notesSnippet?: string;
+}
+
+/** A single resident line list event (resp or GI). */
+export interface LineListEvent {
+  id: string;
+  facilityId: string;
+  residentId: string;
+  symptomClass: SymptomClass;
+  /** ISO timestamp of symptom onset (user-confirmed). */
+  onsetDateISO: ISO;
+  symptoms: SymptomTag[];
+  fever?: boolean;
+  isolationInitiated?: boolean;
+  isolationStatus?: string;
+  testOrdered?: boolean;
+  providerNotified?: boolean;
+  disposition?: LineListDisposition;
+  notes?: string;
+  /** References the notification that triggered this entry. */
+  sourceNotificationId?: string;
+  /** References the ABT or IP event that drove detection. */
+  sourceEventId?: string;
+  createdAt: ISO;
+  updatedAt: ISO;
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
 export interface AppNotification {
   id: string;
   facilityId: string;
@@ -419,6 +482,14 @@ export interface AppNotification {
     noteId?: string;
   };
   ruleId: string;
+  /** Present on LINE_LIST_REVIEW notifications that recommend line listing. */
+  action?: 'add_to_line_list';
+  /** Structured context for the recommended line list action. */
+  payload?: LineListNotificationPayload;
+  /** ISO timestamp set when the user completes the recommended action. */
+  actedAt?: ISO;
+  /** ID of the LineListEvent created/updated as a result of acting on this notification. */
+  lineListRecordId?: string;
 }
 
 export interface MutationLogEntry {
@@ -454,6 +525,7 @@ export interface FacilityStore {
   infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
   notifications: Record<string, AppNotification>;
+  lineListEvents?: Record<string, LineListEvent>;
   shiftLog?: Record<string, ShiftLogEntry>;
   dismissedRuleKeys?: string[];
   /** Append-only audit log of data mutations. Capped at 500 most-recent entries. */
