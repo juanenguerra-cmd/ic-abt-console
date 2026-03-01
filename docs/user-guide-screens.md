@@ -117,3 +117,15 @@ This guide explains what each major screen does and when to use it.
 
 ## Quick Navigation Tip
 If your deployment includes global search, use it to jump quickly to residents or records rather than navigating screen-by-screen.
+
+---
+
+## 12) Data Field Walkthrough / Data Dictionary
+**Purpose:** Provide a complete field-by-field reference for all system entities and events.
+
+**Use it to:**
+- Verify field meaning, requiredness, and storage location before adding features.
+- Align report joins and drill-down behavior to canonical keys.
+- Review compatibility rules for deprecated fields (for example `dateGiven` vs `administeredDate`).
+
+**Reference:** See [Data Field Reference Library](./data-field-reference.md).

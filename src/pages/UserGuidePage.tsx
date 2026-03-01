@@ -1,4 +1,7 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
+import MarkdownViewer from "../components/MarkdownViewer";
+import userGuideScreensDoc from "../../docs/user-guide-screens.md?raw";
+import dataFieldReferenceDoc from "../../docs/data-field-reference.md?raw";
 
 const sections = [
   {
@@ -66,7 +69,32 @@ const sections = [
   },
 ];
 
+type GuideTab = "overview" | "walkthrough" | "dataReference";
+
 export default function UserGuidePage() {
+  const [activeTab, setActiveTab] = useState<GuideTab>("overview");
+
+  const tabContent = useMemo(() => {
+    if (activeTab === "walkthrough") return <MarkdownViewer content={userGuideScreensDoc} />;
+    if (activeTab === "dataReference") return <MarkdownViewer content={dataFieldReferenceDoc} />;
+
+    return (
+      <section className="grid gap-4 md:grid-cols-2">
+        {sections.map((section) => (
+          <article key={section.title} className="bg-white border border-neutral-200 rounded-lg p-4">
+            <h3 className="font-semibold text-neutral-900">{section.title}</h3>
+            <p className="text-sm text-neutral-600 mt-1">{section.purpose}</p>
+            <ul className="list-disc pl-5 mt-3 text-sm text-neutral-700 space-y-1">
+              {section.bullets.map((bullet) => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </section>
+    );
+  }, [activeTab]);
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <header className="space-y-2">
@@ -83,19 +111,31 @@ export default function UserGuidePage() {
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {sections.map((section) => (
-          <article key={section.title} className="bg-white border border-neutral-200 rounded-lg p-4">
-            <h3 className="font-semibold text-neutral-900">{section.title}</h3>
-            <p className="text-sm text-neutral-600 mt-1">{section.purpose}</p>
-            <ul className="list-disc pl-5 mt-3 text-sm text-neutral-700 space-y-1">
-              {section.bullets.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </section>
+      <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "overview" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("walkthrough")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "walkthrough" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Screen Walkthrough
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("dataReference")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "dataReference" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Data Field Reference
+        </button>
+      </nav>
+
+      {tabContent}
     </div>
   );
 }
