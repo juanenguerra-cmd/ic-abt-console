@@ -71,6 +71,7 @@ export const SettingsConsole: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
+  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   
   // Global floor tile size (1–10, default 5)
   const [tileSize, setTileSize] = useState(5);
@@ -341,7 +342,7 @@ export const SettingsConsole: React.FC = () => {
               {(['Viewer', 'Nurse', 'ICLead', 'Admin'] as UserRole[]).map((r) => (
                 <button
                   key={r}
-                  onClick={() => setRole(r)}
+                  onClick={() => (r === 'Viewer' || r === 'Nurse') ? setPendingRole(r) : setRole(r)}
                   className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors active:scale-95 ${
                     role === r
                       ? 'bg-indigo-600 text-white border-indigo-600'
@@ -506,6 +507,44 @@ export const SettingsConsole: React.FC = () => {
           </p>
         </div>
       </div>
+      {pendingRole && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setPendingRole(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setPendingRole(null)}
+          role="presentation"
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4 space-y-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pending-role-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-6 w-6 text-amber-500 flex-shrink-0" />
+              <h2 id="pending-role-modal-title" className="text-lg font-semibold text-neutral-900">Restricted Role Warning</h2>
+            </div>
+            <p className="text-sm text-neutral-700">
+              Switching to <strong>{pendingRole}</strong> will limit your access. You may lose access to Settings and other features. Use Admin to restore full access.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setPendingRole(null)}
+                className="px-4 py-2 rounded-md text-sm font-medium border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setRole(pendingRole); setPendingRole(null); }}
+                className="px-4 py-2 rounded-md text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 active:scale-95"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
