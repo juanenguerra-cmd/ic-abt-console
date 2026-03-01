@@ -55,6 +55,9 @@ export const useNotifications = () => {
   return { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead };
 };
 
+/** Duration (ms) for which the "saved" success toast is displayed. */
+const TOAST_DISPLAY_DURATION_MS = 4000;
+
 export const NotificationsPage: React.FC = () => {
   const { store } = useFacilityData();
   const { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead } = useNotifications();
@@ -716,7 +719,7 @@ export const NotificationsPage: React.FC = () => {
           onSaved={() => {
             setLineListSavedId(lineListModalNotif.id);
             setLineListModalNotif(null);
-            setTimeout(() => setLineListSavedId(null), 4000);
+            setTimeout(() => setLineListSavedId(null), TOAST_DISPLAY_DURATION_MS);
           }}
         />
       )}

@@ -52,6 +52,11 @@ interface AddToLineListModalProps {
   onSaved: () => void;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Hours window used to detect duplicate line list entries for the same resident + symptomClass. */
+const DUPLICATE_WINDOW_HOURS = 96;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const AddToLineListModal: React.FC<AddToLineListModalProps> = ({
@@ -91,7 +96,7 @@ export const AddToLineListModal: React.FC<AddToLineListModalProps> = ({
 
   useEffect(() => {
     if (!residentId) return;
-    const ninetySixHoursAgo = new Date(Date.now() - 96 * 60 * 60 * 1000);
+    const ninetySixHoursAgo = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000);
     const existing = (Object.values(store.lineListEvents ?? {}) as LineListEvent[]).find(
       (e: LineListEvent) =>
         e.residentId === residentId &&
