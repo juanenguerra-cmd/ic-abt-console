@@ -69,15 +69,13 @@ const VAX_STATUS_OPTIONS: Array<"Vaccinated" | "Historical" | "Refused"> = [
   "Vaccinated", "Historical", "Refused",
 ];
 
-// ─── 3-Tier Resident Resolution ────────────────────────────────────────────────
+// ─── 3-Tier Resident Resolution ───────────────────────────────────────────────
 //
-// Tier 1 — Active census:    store.residents where isHistorical !== true
-//           and status is not Discharged / Deceased
-// Tier 2 — Historical list:  store.residents where isHistorical === true
-// Tier 3 — Unresolved:       QuarantineResident created at commit time;
-//           record committed with residentRef: { kind: "quarantine" }
+// Tier 1 — Active census:    isHistorical !== true, status not Discharged/Deceased
+// Tier 2 — Historical list:  isHistorical === true
+// Tier 3 — Unresolved:       QuarantineResident created at commit time
 //
-// The wizard re-runs resolution live on every MRN keystroke in the staging table.
+// Runs on every parse AND on every MRN keystroke in all staging tables.
 
 const resolveResident = (
   mrn: string,
@@ -205,7 +203,12 @@ export const CsvMigrationWizard: React.FC = () => {
       try {
         const parsedRows = parseAbtCsvToStaging(rawCsv, existingAbts);
         if (!parsedRows.length) { alert("CSV is missing headers or data rows."); return; }
-        setAbtCsvRows(parsedRows);
+        // Resolution pass — run immediately after staging so the table shows badges on first render
+        const withResolution = parsedRows.map((row) => {
+          const res = resolveResident(row.data.mrn, store.residents);
+          return { ...row, residentResolution: res.resolution, residentDisplayName: res.displayName };
+        });
+        setAbtCsvRows(withResolution);
         setImportErrors([]);
       } catch (error) {
         console.error("Failed to parse ABT CSV:", error);
@@ -282,14 +285,18 @@ export const CsvMigrationWizard: React.FC = () => {
           imported += 1;
         });
       });
-      alert(`ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}${quarantineCreated ? `\nQuarantine created: ${quarantineCreated}` : ''}`);
+      alert(
+        `ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}` +
+        (quarantineCreated ? `\n\n⚠️ ${quarantineCreated} resident(s) not found in census or historical list — added to Quarantine for manual linking.` : '')
+      );
       setAbtCsvRows([]);
       return;
     }
     if (!rows.length || !mapping.length) { alert("Upload or paste CSV and parse it first."); return; }
-    let summary = { importedCount: 0, updatedCount: 0, errors: [] as { rowNumber: number; message: string }[] };
+    let summary = { importedCount: 0, updatedCount: 0, errors: [] as { rowNumber: number; message: string }[], quarantineCreated: 0 };
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
+      facility.quarantine = facility.quarantine || {};
       summary = importMappedRows(datasetType, rows, mapping, {
         residents: facility.residents,
         quarantine: facility.quarantine,
@@ -302,9 +309,9 @@ export const CsvMigrationWizard: React.FC = () => {
     });
     const errorText = summary.errors.slice(0, 10).map((e) => `Row ${e.rowNumber}: ${e.message}`).join("\n");
     alert(
-      `${datasetType} import complete.\nCreated: ${summary.importedCount}\nUpdated: ${summary.updatedCount}\nSkipped: ${summary.errors.length}${
-        errorText ? `\n\nErrors:\n${errorText}` : ""
-      }`
+      `${datasetType} import complete.\nCreated: ${summary.importedCount}\nUpdated: ${summary.updatedCount}\nSkipped: ${summary.errors.length}` +
+      (errorText ? `\n\nErrors:\n${errorText}` : "") +
+      (summary.quarantineCreated ? `\n\n⚠️ ${summary.quarantineCreated} resident(s) not found in census or historical list — added to Quarantine for manual linking.` : '')
     );
     setImportErrors(summary.errors);
   };
@@ -332,7 +339,7 @@ export const CsvMigrationWizard: React.FC = () => {
     }
   };
 
-  // ─── RAW Commit ────────────────────────────────────────────────────────────
+  // ─── RAW Commit ───────────────────────────────────────────────────────────────
   const commitRawImport = () => {
     if (hasRawErrors) { alert("Cannot commit while unskipped error rows exist."); return; }
     let imported = 0;
@@ -435,13 +442,18 @@ export const CsvMigrationWizard: React.FC = () => {
     return <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">✅ Parsed</span>;
   };
 
+  // updateAbtCsvRow — re-resolves resident when MRN field changes; preserves resolution for all other fields
   const updateAbtCsvRow = (rowId: string, field: keyof AbtCsvStagingRow["data"], value: string) => {
     setAbtCsvRows((prev) =>
-      prev.map((row) =>
-        row.rowId === rowId
-          ? evaluateAbtStagingRow(rowId, { ...row.data, [field]: value }, existingAbts)
-          : row
-      )
+      prev.map((row) => {
+        if (row.rowId !== rowId) return row;
+        const updated = evaluateAbtStagingRow(rowId, { ...row.data, [field]: value }, existingAbts);
+        if (field === 'mrn') {
+          const res = resolveResident(value, store.residents);
+          return { ...updated, residentResolution: res.resolution, residentDisplayName: res.displayName };
+        }
+        return { ...updated, residentResolution: row.residentResolution, residentDisplayName: row.residentDisplayName };
+      })
     );
   };
 
@@ -482,6 +494,14 @@ export const CsvMigrationWizard: React.FC = () => {
               Upload CSV → Parse → Review/Edit in Preview → Commit Import. Nothing is saved until Commit Import.
             </div>
           )}
+
+          {/* Resolution legend — shown for all CSV modes */}
+          <div className="flex flex-wrap gap-2 text-[10px]">
+            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">✅ Active census</span>
+            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🟡 Historical resident</span>
+            <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 Unresolved — will create Quarantine record at commit</span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <select
               value={datasetType}
@@ -517,6 +537,7 @@ export const CsvMigrationWizard: React.FC = () => {
                       <th className="px-2 py-1">Skip</th>
                       <th className="px-2 py-1">MRN</th>
                       <th className="px-2 py-1">Resident</th>
+                      <th className="px-2 py-1">Name</th>
                       <th className="px-2 py-1">Medication</th>
                       <th className="px-2 py-1">Medication Class</th>
                       <th className="px-2 py-1">Dose</th>
@@ -534,7 +555,15 @@ export const CsvMigrationWizard: React.FC = () => {
                       <tr key={row.rowId} className={row.skip ? "opacity-60 bg-neutral-50" : ""}>
                         <td className="px-2 py-1">{statusBadge(row.status)}</td>
                         <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => setAbtCsvRows((prev) => prev.map((item) => item.rowId === row.rowId ? { ...item, skip: e.target.checked } : item))} /></td>
-                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.mrn} onChange={(e) => updateAbtCsvRow(row.rowId, "mrn", e.target.value)} /></td>
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-20 text-xs"
+                            value={row.data.mrn}
+                            onChange={(e) => updateAbtCsvRow(row.rowId, "mrn", e.target.value)}
+                          />
+                        </td>
+                        {/* Resident resolution badge — live updates on MRN change */}
+                        <td className="px-2 py-1 whitespace-nowrap">{resolutionBadge(row.residentResolution, row.residentDisplayName)}</td>
                         <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.residentName} onChange={(e) => updateAbtCsvRow(row.rowId, "residentName", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationName} onChange={(e) => updateAbtCsvRow(row.rowId, "medicationName", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationClass} onChange={(e) => updateAbtCsvRow(row.rowId, "medicationClass", e.target.value)} /></td>
@@ -637,8 +666,6 @@ export const CsvMigrationWizard: React.FC = () => {
                       <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                         <td className="px-2 py-1">{statusBadge(row.status)}</td>
                         <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => updateField("skip", e.target.checked)} /></td>
-
-                        {/* MRN — re-resolves resident on every keystroke */}
                         <td className="px-2 py-1">
                           <input
                             className="border rounded p-1 w-20 text-xs"
@@ -654,10 +681,7 @@ export const CsvMigrationWizard: React.FC = () => {
                             }}
                           />
                         </td>
-
-                        {/* Resident resolution badge */}
                         <td className="px-2 py-1 whitespace-nowrap">{resolutionBadge(row.residentResolution, row.residentDisplayName)}</td>
-
                         <td className="px-2 py-1"><input className="border rounded p-1 w-28 text-xs" value={row.residentNameRaw} onChange={(e) => updateField("residentNameRaw", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1 w-32 text-xs" value={row.medicationName} onChange={(e) => updateField("medicationName", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1 w-16 text-xs" value={row.dose} onChange={(e) => updateField("dose", e.target.value)} /></td>
@@ -722,8 +746,6 @@ export const CsvMigrationWizard: React.FC = () => {
                     <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                       <td className="px-2 py-1">{statusBadge(row.status)}</td>
                       <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => updateVaxRow(row.id, "skip", e.target.checked)} /></td>
-
-                      {/* MRN — re-resolves resident on every keystroke */}
                       <td className="px-2 py-1">
                         <input
                           className="border rounded p-1 w-20 text-xs"
@@ -739,10 +761,7 @@ export const CsvMigrationWizard: React.FC = () => {
                           }}
                         />
                       </td>
-
-                      {/* Resident resolution badge */}
                       <td className="px-2 py-1 whitespace-nowrap">{resolutionBadge(row.residentResolution, row.residentDisplayName)}</td>
-
                       <td className="px-2 py-1"><input className="border rounded p-1 w-28 text-xs" value={row.residentNameRaw} onChange={(e) => updateVaxRow(row.id, "residentNameRaw", e.target.value)} /></td>
                       <td className="px-2 py-1">
                         <select className="border rounded p-1 text-xs w-28" value={row.vaccineType} onChange={(e) => updateVaxRow(row.id, "vaccineType", e.target.value)}>

@@ -1,4 +1,4 @@
-import { ABTCourse, IPEvent, QuarantineResident, ResidentRef, VaxEvent } from "../../domain/models";
+import { ABTCourse, IPEvent, QuarantineResident, Resident, ResidentRef, VaxEvent } from "../../domain/models";
 import { MigrationDatasetType } from "./csvTemplates";
 
 export interface CsvColumnMapping {
@@ -207,10 +207,12 @@ export interface ImportResult {
   importedCount: number;
   updatedCount: number;
   errors: ImportRowError[];
+  /** Number of QuarantineResident records created for MRNs not found in active census or historical list. */
+  quarantineCreated: number;
 }
 
 interface ImportContext {
-  residents: Record<string, unknown>;
+  residents: Record<string, Resident>;
   quarantine: Record<string, QuarantineResident>;
   abts: Record<string, ABTCourse>;
   infections: Record<string, IPEvent>;
@@ -232,6 +234,47 @@ const getResidentRef = (row: string[], mapping: CsvColumnMapping[]): ResidentRef
   return candidate.startsWith("Q:")
     ? { kind: "quarantine", id: candidate }
     : { kind: "mrn", id: candidate };
+};
+
+/**
+ * 3-tier resident resolution:
+ *  Tier 1 — Active census: isHistorical !== true, status not Discharged/Deceased
+ *  Tier 2 — Historical list: isHistorical === true
+ *  Tier 3 — Unresolved: creates a QuarantineResident for manual linking
+ *
+ * Returns the effective ResidentRef and whether a quarantine record was created.
+ */
+const resolveResidentRef = (
+  mrn: string,
+  context: ImportContext,
+  rowNumber: number,
+  type: MigrationDatasetType
+): { ref: ResidentRef; quarantined: boolean } => {
+  const residentList = Object.values(context.residents);
+
+  // Tier 1: active census
+  const isActive = residentList.some(
+    (r) => r.mrn === mrn && !r.isHistorical && r.status !== 'Discharged' && r.status !== 'Deceased'
+  );
+  if (isActive) return { ref: { kind: 'mrn', id: mrn }, quarantined: false };
+
+  // Tier 2: historical list
+  const isHistorical = residentList.some(
+    (r) => r.mrn === mrn && r.isHistorical === true
+  );
+  if (isHistorical) return { ref: { kind: 'mrn', id: mrn }, quarantined: false };
+
+  // Tier 3: not found anywhere — create quarantine placeholder
+  const quarantineId = `Q:${context.createId()}`;
+  context.quarantine[quarantineId] = {
+    tempId: quarantineId,
+    displayName: `MRN ${mrn}`,
+    source: 'census_missing_mrn',
+    rawHint: `${type} row ${rowNumber} — MRN: ${mrn}`,
+    createdAt: context.nowISO,
+    updatedAt: context.nowISO,
+  };
+  return { ref: { kind: 'quarantine', id: quarantineId }, quarantined: true };
 };
 
 const findExistingRecordId = (
@@ -288,6 +331,7 @@ export const importMappedRows = (
   const errors: ImportRowError[] = [];
   let importedCount = 0;
   let updatedCount = 0;
+  let quarantineCreated = 0;
 
   rows.forEach((row, rowIndex) => {
     const rowNumber = rowIndex + 2;
@@ -296,18 +340,13 @@ export const importMappedRows = (
       errors.push({ rowNumber, message: "Missing resident linkage (residentId or MRN)." });
       return;
     }
+
+    // 3-tier resolution — only applies to MRN-based refs (Q: refs pass through as-is)
     let effectiveResidentRef = residentRef;
-    if (residentRef.kind === "mrn" && !context.residents[residentRef.id]) {
-      const quarantineId = `Q:${context.createId()}`;
-      context.quarantine[quarantineId] = {
-        tempId: quarantineId,
-        displayName: `MRN ${residentRef.id}`,
-        source: "legacy_import",
-        rawHint: `Imported ${type} row ${rowNumber}`,
-        createdAt: context.nowISO,
-        updatedAt: context.nowISO,
-      };
-      effectiveResidentRef = { kind: "quarantine", id: quarantineId };
+    if (residentRef.kind === "mrn") {
+      const { ref, quarantined } = resolveResidentRef(residentRef.id, context, rowNumber, type);
+      effectiveResidentRef = ref;
+      if (quarantined) quarantineCreated++;
     }
 
     const dateFields: Record<MigrationDatasetType, string[]> = {
@@ -327,6 +366,7 @@ export const importMappedRows = (
     const id = existingId || context.createId();
     const createdAt = getMappedValue(row, mapping, "createdAt") || context.nowISO;
     const updatedAt = getMappedValue(row, mapping, "updatedAt") || context.nowISO;
+
     if (type === "ABT") {
       const status = normalizeStatus("ABT", getMappedValue(row, mapping, "status")) || "completed";
       const medication = getMappedValue(row, mapping, "medication");
@@ -419,9 +459,5 @@ export const importMappedRows = (
     else importedCount++;
   });
 
-  return {
-    importedCount,
-    updatedCount,
-    errors,
-  };
+  return { importedCount, updatedCount, errors, quarantineCreated };
 };

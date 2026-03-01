@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { ABTCourse } from "../domain/models";
+import type { ResolutionLevel } from "./rawAbtOrderListingParser";
 
 export type AbtStagingStatus = "OK" | "NEEDS_REVIEW" | "ERROR" | "DUPLICATE";
 
@@ -32,6 +33,9 @@ export interface AbtCsvStagingRow {
   warnings: string[];
   skip: boolean;
   duplicateMatch?: AbtCsvDuplicateMatch;
+  /** Populated by the wizard after parsing — never set by the parser itself. */
+  residentResolution: ResolutionLevel;
+  residentDisplayName: string;
 }
 
 const FIELD_ALIASES: Record<keyof AbtCsvRowData, string[]> = {
@@ -182,6 +186,9 @@ export const evaluateAbtStagingRow = (rowId: string, data: AbtCsvRowData, existi
     warnings,
     skip: status === "ERROR" || status === "DUPLICATE",
     duplicateMatch,
+    // Resolution fields — wizard populates these after parsing
+    residentResolution: 'unresolved',
+    residentDisplayName: '',
   };
 };
 
