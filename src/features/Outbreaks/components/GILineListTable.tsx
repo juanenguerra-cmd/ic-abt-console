@@ -1,5 +1,7 @@
 import React from 'react';
 import { EditableCell, RowModel } from './LineListReportTab';
+import { OnsetDateCell } from './OnsetDateCell';
+import { useCorrectOnsetDate } from '../hooks/useCorrectOnsetDate';
 
 interface Props {
   rows: RowModel[];
@@ -19,6 +21,7 @@ function getInitials(name: string): string {
 }
 
 export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate }) => {
+  const { correctOnset } = useCorrectOnsetDate();
   const paddedRows: RowModel[] = [...rows];
   while (paddedRows.length < MIN_ROWS) {
     paddedRows.push({
@@ -154,7 +157,15 @@ export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate
               <EditableCell value={getInitials(row.name)} autoFilled={!!row.name} />
               <EditableCell value={row.unit} autoFilled={!!row.unit} />
               <EditableCell value={row.room} autoFilled={!!row.room} />
-              <EditableCell value={row.onsetDate} autoFilled={!!row.onsetDate} />
+              {row.eventId ? (
+                <OnsetDateCell
+                  eventId={row.eventId}
+                  originalDate={row.onsetDateISO ?? ''}
+                  onCorrected={correctOnset}
+                />
+              ) : (
+                <EditableCell value="" />
+              )}
               {/* Severity */}
               <EditableCell value={row.fever} autoFilled={row.fever !== '' && row.fever !== 'U'} />
               <EditableCell value="" /> {/* T max */}

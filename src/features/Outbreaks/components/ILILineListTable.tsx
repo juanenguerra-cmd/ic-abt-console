@@ -1,5 +1,7 @@
 import React from 'react';
 import { EditableCell, RowModel } from './LineListReportTab';
+import { OnsetDateCell } from './OnsetDateCell';
+import { useCorrectOnsetDate } from '../hooks/useCorrectOnsetDate';
 
 interface Props {
   rows: RowModel[];
@@ -11,6 +13,7 @@ interface Props {
 const MIN_ROWS = 15;
 
 export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate }) => {
+  const { correctOnset } = useCorrectOnsetDate();
   const paddedRows: RowModel[] = [...rows];
   while (paddedRows.length < MIN_ROWS) {
     paddedRows.push({
@@ -164,7 +167,15 @@ export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDat
               <EditableCell value="" />
               <EditableCell value="" />
               {/* Onset Date */}
-              <EditableCell value={row.onsetDate} autoFilled={!!row.onsetDate} />
+              {row.eventId ? (
+                <OnsetDateCell
+                  eventId={row.eventId}
+                  originalDate={row.onsetDateISO ?? ''}
+                  onCorrected={correctOnset}
+                />
+              ) : (
+                <EditableCell value="" />
+              )}
               {/* Symptoms */}
               <EditableCell value="" /> {/* Highest Temp — manual */}
               <EditableCell value={row.symptoms.includes('cough') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
