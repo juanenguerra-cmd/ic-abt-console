@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield } from 'lucide-react';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
@@ -9,6 +9,7 @@ import { AdmissionScreeningModal } from './AdmissionScreeningModal';
 import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
 import { FloorLayout, Resident } from '../../domain/models';
+import { computeSymptomIndicators, SymptomIndicator } from '../../utils/symptomIndicators';
 
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 52;
@@ -114,6 +115,7 @@ export const Dashboard: React.FC = () => {
   const [showAbtModal, setShowAbtModal] = useState(false);
   const [showOutbreakModal, setShowOutbreakModal] = useState(false);
   const [selectedUnit, setSelectedUnit] = useState<string>("all");
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [tileSize, setTileSize] = useState<number>(() => {
     const stored = localStorage.getItem(`ltc_floor_tile_size_global:${activeFacilityId}`);
     return stored ? Math.min(10, Math.max(1, parseInt(stored, 10))) : 5;
@@ -144,6 +146,46 @@ export const Dashboard: React.FC = () => {
     );
     return { ...layout, rooms: layout.rooms.filter(r => roomsInUnit.has(r.label || "")) };
   }, [layout, selectedUnit, store.residents]);
+
+  const symptomIndicators = useMemo((): Record<string, SymptomIndicator> => {
+    const nowMs = Date.now();
+    const perResident = computeSymptomIndicators(store, nowMs);
+    const perRoom: Record<string, SymptomIndicator> = {};
+    (Object.values(store.residents || {}) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .forEach(res => {
+        if (!res.currentRoom) return;
+        const sig = perResident[res.mrn];
+        if (!sig?.respiratory && !sig?.gi) return;
+        const room = filteredLayout.rooms.find(
+          r => r.label === res.currentRoom || r.label === res.currentRoom!.replace(/^\d/, '')
+        );
+        if (!room) return;
+        const existing = perRoom[room.roomId];
+        perRoom[room.roomId] = {
+          respiratory: (existing?.respiratory || sig.respiratory),
+          gi: (existing?.gi || sig.gi),
+        };
+      });
+    return perRoom;
+  }, [store, filteredLayout.rooms]);
+
+  const roomResidentsMap = useMemo(() => {
+    const map: Record<string, Resident[]> = {};
+    (Object.values(store.residents || {}) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .forEach(r => {
+        const room = filteredLayout.rooms.find(rm =>
+          rm.label === r.currentRoom ||
+          rm.label === r.currentRoom?.replace(/^\d/, '')
+        );
+        if (room) {
+          if (!map[room.roomId]) map[room.roomId] = [];
+          map[room.roomId].push(r);
+        }
+      });
+    return map;
+  }, [store.residents, filteredLayout.rooms]);
 
   // Calculate stats
   const activeResidents = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
@@ -542,7 +584,51 @@ export const Dashboard: React.FC = () => {
             facilityId={activeFacilityId}
             unitId={selectedUnit}
             roomStatuses={roomStatuses}
+            symptomIndicators={symptomIndicators}
+            onRoomClick={(roomId) => setSelectedRoomId(roomId)}
           />
+          {selectedRoomId && (() => {
+            const residents = roomResidentsMap[selectedRoomId] ?? [];
+            const roomLabel = filteredLayout.rooms.find(r => r.roomId === selectedRoomId)?.label ?? selectedRoomId;
+            const roomIndicator = symptomIndicators[selectedRoomId] ?? { respiratory: false, gi: false };
+            return (
+              <div className="mt-3 bg-neutral-50 border border-neutral-200 rounded-lg p-4 space-y-2 relative">
+                <button
+                  onClick={() => setSelectedRoomId(null)}
+                  className="absolute top-2 right-2 text-neutral-400 hover:text-neutral-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <p className="text-sm font-bold text-neutral-700">Room {roomLabel}</p>
+                {residents.length === 0 ? (
+                  <p className="text-sm text-neutral-400">Unoccupied</p>
+                ) : (
+                  residents.map(r => (
+                    <div key={r.mrn} className="flex items-center justify-between bg-white border border-neutral-200 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-neutral-800">{r.displayName}</p>
+                        <p className="text-xs text-neutral-400">MRN: {r.mrn}</p>
+                        <div className="flex gap-1 mt-0.5">
+                          {roomIndicator.respiratory && (
+                            <span className="text-[9px] font-bold bg-orange-500 text-white px-1 rounded">Resp 96h</span>
+                          )}
+                          {roomIndicator.gi && (
+                            <span className="text-[9px] font-bold bg-purple-500 text-white px-1 rounded">GI 96h</span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate('/resident-board', { state: { focusMrn: r.mrn } })}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                      >
+                        View Profile →
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
       {showCensusModal && <CensusModal onClose={() => setShowCensusModal(false)} />}
