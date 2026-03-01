@@ -128,6 +128,13 @@ ic-abt-console/
 
 ---
 
+
+## User Guide
+
+For a screen-by-screen functional walkthrough, see **[docs/user-guide-screens.md](docs/user-guide-screens.md)**.
+
+---
+
 ## License & Credits
 
 Developed and built by **Juan Enguerra**. © 2026 All Rights Reserved.
