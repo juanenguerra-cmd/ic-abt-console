@@ -132,4 +132,4 @@ The Data Field Reference covers all entity types (Resident, IP Events, ABT/Antib
 - Developer checklist for adding or modifying fields
 - Critical field examples with code snippets
 
-> **In-app location:** Open the left sidebar → **User Guide** → scroll to the **Data Field Reference** section or click the **Data Field Reference** link at the top of the page.
+> **In-app location:** Open the left sidebar → **User Guide** → click the **Data Field Reference** tab at the top of the page.
