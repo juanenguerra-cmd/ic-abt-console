@@ -2,6 +2,8 @@
 
 This guide explains what each major screen does and when to use it.
 
+> **In-app location:** Open the left sidebar and click **User Guide**.
+
 ## 1) Dashboard
 **Purpose:** Daily command center for infection-control priorities.
 
