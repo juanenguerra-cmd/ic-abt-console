@@ -7,6 +7,7 @@ import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 import { CsvMigrationWizard } from "./CsvMigrationWizard";
 import { useNavigate } from "react-router-dom";
+import { LS_LAST_BACKUP_TS } from "../../constants/storageKeys";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
@@ -130,7 +131,7 @@ export const SettingsConsole: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    localStorage.setItem('ltc_last_backup_timestamp', Date.now().toString());
+    localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString());
   };
 
   const handleRestorePrev = () => {

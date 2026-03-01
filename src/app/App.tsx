@@ -8,6 +8,7 @@ import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
 import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
 import { FloorMap } from "../features/Heatmap/FloorMap";
+import { LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { Floorplan } from "../features/Floorplan";
 import { ResidentChat } from "../features/Notes";
 import { ShiftLogPage } from "../features/Notes/ShiftLogPage";
@@ -102,7 +103,7 @@ const AppShell = () => {
   const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
 
   React.useEffect(() => {
-    const lastBackupTimestamp = localStorage.getItem('ltc_last_backup_timestamp');
+    const lastBackupTimestamp = localStorage.getItem(LS_LAST_BACKUP_TS);
     if (lastBackupTimestamp) {
       const lastBackupDate = new Date(parseInt(lastBackupTimestamp, 10));
       const oneDayAgo = new Date();
