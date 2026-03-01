@@ -66,25 +66,31 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   const canvasWidth = Math.max(maxX + 40, 800);
   const canvasHeight = Math.max(maxY + 40, 400);
 
-  const getRoomTooltip = (roomLabel: string, roomId: string) => {
-    const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
-    if (residents.length === 0) return `Room ${roomLabel} (Unoccupied)`;
-
-    return residents.map(res => {
-      const precaution = (Object.values(store.infections) as IPEvent[]).find(ip => 
-        ip.residentRef.kind === 'mrn' && 
-        ip.residentRef.id === res.mrn && 
-        ip.status === 'active' && 
-        ip.isolationType
+  const getPrecautionLabel = (roomId: string): string | null => {
+    const status = roomStatuses[roomId];
+    if (!status || status === 'normal') return null;
+    if (status === 'ebp') return 'E';
+    if (status === 'outbreak') return 'OB';
+    if (status === 'isolation') {
+      const room = layout.rooms.find(r => r.roomId === roomId);
+      const roomLabel = room?.label || roomId;
+      const resident = (Object.values(store.residents) as Resident[]).find(
+        r => !r.isHistorical && !r.backOfficeOnly &&
+          (r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel)
       );
-      const precautionText = precaution ? `Precaution: ${precaution.isolationType}` : 'No Precautions';
-      const indicator = symptomIndicators[roomId];
-      const symptomParts: string[] = [];
-      if (indicator?.respiratory) symptomParts.push('Respiratory (96h)');
-      if (indicator?.gi) symptomParts.push('GI (96h)');
-      const symptomText = symptomParts.length > 0 ? ` | ⚠ ${symptomParts.join(', ')}` : '';
-      return `${res.displayName} - ${precautionText}${symptomText}`;
-    }).join('\n');
+      if (!resident) return 'ISO';
+      const ipEvent = (Object.values(store.infections) as IPEvent[]).find(
+        ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === resident.mrn && ip.status === 'active'
+      );
+      const isoType = ipEvent?.isolationType?.trim();
+      if (!isoType) return 'ISO';
+      if (isoType === 'Contact') return 'C';
+      if (isoType === 'Droplet') return 'D';
+      if (isoType === 'Airborne') return 'A';
+      if (isoType === 'Contact/Droplet') return 'C/D';
+      return 'ISO';
+    }
+    return null;
   };
 
   const roomById = React.useMemo(
@@ -252,8 +258,55 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                 }
                 return null;
               })()}
-              <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-neutral-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 whitespace-pre-wrap">
-                {getRoomTooltip(room.label || room.roomId, room.roomId)}
+              {(() => {
+                const precautionLabel = getPrecautionLabel(room.roomId);
+                if (!precautionLabel) return null;
+                return (
+                  <span className="absolute bottom-0.5 left-1 text-[9px] font-black leading-none opacity-80 tracking-tighter">
+                    {precautionLabel}
+                  </span>
+                );
+              })()}
+              <div className="absolute bottom-full mb-2 min-w-[160px] max-w-[240px] bg-neutral-800 rounded-lg p-2 space-y-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
+                {(() => {
+                  const roomLabel = room.label || room.roomId;
+                  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
+                  if (residents.length === 0) {
+                    return <span className="text-neutral-400 text-xs">Unoccupied</span>;
+                  }
+                  return residents.map(res => {
+                    const status = roomStatuses[room.roomId];
+                    const indicator = symptomIndicators[room.roomId];
+                    let pillClass = '';
+                    let pillLabel = '';
+                    if (status === 'isolation') {
+                      pillClass = 'bg-yellow-400 text-yellow-900';
+                      pillLabel = 'Isolation';
+                    } else if (status === 'ebp') {
+                      pillClass = 'bg-blue-400 text-blue-900';
+                      pillLabel = 'EBP';
+                    } else if (status === 'outbreak') {
+                      pillClass = 'bg-red-400 text-red-900';
+                      pillLabel = 'Outbreak';
+                    }
+                    return (
+                      <div key={res.mrn}>
+                        <p className="font-semibold text-white text-xs">{res.displayName}</p>
+                        {pillLabel ? (
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${pillClass}`}>{pillLabel}</span>
+                        ) : (
+                          <span className="text-neutral-300 text-[10px]">No Precautions</span>
+                        )}
+                        {indicator?.respiratory && (
+                          <span className="bg-orange-500 text-white px-1 rounded text-[9px] font-bold ml-1">Resp 96h</span>
+                        )}
+                        {indicator?.gi && (
+                          <span className="bg-purple-500 text-white px-1 rounded text-[9px] font-bold ml-1">GI 96h</span>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           );
@@ -263,22 +316,36 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       
       {/* Legend */}
       <div className="mt-6 flex flex-wrap gap-4 justify-center">
-        {(Object.keys(STATUS_COLORS) as RoomStatus[]).map((status) => (
-          <div key={status} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded border-2 ${STATUS_COLORS[status].split(' ')[0]} ${STATUS_COLORS[status].split(' ')[1]}`}></div>
-            <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">
-              {status}
-            </span>
-          </div>
-        ))}
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-bold bg-orange-500 text-white px-1 rounded">R</span>
-          <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">Respiratory (96h)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] font-bold bg-purple-500 text-white px-1 rounded">G</span>
-          <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">GI (96h)</span>
-        </div>
+        {(() => {
+          const statusCounts = (Object.keys(STATUS_COLORS) as RoomStatus[])
+            .reduce((acc, s) => ({
+              ...acc,
+              [s]: Object.values(roomStatuses).filter(v => v === s).length,
+            }), {} as Record<RoomStatus, number>);
+          statusCounts['normal'] = layout.rooms.length - Object.values(roomStatuses).length;
+          const respCount = layout.rooms.filter(r => symptomIndicators[r.roomId]?.respiratory).length;
+          const giCount = layout.rooms.filter(r => symptomIndicators[r.roomId]?.gi).length;
+          return (
+            <>
+              {(Object.keys(STATUS_COLORS) as RoomStatus[]).map((status) => (
+                <div key={status} className="flex items-center gap-2">
+                  <div className={`w-4 h-4 rounded border-2 ${STATUS_COLORS[status].split(' ')[0]} ${STATUS_COLORS[status].split(' ')[1]}`}></div>
+                  <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">
+                    {status} ({statusCounts[status] ?? 0})
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold bg-orange-500 text-white px-1 rounded">R</span>
+                <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">Respiratory 96H ({respCount})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold bg-purple-500 text-white px-1 rounded">G</span>
+                <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">GI 96H ({giCount})</span>
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
