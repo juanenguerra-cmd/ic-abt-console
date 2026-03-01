@@ -132,6 +132,16 @@ export const OutbreakManager: React.FC = () => {
                 >
                   SITREP / Daily Status
                 </button>
+                <button
+                  onClick={() => setActiveTab("linelist-report")}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === "linelist-report" 
+                      ? "bg-white text-neutral-900 shadow-sm" 
+                      : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                >
+                  Line List Report
+                </button>
               </div>
             </div>
 
