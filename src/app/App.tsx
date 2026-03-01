@@ -1,11 +1,10 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
-import { RoleProvider } from "../context/RoleContext";
+import { RoleProvider, useRole } from "../context/RoleContext";
 import { RoleGuard, NotAuthorisedPage } from "./guards/RoleGuard";
 import { LS_LAST_ACTIVE_TS, IDLE_THRESHOLD_MS, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { RoleProvider } from "../context/RoleContext";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
@@ -25,6 +24,7 @@ import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
+import { FloorMap } from '../features/Heatmap/FloorMap';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -53,6 +53,21 @@ import { motion, AnimatePresence } from "motion/react";
 const FloorplanPage = () => {
   const navigate = useNavigate();
   return <Floorplan onBack={() => navigate(-1)} />;
+};
+
+const HeatmapPage = () => {
+  const { activeFacilityId } = useFacilityData();
+  const { db } = useDatabase();
+  const facility = db.data.facilities.byId[activeFacilityId];
+  const layout = facility?.floorLayouts?.[0] ?? {
+    id: 'heatmap-default',
+    facilityId: activeFacilityId,
+    name: 'Heatmap',
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    rooms: [],
+  };
+  return <FloorMap layout={layout} facilityId={activeFacilityId} />;
 };
 
 const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: any, label: string, badge?: number, alertBadge?: boolean }) => {
@@ -97,6 +112,7 @@ const AppShell = () => {
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
+  const { can, role } = useRole();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isFacilitySwitcherOpen, setIsFacilitySwitcherOpen] = React.useState(false);
   const facilitySwitcherRef = React.useRef<HTMLDivElement>(null);
@@ -295,18 +311,19 @@ const AppShell = () => {
             <SidebarLink to="/heatmap" icon={Activity} label="Heatmap" />
             <SidebarLink to="/staff" icon={Users} label="Staff" />
             
-            <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
-            <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
+            {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
+            {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
             <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
-            <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
-            <SidebarLink to="/reports" icon={FileText} label="Reports" />
-            <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />
-            <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />
+            {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
+            {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
+            {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
+            {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
             <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />
-            <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />
+            {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
+            {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
             
             <div className="pt-4 mt-4 border-t border-neutral-100">
-              <SidebarLink to="/settings" icon={Settings} label="Settings" />
+              {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
             </div>
           </nav>
         </aside>
@@ -319,22 +336,22 @@ const AppShell = () => {
                 <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floorplan" element={<PageTransition><FloorplanPage /></PageTransition>} />
-                <Route path="/heatmap" element={<PageTransition><FloorplanPage /></PageTransition>} />
+                <Route path="/heatmap" element={<PageTransition><HeatmapPage /></PageTransition>} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><ShiftLogPage /></PageTransition>} />
-                <Route path="/note-generator" element={<PageTransition><NoteGenerator /></PageTransition>} />
+                <Route path="/note-generator" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><NoteGenerator /></RoleGuard></PageTransition>} />
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
                 <Route path="/reports/forms" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
                 <Route path="/reports/antibiogram" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AntibiogramPage /></RoleGuard></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><InfectionControlAuditCenter /></RoleGuard></PageTransition>} />
-                <Route path="/report-builder" element={<PageTransition><ReportBuilder /></PageTransition>} />
+                <Route path="/report-builder" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><ReportBuilder /></RoleGuard></PageTransition>} />
                 <Route path="/print/audit-report" element={<AuditReportPrint />} />
-                <Route path="/quarantine" element={<PageTransition><div className="p-6"><QuarantineInbox /></div></PageTransition>} />
+                <Route path="/quarantine" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><div className="p-6"><QuarantineInbox /></div></RoleGuard></PageTransition>} />
                 <Route path="/settings" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><div className="p-6"><SettingsConsole /></div></RoleGuard></PageTransition>} />
-                <Route path="/back-office" element={<PageTransition><BackOfficePage /></PageTransition>} />
+                <Route path="/back-office" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><BackOfficePage /></RoleGuard></PageTransition>} />
                 <Route path="/not-authorised" element={<PageTransition><div className="p-6"><NotAuthorisedPage /></div></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
