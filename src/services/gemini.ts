@@ -1,26 +1,9 @@
-// Requires @google/genai >= 1.0.0
-// Uses the GoogleGenAI client introduced in @google/genai ^1.x.
-// Do NOT use the older @google-cloud/aiplatform or @google/generative-ai patterns;
-// those use a different client instantiation and generateContent() call signature.
-import { GoogleGenAI } from "@google/genai";
-
-// process.env.GEMINI_API_KEY is injected at build time by vite.config.ts → define.
-const API_KEY = process.env.GEMINI_API_KEY as string | undefined;
-
-function getClient(): GoogleGenAI {
-  if (!API_KEY) {
-    throw new Error(
-      "GEMINI_API_KEY is not set. Add it to your .env.local file."
-    );
-  }
-  return new GoogleGenAI({ apiKey: API_KEY });
-}
-
 /**
- * Generate text content via the Gemini API.
+ * Generate text content via the /api/generate proxy.
  *
- * Call signature follows @google/genai ^1.x:
- *   ai.models.generateContent({ model, contents })
+ * The proxy (functions/api/generate.ts) forwards the request to the Gemini
+ * API using GEMINI_API_KEY stored in Cloudflare Pages environment variables,
+ * so the key is never exposed to the browser.
  *
  * @param prompt  The prompt string to send to the model.
  * @param model   The Gemini model ID (defaults to "gemini-2.0-flash").
@@ -30,10 +13,12 @@ export async function generateContent(
   prompt: string,
   model = "gemini-2.0-flash"
 ): Promise<string> {
-  const ai = getClient();
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  const response = await fetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, model }),
   });
-  return response.text ?? "";
+  if (!response.ok) throw new Error("AI generation failed");
+  const data = await response.json() as { text?: string };
+  return data.text ?? "";
 }
