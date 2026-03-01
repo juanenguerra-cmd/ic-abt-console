@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 interface Props {
   notification: AppNotification;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
 /** Derive a human-readable symptom class and infectionCategory from the notification message/refs. */
@@ -30,7 +31,7 @@ function deriveSymptomClass(notif: AppNotification): {
 
 const MS_96H = 96 * 60 * 60 * 1000;
 
-export const AddToLineListModal: React.FC<Props> = ({ notification, onClose }) => {
+export const AddToLineListModal: React.FC<Props> = ({ notification, onClose, onSaved }) => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
 
@@ -100,6 +101,7 @@ export const AddToLineListModal: React.FC<Props> = ({ notification, onClose }) =
       }
     });
 
+    onSaved?.();
     onClose();
   };
 

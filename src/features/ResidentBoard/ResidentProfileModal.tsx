@@ -71,9 +71,15 @@ export const ResidentProfileModal: React.FC<Props> = ({
     </div>
   );
 
-  const activeABTs = (Object.values(store.abts) as any[]).filter(a => a.status === 'active' && a.residentRef.id === residentId);
-  const activeInfections = (Object.values(store.infections) as any[]).filter(i => i.status === 'active' && i.residentRef.id === residentId);
-  const vaxEvents = (Object.values(store.vaxEvents) as any[]).filter(v => v.residentRef.id === residentId);
+  const residentAbts = (Object.values(store.abts) as any[]).filter(a => a.residentRef.kind === 'mrn' && a.residentRef.id === residentId).sort((a: any, b: any) => (b.startDate || b.createdAt || '0000-00-00').localeCompare(a.startDate || a.createdAt || '0000-00-00'));
+  const residentInfections = (Object.values(store.infections) as any[]).filter(i => i.residentRef.kind === 'mrn' && i.residentRef.id === residentId).sort((a: any, b: any) => (b.onsetDate || b.createdAt || '0000-00-00').localeCompare(a.onsetDate || a.createdAt || '0000-00-00'));
+  const vaxEvents = (Object.values(store.vaxEvents) as any[]).filter(v => v.residentRef.kind === 'mrn' && v.residentRef.id === residentId);
+
+  const getStatusBadgeClasses = (status: string): string => {
+    if (status === 'active') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (status === 'completed') return 'bg-green-100 text-green-700 border-green-200';
+    return 'bg-neutral-100 text-neutral-600 border-neutral-300';
+  };
 
   const getAge = (dobStr?: string) => {
     const birthDate = new Date(dobStr);
@@ -278,25 +284,37 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 </div>
               </div>
               <div className="space-y-3">
-                {activeABTs.map(abt => (
-                  <div key={abt.id} onClick={() => onEditAbt(abt.id)} className="flex items-start gap-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:shadow-sm transition-shadow">
-                    <Activity className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold text-emerald-900">Active ABT: {abt.medication}</p>
-                      <p className="text-xs text-emerald-700">{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}</p>
+                {residentAbts.map((abt: any) => {
+                  const isActive = abt.status === 'active';
+                  return (
+                    <div key={abt.id} onClick={() => onEditAbt(abt.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${isActive ? 'bg-emerald-50 border-emerald-100' : 'bg-neutral-50 border-neutral-200'}`}>
+                      <Activity className={`w-5 h-5 shrink-0 mt-0.5 ${isActive ? 'text-emerald-600' : 'text-neutral-400'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold ${isActive ? 'text-emerald-900' : 'text-neutral-700'}`}>
+                          ABT: {abt.medication}
+                          <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(abt.status)}`}>{abt.status}</span>
+                        </p>
+                        <p className={`text-xs ${isActive ? 'text-emerald-700' : 'text-neutral-500'}`}>{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}{abt.endDate ? ` • Ended: ${new Date(abt.endDate).toLocaleDateString()}` : ''}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {activeInfections.map(ip => (
-                  <div key={ip.id} onClick={() => onEditIp(ip.id)} className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:shadow-sm transition-shadow">
-                    <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold text-amber-900">Active Infection: {ip.infectionCategory || 'Unspecified'}</p>
-                      <p className="text-xs text-amber-700">{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
+                  );
+                })}
+                {residentInfections.map((ip: any) => {
+                  const isActive = ip.status === 'active';
+                  return (
+                    <div key={ip.id} onClick={() => onEditIp(ip.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${isActive ? 'bg-amber-50 border-amber-100' : 'bg-neutral-50 border-neutral-200'}`}>
+                      <Shield className={`w-5 h-5 shrink-0 mt-0.5 ${isActive ? 'text-amber-600' : 'text-neutral-400'}`} />
+                      <div>
+                        <p className={`text-sm font-bold ${isActive ? 'text-amber-900' : 'text-neutral-700'}`}>
+                          Infection: {ip.infectionCategory || 'Unspecified'}
+                          <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(ip.status)}`}>{ip.status}</span>
+                        </p>
+                        <p className={`text-xs ${isActive ? 'text-amber-700' : 'text-neutral-500'}`}>{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {vaxEvents.map(vax => (
+                  );
+                })}
+                {vaxEvents.map((vax: any) => (
                   <div key={vax.id} onClick={() => onEditVax(vax.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${vax.status === 'due' || vax.status === 'overdue' ? 'bg-purple-50 border-purple-100' : 'bg-neutral-50 border-neutral-200'}`}>
                     <Syringe className={`w-5 h-5 shrink-0 mt-0.5 ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-600' : 'text-neutral-500'}`} />
                     <div>
@@ -309,7 +327,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                     </div>
                   </div>
                 ))}
-                {!activeABTs.length && !activeInfections.length && !vaxEvents.length && (
+                {!residentAbts.length && !residentInfections.length && !vaxEvents.length && (
                   <p className="text-sm text-neutral-500 italic">No clinical events logged.</p>
                 )}
               </div>
