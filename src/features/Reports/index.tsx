@@ -4,7 +4,7 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { FileText } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
 
@@ -124,8 +124,69 @@ const SurveyPacketsReport: React.FC = () => {
     [store.abts, store.residents, store.quarantine]
   );
 
+  // E6: Generate Line List CSV — merges active IP events + active ABTs
+  const handleExportLineList = () => {
+    const now = new Date().toISOString().split('T')[0];
+    const rows: string[][] = [];
+    rows.push(['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes']);
+
+    activePrecautions.forEach(({ ip, res }) => {
+      rows.push([
+        'IP Event',
+        residentLabel(res),
+        (res as any)?.mrn || '',
+        ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+        ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
+        ip.infectionCategory || '',
+        ip.isolationType || '',
+        ip.organism || '',
+        ip.onsetDate || ip.createdAt?.split('T')[0] || '',
+        ip.status,
+        ip.notes || '',
+      ]);
+    });
+
+    activeAbts.forEach(({ abt, res }) => {
+      rows.push([
+        'ABT Course',
+        residentLabel(res),
+        (res as any)?.mrn || '',
+        abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+        abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
+        abt.syndromeCategory || abt.indication || '',
+        '',
+        abt.organismIdentified || '',
+        abt.startDate || '',
+        abt.status,
+        abt.notes || '',
+      ]);
+    });
+
+    const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `line_list_${now}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
+      {/* E6: Line List Export */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleExportLineList}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
+        >
+          <Download className="w-4 h-4" />
+          Generate Line List (CSV)
+        </button>
+      </div>
+
       <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
           <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List</h3>

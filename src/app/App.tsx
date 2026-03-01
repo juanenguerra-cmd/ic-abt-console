@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ResidentBoard } from "../features/ResidentBoard";
@@ -37,7 +37,8 @@ import {
   FileBarChart,
   PenSquare,
   ClipboardCheck,
-  Bell
+  Bell,
+  Database
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -80,26 +81,38 @@ const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string,
 
 const AppShell = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const isPrintRoute = location.pathname === "/print/audit-report";
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
+  const [lastBackupLabel, setLastBackupLabel] = React.useState<string | null>(null);
   const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
 
   React.useEffect(() => {
     const lastBackupTimestamp = localStorage.getItem('ltc_last_backup_timestamp');
     if (lastBackupTimestamp) {
       const lastBackupDate = new Date(parseInt(lastBackupTimestamp, 10));
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      if (lastBackupDate < sevenDaysAgo) {
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      if (lastBackupDate < oneDayAgo) {
         setShowBackupBanner(true);
+      }
+      // Format a human-readable label for the header badge
+      const diffMs = Date.now() - lastBackupDate.getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours < 24) {
+        setLastBackupLabel(`Backup: ${diffHours}h ago`);
+      } else {
+        const diffDays = Math.floor(diffHours / 24);
+        setLastBackupLabel(`Backup: ${diffDays}d ago`);
       }
     } else {
       // If no backup has ever been made, show the banner
       setShowBackupBanner(true);
+      setLastBackupLabel('No backup');
     }
   }, []);
 
@@ -119,7 +132,8 @@ const AppShell = () => {
     <div className="min-h-screen bg-neutral-50 flex flex-col">
       {showBackupBanner && (
         <div className="bg-red-600 text-white text-sm text-center py-2 px-4">
-          <strong>Warning:</strong> Your last backup was over 7 days ago. Please go to Settings to create a new backup.
+          <strong>Warning:</strong> No backup in the last 24 hours. Go to{' '}
+          <a href="/settings" className="underline font-semibold hover:text-red-100">Settings</a> to create a backup now.
         </div>
       )}
       {/* Top Navigation */}
@@ -176,6 +190,23 @@ const AppShell = () => {
             </div>
           </div>
           
+          {/* G7: Last backup badge */}
+          {lastBackupLabel && (
+            <button
+              onClick={() => navigate('/settings')}
+              title="Click to go to Settings and create a backup"
+              className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                showBackupBanner
+                  ? 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+              }`}
+              aria-label={`Last backup status: ${lastBackupLabel}`}
+            >
+              <Database className="w-3 h-3" aria-hidden="true" />
+              {lastBackupLabel}
+            </button>
+          )}
+
           <div className="h-8 w-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-500 font-medium text-sm" aria-label="Current user: JD">
             JD
           </div>

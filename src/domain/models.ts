@@ -406,7 +406,7 @@ export interface AppNotification {
   facilityId: string;
   createdAtISO: string;
   status: 'unread' | 'read' | 'dismissed';
-  category: 'LINE_LIST_REVIEW' | 'OUTBREAK_SUGGESTION' | 'VAX_GAP' | 'DEVICE_LINK' | 'ADMISSION_SCREENING' | 'SYMPTOM_WATCH' | 'ABT_STEWARDSHIP' | 'DEVICE_REVIEW' | 'VAX_REOFFER';
+  category: 'LINE_LIST_REVIEW' | 'OUTBREAK_SUGGESTION' | 'VAX_GAP' | 'DEVICE_LINK' | 'ADMISSION_SCREENING' | 'SYMPTOM_WATCH' | 'ABT_STEWARDSHIP' | 'DEVICE_REVIEW' | 'VAX_REOFFER' | 'AUDIT_OVERDUE';
   residentId?: string;
   unit?: string;
   room?: string;
@@ -419,6 +419,19 @@ export interface AppNotification {
     noteId?: string;
   };
   ruleId: string;
+}
+
+export interface MutationLogEntry {
+  /** ISO timestamp of the mutation. */
+  timestamp: ISO;
+  /** Identifier for the user/session performing the mutation (e.g. PIN-unlocked user label). */
+  who: string;
+  /** High-level action verb: 'create' | 'update' | 'delete'. */
+  action: 'create' | 'update' | 'delete';
+  /** Domain entity type, e.g. 'ABTCourse', 'IPEvent', 'Resident'. */
+  entityType: string;
+  /** Entity primary key (id, mrn, etc.). */
+  entityId: string;
 }
 
 export interface FacilityStore {
@@ -443,6 +456,8 @@ export interface FacilityStore {
   notifications: Record<string, AppNotification>;
   shiftLog?: Record<string, ShiftLogEntry>;
   dismissedRuleKeys?: string[];
+  /** Append-only audit log of data mutations. Capped at 500 most-recent entries. */
+  mutationLog?: MutationLogEntry[];
   notificationMeta?: {
     lastDetectionRunAtISO?: string;
     lastSeenEventAtISO?: string;

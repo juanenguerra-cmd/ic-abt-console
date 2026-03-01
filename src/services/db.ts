@@ -24,6 +24,7 @@ function createEmptyFacilityStore(): FacilityStore {
     surveyPackets: {},
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},
+    notifications: {},
   };
 }
 

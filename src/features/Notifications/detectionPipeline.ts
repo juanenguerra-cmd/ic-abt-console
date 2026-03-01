@@ -1,4 +1,4 @@
-import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident } from '../../domain/models';
+import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident, InfectionControlAuditItem } from '../../domain/models';
 
 export const runDetectionPipeline = (
   store: FacilityStore,
@@ -531,6 +531,33 @@ export const runDetectionPipeline = (
         }
       } catch {
         // ignore parse errors
+      }
+    }
+  });
+
+  // 11. Audit corrective-action overdue (AUDIT_OVERDUE) — E7
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  Object.values(store.infectionControlAuditItems || {}).forEach((item: InfectionControlAuditItem) => {
+    if (
+      item.response === 'NON_COMPLIANT' &&
+      item.correctiveAction?.trim() &&
+      item.dueDateISO?.trim() &&
+      !item.completedAt
+    ) {
+      const dueDate = new Date(item.dueDateISO);
+      if (dueDate < today) {
+        const sessionId = item.sessionId;
+        addNotif(
+          'audit_overdue_rule',
+          'AUDIT_OVERDUE',
+          undefined,
+          `${item.id}_${item.dueDateISO}`,
+          `Corrective action overdue (due ${item.dueDateISO.split('T')[0]}): "${item.correctiveAction.slice(0, 80)}${item.correctiveAction.length > 80 ? '…' : ''}" — ${item.questionText}`,
+          {},
+          undefined,
+          sessionId
+        );
       }
     }
   });
