@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDB } from "../context/DBContext";
-import { FloorLayout, FloorRoom } from "../types";
+import { FloorLayout, FloorRoom } from "../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { Plus, MapPin } from "lucide-react";
 

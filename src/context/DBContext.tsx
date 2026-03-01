@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { UnifiedDB, FacilityStore } from "../types";
+import { UnifiedDB, FacilityStore } from "../domain/models";
 import { loadDB, saveDB, createEmptyDB } from "../services/db";
 
 interface DBContextType {

@@ -1,4 +1,4 @@
-import { UnifiedDB, FacilityStore, ResidentRef } from "../types";
+import { UnifiedDB, FacilityStore, ResidentRef } from "../domain/models";
 
 const DB_KEY_MAIN = "UNIFIED_DB_MAIN";
 const DB_KEY_PREV = "UNIFIED_DB_PREV";

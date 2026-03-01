@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDB } from "../context/DBContext";
-import { Resident, QuarantineResident, Unit } from "../types";
+import { Resident, QuarantineResident, Unit } from "../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { Plus, Search, UserPlus } from "lucide-react";
 
