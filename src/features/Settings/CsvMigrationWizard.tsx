@@ -21,7 +21,7 @@ const DATASET_LABELS: Record<MigrationDatasetType, string> = {
   VAX: "VAX",
 };
 
-// ─── PATCH A: ABT Raw Staging — Dropdown Options & Cascade ─────────────────────
+// ─── ABT Raw Staging — Dropdown Options & Cascade ─────────────────────────────
 
 const SOURCE_OPTIONS = [
   "", "Urinary", "Respiratory", "Skin", "GI", "Bloodstream",
@@ -62,6 +62,16 @@ const INDICATION_CASCADE: Record<string, { category: string; syndrome: string }>
   Chronic:        { category: "Suppression",   syndrome: "Chronic Suppression" },
   Prophylaxis:    { category: "Prophylaxis",   syndrome: "Prophylaxis"         },
 };
+
+// ─── VAX Raw Staging — Dropdown Options ───────────────────────────────────────
+
+const VAX_TYPE_OPTIONS = [
+  "Influenza", "COVID-19", "Pneumococcal", "Shingles", "Other",
+];
+
+const VAX_STATUS_OPTIONS: Array<"Vaccinated" | "Historical" | "Refused"> = [
+  "Vaccinated", "Historical", "Refused",
+];
 
 export const CsvMigrationWizard: React.FC = () => {
   const { updateDB } = useDatabase();
@@ -115,7 +125,6 @@ export const CsvMigrationWizard: React.FC = () => {
           route === (row.routeNormalized || "Other").toLowerCase()
         );
       });
-
       if (!duplicate) return row;
       return {
         ...row,
@@ -174,7 +183,6 @@ export const CsvMigrationWizard: React.FC = () => {
       }
       return;
     }
-
     const parsed = parseCsv(rawCsv);
     if (!parsed.headers.length || !parsed.rows.length) {
       alert("CSV is missing headers or data rows.");
@@ -208,20 +216,13 @@ export const CsvMigrationWizard: React.FC = () => {
         alert("Cannot commit while unskipped error rows exist.");
         return;
       }
-
       let imported = 0;
       let skipped = 0;
-
       updateDB((draft) => {
         const facility = draft.data.facilityData[activeFacilityId];
         facility.abts = facility.abts || {};
-
         abtCsvRows.forEach((row) => {
-          if (row.skip || row.status === "ERROR") {
-            skipped += 1;
-            return;
-          }
-
+          if (row.skip || row.status === "ERROR") { skipped += 1; return; }
           const id = uuidv4();
           facility.abts[id] = {
             id,
@@ -241,12 +242,10 @@ export const CsvMigrationWizard: React.FC = () => {
           imported += 1;
         });
       });
-
       alert(`ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}`);
       setAbtCsvRows([]);
       return;
     }
-
     if (!rows.length || !mapping.length) {
       alert("Upload or paste CSV and parse it first.");
       return;
@@ -276,7 +275,6 @@ export const CsvMigrationWizard: React.FC = () => {
     setImportErrors(summary.errors);
   };
 
-  // ─── PATCH B: parseRawImport — prescriber enrichment removed ─────────────────────
   const parseRawImport = () => {
     if (datasetType === "ABT") {
       const parsed = parseRawAbtOrderListing(rawAbtText);
@@ -294,18 +292,15 @@ export const CsvMigrationWizard: React.FC = () => {
       alert("Cannot commit while unskipped error rows exist.");
       return;
     }
-
     let imported = 0;
     let skipped = 0;
     let duplicatesSkipped = 0;
     let errorsSkipped = 0;
-
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       facility.abts = facility.abts || {};
       facility.vaxEvents = facility.vaxEvents || {};
 
-      // ─── PATCH C: ABT commit block — prescriber removed ───────────────────
       if (datasetType === "ABT") {
         rawAbtRows.forEach((row) => {
           if (row.skip || row.status === "ERROR") {
@@ -315,7 +310,6 @@ export const CsvMigrationWizard: React.FC = () => {
               duplicatesSkipped += 1;
             return;
           }
-
           const id = uuidv4();
           facility.abts[id] = {
             id,
@@ -349,31 +343,29 @@ export const CsvMigrationWizard: React.FC = () => {
               duplicatesSkipped += 1;
             return;
           }
-
           const id = uuidv4();
           facility.vaxEvents[id] = {
             id,
-            residentRef: { kind: "mrn", id: row.mrn },
-            vaccine: row.vaccineType,
-            status: row.eventStatus as VaxEvent["status"],
+            residentRef:      { kind: "mrn", id: row.mrn },
+            vaccine:          row.vaccineType,
+            status:           row.eventStatus as VaxEvent["status"],
             administeredDate: row.eventDate,
-            dateGiven: row.eventDate,
-            source: "csv-import",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            dateGiven:        row.eventDate,
+            source:           "csv-import",
+            createdAt:        new Date().toISOString(),
+            updatedAt:        new Date().toISOString(),
           };
           imported += 1;
         });
       }
     });
-
     alert(`RAW import complete.\nImported: ${imported}\nSkipped: ${skipped}\nDuplicates skipped: ${duplicatesSkipped}\nErrors skipped: ${errorsSkipped}`);
   };
 
   const statusBadge = (status: string) => {
-    if (status === "ERROR") return <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">❌ Error</span>;
+    if (status === "ERROR")        return <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">❌ Error</span>;
     if (status === "NEEDS_REVIEW") return <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">⚠ Needs review</span>;
-    if (status === "DUPLICATE") return <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700">🟣 Duplicate</span>;
+    if (status === "DUPLICATE")    return <span className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700">🟣 Duplicate</span>;
     return <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">✅ Parsed</span>;
   };
 
@@ -386,6 +378,16 @@ export const CsvMigrationWizard: React.FC = () => {
       )
     );
   };
+
+  // ─── VAX staging helper — updates a single field on a row by id ───────────
+  const updateVaxRow = <K extends keyof RawVaxStagingRow>(
+    id: string,
+    field: K,
+    value: RawVaxStagingRow[K]
+  ) =>
+    setRawVaxRows((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
 
   return (
     <div className="space-y-4">
@@ -548,18 +550,26 @@ export const CsvMigrationWizard: React.FC = () => {
         <div className="border border-neutral-200 rounded-md p-4 space-y-3">
           {datasetType === "VAX" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select value={vaxTypeSelection} onChange={(event) => setVaxTypeSelection(event.target.value)} className="border border-neutral-300 rounded-md p-2 text-sm">
-                <option>Influenza</option>
-                <option>COVID-19</option>
-                <option>Pneumococcal</option>
-                <option>Shingles</option>
-                <option>Other</option>
-              </select>
-              <select value={vaxStatusSelection} onChange={(event) => setVaxStatusSelection(event.target.value as "Vaccinated" | "Historical" | "Refused")} className="border border-neutral-300 rounded-md p-2 text-sm">
-                <option>Vaccinated</option>
-                <option>Historical</option>
-                <option>Refused</option>
-              </select>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Default Vaccine Type</label>
+                <select
+                  value={vaxTypeSelection}
+                  onChange={(event) => setVaxTypeSelection(event.target.value)}
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm"
+                >
+                  {VAX_TYPE_OPTIONS.map((opt) => <option key={opt}>{opt}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-600">Default Event Status</label>
+                <select
+                  value={vaxStatusSelection}
+                  onChange={(event) => setVaxStatusSelection(event.target.value as "Vaccinated" | "Historical" | "Refused")}
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm"
+                >
+                  {VAX_STATUS_OPTIONS.map((opt) => <option key={opt}>{opt}</option>)}
+                </select>
+              </div>
             </div>
           )}
 
@@ -570,26 +580,28 @@ export const CsvMigrationWizard: React.FC = () => {
             rows={8}
             className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
           />
+
           <div className="flex gap-2">
             <button onClick={parseRawImport} className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700">Parse</button>
             <button
               onClick={() => {
-                if (datasetType === "ABT") {
-                  setRawAbtText("");
-                  setRawAbtRows([]);
-                } else {
-                  setRawVaxText("");
-                  setRawVaxRows([]);
-                }
+                if (datasetType === "ABT") { setRawAbtText(""); setRawAbtRows([]); }
+                else                       { setRawVaxText(""); setRawVaxRows([]); }
               }}
               className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700"
             >
               Clear
             </button>
-            <button onClick={commitRawImport} disabled={hasRawErrors} className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm">Commit Import</button>
+            <button
+              onClick={commitRawImport}
+              disabled={hasRawErrors}
+              className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm"
+            >
+              Commit Import
+            </button>
           </div>
 
-          {/* PATCH D: ABT RAW staging table — full editable preview with dropdowns */}
+          {/* ABT RAW staging table */}
           {datasetType === "ABT" && rawAbtRows.length > 0 && (
             <div className="overflow-x-auto border border-neutral-200 rounded-md">
               <table className="min-w-full text-xs">
@@ -626,98 +638,18 @@ export const CsvMigrationWizard: React.FC = () => {
                     return (
                       <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                         <td className="px-2 py-1">{statusBadge(row.status)}</td>
-
-                        {/* Skip */}
                         <td className="px-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={row.skip}
-                            onChange={(e) => updateField("skip", e.target.checked)}
-                          />
+                          <input type="checkbox" checked={row.skip} onChange={(e) => updateField("skip", e.target.checked)} />
                         </td>
-
-                        {/* MRN */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-20 text-xs"
-                            value={row.mrn}
-                            onChange={(e) => updateField("mrn", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Name */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-28 text-xs"
-                            value={row.residentNameRaw}
-                            onChange={(e) => updateField("residentNameRaw", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Medication */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-32 text-xs"
-                            value={row.medicationName}
-                            onChange={(e) => updateField("medicationName", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Dose */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-16 text-xs"
-                            value={row.dose}
-                            onChange={(e) => updateField("dose", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Route */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-14 text-xs"
-                            value={row.routeNormalized}
-                            onChange={(e) => updateField("routeNormalized", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Frequency */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-16 text-xs"
-                            value={row.frequencyNormalized}
-                            onChange={(e) => updateField("frequencyNormalized", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Start Date */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-24 text-xs"
-                            value={row.startDate}
-                            onChange={(e) => updateField("startDate", e.target.value)}
-                          />
-                        </td>
-
-                        {/* End Date */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-24 text-xs"
-                            value={row.endDate}
-                            onChange={(e) => updateField("endDate", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Indication (raw) */}
-                        <td className="px-2 py-1">
-                          <input
-                            className="border rounded p-1 w-24 text-xs"
-                            value={row.indicationRaw}
-                            onChange={(e) => updateField("indicationRaw", e.target.value)}
-                          />
-                        </td>
-
-                        {/* Source of Infection — dropdown, cascades Category + Syndrome */}
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-20 text-xs" value={row.mrn} onChange={(e) => updateField("mrn", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-28 text-xs" value={row.residentNameRaw} onChange={(e) => updateField("residentNameRaw", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-32 text-xs" value={row.medicationName} onChange={(e) => updateField("medicationName", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-16 text-xs" value={row.dose} onChange={(e) => updateField("dose", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-14 text-xs" value={row.routeNormalized} onChange={(e) => updateField("routeNormalized", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-16 text-xs" value={row.frequencyNormalized} onChange={(e) => updateField("frequencyNormalized", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.startDate} onChange={(e) => updateField("startDate", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.endDate} onChange={(e) => updateField("endDate", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.indicationRaw} onChange={(e) => updateField("indicationRaw", e.target.value)} /></td>
                         <td className="px-2 py-1">
                           <select
                             className="border rounded p-1 text-xs w-28"
@@ -739,39 +671,19 @@ export const CsvMigrationWizard: React.FC = () => {
                               );
                             }}
                           >
-                            {SOURCE_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt || "— select —"}</option>
-                            ))}
+                            {SOURCE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt || "— select —"}</option>)}
                           </select>
                         </td>
-
-                        {/* Indication Category — dropdown, independently editable */}
                         <td className="px-2 py-1">
-                          <select
-                            className="border rounded p-1 text-xs w-28"
-                            value={row.indicationCategory}
-                            onChange={(e) => updateField("indicationCategory", e.target.value)}
-                          >
-                            {CATEGORY_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt || "— select —"}</option>
-                            ))}
+                          <select className="border rounded p-1 text-xs w-28" value={row.indicationCategory} onChange={(e) => updateField("indicationCategory", e.target.value)}>
+                            {CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt || "— select —"}</option>)}
                           </select>
                         </td>
-
-                        {/* Syndrome — dropdown, independently editable */}
                         <td className="px-2 py-1">
-                          <select
-                            className="border rounded p-1 text-xs w-28"
-                            value={row.syndrome}
-                            onChange={(e) => updateField("syndrome", e.target.value)}
-                          >
-                            {SYNDROME_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt || "— select —"}</option>
-                            ))}
+                          <select className="border rounded p-1 text-xs w-28" value={row.syndrome} onChange={(e) => updateField("syndrome", e.target.value)}>
+                            {SYNDROME_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt || "— select —"}</option>)}
                           </select>
                         </td>
-
-                        {/* Flags */}
                         <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">
                           {row.errors.concat(row.warnings).join("; ")}
                         </td>
@@ -783,24 +695,89 @@ export const CsvMigrationWizard: React.FC = () => {
             </div>
           )}
 
+          {/* VAX RAW staging table */}
           {datasetType === "VAX" && rawVaxRows.length > 0 && (
             <div className="overflow-x-auto border border-neutral-200 rounded-md">
               <table className="min-w-full text-xs">
                 <thead className="bg-neutral-50">
                   <tr>
-                    <th className="px-2 py-1">Status</th><th className="px-2 py-1">Skip</th><th className="px-2 py-1">MRN</th><th className="px-2 py-1">Name</th><th className="px-2 py-1">Vaccine</th><th className="px-2 py-1">Event status</th><th className="px-2 py-1">Date</th>
+                    <th className="px-2 py-1">Status</th>
+                    <th className="px-2 py-1">Skip</th>
+                    <th className="px-2 py-1">MRN</th>
+                    <th className="px-2 py-1">Name</th>
+                    <th className="px-2 py-1">Vaccine Type</th>
+                    <th className="px-2 py-1">Event Status</th>
+                    <th className="px-2 py-1">Date</th>
+                    <th className="px-2 py-1">Flags</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rawVaxRows.map((row) => (
-                    <tr key={row.id}>
+                    <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                       <td className="px-2 py-1">{statusBadge(row.status)}</td>
-                      <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, skip: event.target.checked } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.mrn} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, mrn: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.residentNameRaw} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, residentNameRaw: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.vaccineType} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, vaccineType: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.eventStatus} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, eventStatus: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.eventDate} onChange={(event) => setRawVaxRows((prev) => prev.map((item) => item.id === row.id ? { ...item, eventDate: event.target.value } : item))} /></td>
+
+                      {/* Skip */}
+                      <td className="px-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={row.skip}
+                          onChange={(e) => updateVaxRow(row.id, "skip", e.target.checked)}
+                        />
+                      </td>
+
+                      {/* MRN */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="border rounded p-1 w-20 text-xs"
+                          value={row.mrn}
+                          onChange={(e) => updateVaxRow(row.id, "mrn", e.target.value)}
+                        />
+                      </td>
+
+                      {/* Name */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="border rounded p-1 w-28 text-xs"
+                          value={row.residentNameRaw}
+                          onChange={(e) => updateVaxRow(row.id, "residentNameRaw", e.target.value)}
+                        />
+                      </td>
+
+                      {/* Vaccine Type — dropdown */}
+                      <td className="px-2 py-1">
+                        <select
+                          className="border rounded p-1 text-xs w-28"
+                          value={row.vaccineType}
+                          onChange={(e) => updateVaxRow(row.id, "vaccineType", e.target.value)}
+                        >
+                          {VAX_TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      </td>
+
+                      {/* Event Status — dropdown */}
+                      <td className="px-2 py-1">
+                        <select
+                          className="border rounded p-1 text-xs w-24"
+                          value={row.eventStatus}
+                          onChange={(e) => updateVaxRow(row.id, "eventStatus", e.target.value as RawVaxStagingRow["eventStatus"])}
+                        >
+                          {VAX_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      </td>
+
+                      {/* Date */}
+                      <td className="px-2 py-1">
+                        <input
+                          className="border rounded p-1 w-24 text-xs"
+                          value={row.eventDate}
+                          onChange={(e) => updateVaxRow(row.id, "eventDate", e.target.value)}
+                        />
+                      </td>
+
+                      {/* Flags */}
+                      <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">
+                        {row.errors.concat(row.warnings).join("; ")}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -841,9 +818,7 @@ export const CsvMigrationWizard: React.FC = () => {
                         >
                           <option value="">(Unmapped)</option>
                           {fields.map((field) => (
-                            <option key={field} value={field}>
-                              {field}
-                            </option>
+                            <option key={field} value={field}>{field}</option>
                           ))}
                         </select>
                       </td>
@@ -870,7 +845,6 @@ export const CsvMigrationWizard: React.FC = () => {
               </ul>
             </div>
           )}
-
           <div>
             <h4 className="text-sm font-semibold text-neutral-900 mb-2">Preview (first 20 rows)</h4>
             <div className="overflow-x-auto max-h-64 border border-neutral-200">
@@ -878,9 +852,7 @@ export const CsvMigrationWizard: React.FC = () => {
                 <thead className="bg-neutral-50 sticky top-0">
                   <tr>
                     {headers.map((header) => (
-                      <th key={header} className="text-left px-2 py-1 border-b border-neutral-200">
-                        {header}
-                      </th>
+                      <th key={header} className="text-left px-2 py-1 border-b border-neutral-200">{header}</th>
                     ))}
                   </tr>
                 </thead>
