@@ -17,6 +17,29 @@ export interface AppEvent {
   payload: Record<string, any>;
 }
 
+const isRecord = (value: unknown): value is Record<string, any> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const normalizeEvent = (rawEvent: unknown): AppEvent | null => {
+  if (!isRecord(rawEvent)) return null;
+
+  const { id, timestamp, type, facilityId, userId, payload } = rawEvent;
+
+  if (typeof id !== "string" || typeof timestamp !== "string" || typeof type !== "string") {
+    return null;
+  }
+
+  return {
+    id,
+    timestamp,
+    type: type as AppEventType,
+    facilityId: typeof facilityId === "string" ? facilityId : undefined,
+    userId: typeof userId === "string" ? userId : undefined,
+    payload: isRecord(payload) ? payload : {}
+  };
+};
+
 const EVENTS_STORAGE_KEY = "UNIFIED_DB_EVENTS";
 
 /**
@@ -39,7 +62,10 @@ export const EventLogger = {
 
     try {
       const existingRaw = localStorage.getItem(EVENTS_STORAGE_KEY);
-      const events: AppEvent[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const parsedEvents: unknown[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const events: AppEvent[] = Array.isArray(parsedEvents)
+        ? parsedEvents.map(normalizeEvent).filter((event): event is AppEvent => Boolean(event))
+        : [];
       
       events.push(event);
       
@@ -55,7 +81,11 @@ export const EventLogger = {
   getEvents: (): AppEvent[] => {
     try {
       const existingRaw = localStorage.getItem(EVENTS_STORAGE_KEY);
-      return existingRaw ? JSON.parse(existingRaw) : [];
+      const parsedEvents: unknown = existingRaw ? JSON.parse(existingRaw) : [];
+      if (!Array.isArray(parsedEvents)) return [];
+      return parsedEvents
+        .map(normalizeEvent)
+        .filter((event): event is AppEvent => Boolean(event));
     } catch (e) {
       console.error("EventLogger: Failed to read event log.", e);
       return [];
