@@ -3,6 +3,7 @@ import { useFacilityData, useDatabase } from '../../app/providers';
 import { ArrowLeft } from 'lucide-react';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { FloorLayout, Resident } from '../../domain/models';
+import { computeSymptomIndicators, SymptomIndicator } from '../../utils/symptomIndicators';
 
 interface Props {
   onBack: () => void;
@@ -22,6 +23,14 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
     if (unit2) return unit2.id;
     return units[0]?.id || '';
   });
+
+  // Rolling clock for the 96-hour window — refreshes every 60 seconds so
+  // stale indicators expire automatically without a manual page reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const selectedUnit = units.find(u => u.id === selectedUnitId);
   const unitNumberPrefix = selectedUnit?.name.match(/\d+/)?.[0] || '';
@@ -116,6 +125,42 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
     return statuses;
   }, [store.residents, store.infections, layout.rooms]);
 
+  /**
+   * 96-hour rolling symptom indicators.
+   *
+   * Per-resident signals (from ABTs and notes) are mapped to the resident's
+   * current room so the FloorMap can render R / G badges.  Only residents who
+   * currently occupy a mapped room are included; discharged / historical
+   * residents are excluded because their currentRoom is cleared on discharge.
+   *
+   * nowMs is refreshed every 60 s so expired signals vanish without a reload.
+   */
+  const symptomIndicators = useMemo((): Record<string, SymptomIndicator> => {
+    const perResident = computeSymptomIndicators(store, nowMs);
+    const perRoom: Record<string, SymptomIndicator> = {};
+
+    (Object.values(store.residents) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .forEach(res => {
+        if (!res.currentRoom) return;
+        const sig = perResident[res.mrn];
+        if (!sig?.respiratory && !sig?.gi) return;
+
+        const room = layout.rooms.find(
+          r => r.label === res.currentRoom || r.label === res.currentRoom!.replace(/^\d/, '')
+        );
+        if (!room) return;
+
+        const existing = perRoom[room.roomId];
+        perRoom[room.roomId] = {
+          respiratory: (existing?.respiratory || sig.respiratory),
+          gi: (existing?.gi || sig.gi),
+        };
+      });
+
+    return perRoom;
+  }, [store, layout.rooms, nowMs]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
       <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
@@ -147,6 +192,7 @@ export const Floorplan: React.FC<Props> = ({ onBack }) => {
             facilityId={activeFacilityId}
             unitId={selectedUnitId || 'all'}
             roomStatuses={roomStatuses}
+            symptomIndicators={symptomIndicators}
           />
         </div>
       </div>
