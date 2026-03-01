@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { RoleProvider } from "../context/RoleContext";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
@@ -336,9 +337,11 @@ export default function App() {
     <ErrorBoundary>
       <AppProviders>
         <BrowserRouter>
-          <UndoToastProvider>
-            <AppShell />
-          </UndoToastProvider>
+          <RoleProvider>
+            <UndoToastProvider>
+              <AppShell />
+            </UndoToastProvider>
+          </RoleProvider>
         </BrowserRouter>
       </AppProviders>
     </ErrorBoundary>
