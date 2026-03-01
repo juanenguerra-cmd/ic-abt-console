@@ -27,7 +27,10 @@ export const useNotifications = () => {
         if (!facilityData.dismissedRuleKeys.includes(ruleKey)) {
           facilityData.dismissedRuleKeys.push(ruleKey);
         }
-        facilityData.notifications[id].status = 'dismissed';
+        // Delete the record entirely — dismissed notifications have no storage value.
+        // The dismissedRuleKeys entry above is the only persistent artifact needed to
+        // prevent the detection pipeline from re-firing this same rule.
+        delete facilityData.notifications[id];
       }
     });
   };
@@ -588,7 +591,7 @@ export const NotificationsPage: React.FC = () => {
               })}
 
               {nonVaxDisplayList.map(notif => {
-                const isRead = notif.status === 'read' || notif.status === 'dismissed';
+                const isRead = notif.status === 'read';
                 const typeLabel = getTypeLabel(notif.category);
                 return (
                   <div 
