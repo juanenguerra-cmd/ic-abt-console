@@ -92,10 +92,11 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
       return false;
     }
 
+    const newVaxId = uuidv4();
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       const now = new Date().toISOString();
-      const vaxId = existingVax?.id || uuidv4();
+      const vaxId = existingVax?.id || newVaxId;
 
       const residentRef = residentId.startsWith("Q:") 
         ? { kind: "quarantine" as const, id: residentId }
@@ -145,7 +146,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
           updatedAt: now,
         };
       }
-    }, { action: existingVax ? 'update' : 'create', entityType: 'VaxEvent', entityId: existingVax?.id || vaccine.trim() });
+    }, { action: existingVax ? 'update' : 'create', entityType: 'VaxEvent', entityId: existingVax?.id || newVaxId });
 
     if (closeOnSuccess) {
       onClose();

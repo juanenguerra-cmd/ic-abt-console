@@ -217,7 +217,7 @@ export const Dashboard: React.FC = () => {
   const seasonYear = nowForSeason.getMonth() < 8 ? nowForSeason.getFullYear() - 1 : nowForSeason.getFullYear();
   const fluSeasonStart = new Date(seasonYear, 9, 1); // Oct 1
   const fluSeasonEnd = new Date(seasonYear + 1, 4, 15); // May 15
-  const isFlnSeason = nowForSeason >= fluSeasonStart && nowForSeason <= fluSeasonEnd;
+  const isFluSeason = nowForSeason >= fluSeasonStart && nowForSeason <= fluSeasonEnd;
 
   const activeResidentMrns = new Set(
     (Object.values(store.residents || {}) as Resident[])
@@ -238,7 +238,7 @@ export const Dashboard: React.FC = () => {
       if (vaccineLower.includes('flu') || vaccineLower.includes('influenza')) {
         if (givenDate >= fluSeasonStart) fluVaxMrns.add(resId);
       }
-      if (vaccineLower.includes('covid') || vaccineLower.includes('covid-19') || vaccineLower.includes('sars')) {
+      if (vaccineLower.includes('covid') || vaccineLower.includes('sars-cov-2')) {
         covidVaxMrns.add(resId);
       }
     }
@@ -250,7 +250,7 @@ export const Dashboard: React.FC = () => {
     <>
       <div className="p-6 space-y-6">
         {/* Flu/COVID-19 Season Banner */}
-        {isFlnSeason && (fluCoverage !== null || covidCoverage !== null) && (
+        {isFluSeason && (fluCoverage !== null || covidCoverage !== null) && (
           <div className={`rounded-lg border px-4 py-3 flex flex-wrap items-center gap-4 text-sm ${(fluCoverage !== null && fluCoverage < 80) ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
             <span className="font-semibold text-neutral-800">🍂 Flu Season Active ({fluSeasonStart.getFullYear()}–{fluSeasonEnd.getFullYear()})</span>
             {fluCoverage !== null && (
