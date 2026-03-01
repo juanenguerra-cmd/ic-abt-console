@@ -1,9 +1,7 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove } from "./idb";
-
-export const DB_KEY_MAIN = "UNIFIED_DB_MAIN";
-const DB_KEY_PREV = "UNIFIED_DB_PREV";
-const DB_KEY_TMP = "UNIFIED_DB_TMP";
+import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
+export { DB_KEY_MAIN };
 
 // localStorage fallback thresholds (kept for the sync backup path).
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024;
