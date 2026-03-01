@@ -139,10 +139,11 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
       return;
     }
 
+    const newAbtId = uuidv4();
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       const now = new Date().toISOString();
-      const abtId = existingAbt?.id || uuidv4();
+      const abtId = existingAbt?.id || newAbtId;
 
       const residentRef = residentId.startsWith("Q:") 
         ? { kind: "quarantine" as const, id: residentId }
@@ -186,7 +187,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
         createdAt: existingAbt?.createdAt || now,
         updatedAt: now,
       };
-    });
+    }, { action: existingAbt ? 'update' : 'create', entityType: 'ABTCourse', entityId: existingAbt?.id || newAbtId });
 
     onClose();
   };

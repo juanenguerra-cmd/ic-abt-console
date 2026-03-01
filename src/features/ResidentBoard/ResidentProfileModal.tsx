@@ -106,7 +106,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
         r.cognitiveStatus = cognitiveStatus;
         r.updatedAt = new Date().toISOString();
       }
-    });
+    }, { action: 'update', entityType: 'Resident', entityId: residentId });
     setIsEditing(false);
   };
 

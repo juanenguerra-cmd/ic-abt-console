@@ -179,8 +179,8 @@ _Target: useful for daily IC workflow without manual spreadsheets_
 - [x] **E2** Vaccination coverage dashboard gauges (resident + staff)
 - [x] **E6** Line list auto-generation (CSV/print) from active IP events
 - [x] **E7** Audit corrective-action overdue alert in detection pipeline
-- [ ] Flu/COVID-19 season dashboard banner with coverage %
-- [ ] DOT trend chart (rolling 30-day) in Reports → Analytics tab
+- [x] Flu/COVID-19 season dashboard banner with coverage %
+- [x] DOT trend chart (rolling 30-day) in Reports → Analytics tab
 
 ### Phase 3 — 60–90 Days: Architecture Hardening + Multi-Facility
 _Target: compliant with HIPAA technical safeguards and CMS CoP documentation requirements_

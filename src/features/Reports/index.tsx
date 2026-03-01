@@ -991,11 +991,86 @@ const MonthlyAnalytics: React.FC = () => {
     }
   }, [metrics, store]);
 
+  // DOT Trend Chart — rolling 30 days
+  const dotTrend = useMemo(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const abts = Object.values(store.abts || {}) as ABTCourse[];
+    const points: { label: string; dot: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dayStart = new Date(d);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(d);
+      dayEnd.setHours(23, 59, 59, 999);
+      // Count active ABTs on this day
+      const count = abts.filter(abt => {
+        if (!abt.startDate) return false;
+        const start = new Date(abt.startDate);
+        const end = abt.endDate ? new Date(abt.endDate) : null;
+        return start <= dayEnd && (!end || end >= dayStart);
+      }).length;
+      const label = `${d.getMonth() + 1}/${d.getDate()}`;
+      points.push({ label, dot: count });
+    }
+    return points;
+  }, [store.abts]);
+
+  const maxDot = Math.max(...dotTrend.map(p => p.dot), 1);
+
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg leading-6 font-medium text-neutral-900">Monthly Analytics</h3>
+    <div className="space-y-6">
+      {/* DOT Trend Chart */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200">
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
+          <p className="text-sm text-neutral-500 mt-1">Active antibiotic courses per calendar day over the past 30 days.</p>
+        </div>
+        <div className="px-4 py-5 sm:px-6 overflow-x-auto">
+          {dotTrend.every(p => p.dot === 0) ? (
+            <p className="text-sm text-neutral-400 text-center py-6">No active antibiotic courses recorded in the last 30 days.</p>
+          ) : (
+            <svg viewBox={`0 0 ${dotTrend.length * 22} 120`} className="w-full" style={{ minWidth: '500px', height: '140px' }} aria-label="DOT trend bar chart">
+              {dotTrend.map((p, i) => {
+                const barH = Math.max(2, Math.round((p.dot / maxDot) * 80));
+                const x = i * 22 + 2;
+                const y = 90 - barH;
+                const isToday = i === 29;
+                return (
+                  <g key={i}>
+                    <rect
+                      x={x}
+                      y={y}
+                      width={18}
+                      height={barH}
+                      rx={2}
+                      fill={isToday ? '#4f46e5' : '#a5b4fc'}
+                      aria-label={`${p.label}: ${p.dot} ABT${p.dot !== 1 ? 's' : ''}`}
+                    />
+                    {p.dot > 0 && (
+                      <text x={x + 9} y={y - 3} textAnchor="middle" fontSize={8} fill="#374151">{p.dot}</text>
+                    )}
+                    {(i === 0 || i === 9 || i === 19 || i === 29) && (
+                      <text x={x + 9} y={108} textAnchor="middle" fontSize={7} fill="#6b7280">{p.label}</text>
+                    )}
+                  </g>
+                );
+              })}
+              <line x1={0} y1={91} x2={dotTrend.length * 22} y2={91} stroke="#e5e7eb" strokeWidth={1} />
+            </svg>
+          )}
+          <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500">
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" /> Today</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-indigo-300" /> Previous days</span>
+          </div>
+        </div>
       </div>
+
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg leading-6 font-medium text-neutral-900">Monthly Analytics</h3>
+        </div>
       <div className="border-t border-neutral-200">
         <table className="min-w-full divide-y divide-neutral-200">
           <thead className="bg-neutral-50">
@@ -1024,6 +1099,7 @@ const MonthlyAnalytics: React.FC = () => {
           </tbody>
         </table>
       </div>
+    </div>
     </div>
   )
 }
