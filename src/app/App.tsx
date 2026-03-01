@@ -227,8 +227,10 @@ const AppShell = () => {
             </button>
           )}
 
-          <div className="h-8 w-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-500 font-medium text-sm" aria-label="Current user: JD">
-            JD
+          <div className="h-8 w-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-500 font-medium text-sm" aria-label={`Current user: ${activeFacility?.auditorName || "Unknown"}`}>
+            {activeFacility?.auditorName
+              ? activeFacility.auditorName.trim().split(/\s+/).filter(w => w.length > 0).slice(0, 2).map(w => w[0].toUpperCase()).join("")
+              : "?"}
           </div>
         </div>
       </header>

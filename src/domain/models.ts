@@ -380,6 +380,7 @@ export interface Facility {
   address?: string;
   timezone?: string;
   bedCapacity?: number;
+  auditorName?: string;
   units: Unit[];
   floorLayouts?: FloorLayout[];
   hashtagCategories?: string[];
