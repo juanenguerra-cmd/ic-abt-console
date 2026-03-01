@@ -3,12 +3,13 @@ import { useFacilityData, useDatabase } from "../../app/providers";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
 import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { LineListReportTab } from "./components/LineListReportTab";
 
 export const OutbreakManager: React.FC = () => {
   const { store } = useFacilityData();
   const { updateDB } = useDatabase();
   const [activeOutbreakId, setActiveOutbreakId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"linelist" | "sitrep">("linelist");
+  const [activeTab, setActiveTab] = useState<"linelist" | "sitrep" | "linelist-report">("linelist");
 
   const outbreaks = (Object.values(store.outbreaks) as Outbreak[]).sort((a, b) => 
     new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
@@ -121,6 +122,16 @@ export const OutbreakManager: React.FC = () => {
                 >
                   SITREP / Daily Status
                 </button>
+                <button
+                  onClick={() => setActiveTab("linelist-report")}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === "linelist-report" 
+                      ? "bg-white text-neutral-900 shadow-sm" 
+                      : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                >
+                  Line List Report
+                </button>
               </div>
             </div>
 
@@ -128,6 +139,8 @@ export const OutbreakManager: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {activeTab === "linelist" ? (
                 <LineListView outbreakId={currentOutbreak.id} />
+              ) : activeTab === "linelist-report" ? (
+                <LineListReportTab outbreak={currentOutbreak} />
               ) : (
                 <SitrepView outbreakId={currentOutbreak.id} />
               )}
