@@ -1,469 +1,201 @@
-import React, { useState, useEffect } from 'react';
-import { X, ClipboardList, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
-import {
-  AppNotification,
-  LineListEvent,
-  SymptomClass,
-  SymptomTag,
-  RespSymptomTag,
-  GISymptomTag,
-  LineListDisposition,
-  Resident,
-} from '../../domain/models';
+import React, { useState, useMemo } from 'react';
+import { X, Save, AlertCircle } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
+import { AppNotification, IPEvent } from '../../domain/models';
+import { v4 as uuidv4 } from 'uuid';
 
-// ─── Symptom options ──────────────────────────────────────────────────────────
-
-const RESP_SYMPTOMS: { tag: RespSymptomTag; label: string }[] = [
-  { tag: 'cough', label: 'Cough' },
-  { tag: 'fever', label: 'Fever' },
-  { tag: 'shortness_of_breath', label: 'Shortness of Breath' },
-  { tag: 'sore_throat', label: 'Sore Throat' },
-  { tag: 'runny_nose', label: 'Runny Nose' },
-  { tag: 'congestion', label: 'Congestion' },
-  { tag: 'body_aches', label: 'Body Aches' },
-  { tag: 'loss_of_smell_taste', label: 'Loss of Smell/Taste' },
-  { tag: 'chills', label: 'Chills' },
-  { tag: 'fatigue', label: 'Fatigue' },
-];
-
-const GI_SYMPTOMS: { tag: GISymptomTag; label: string }[] = [
-  { tag: 'diarrhea', label: 'Diarrhea' },
-  { tag: 'nausea', label: 'Nausea' },
-  { tag: 'vomiting', label: 'Vomiting' },
-  { tag: 'stomach_cramping', label: 'Stomach Cramping' },
-  { tag: 'loss_of_appetite', label: 'Loss of Appetite' },
-  { tag: 'fever', label: 'Fever' },
-];
-
-const DISPOSITIONS: { value: LineListDisposition; label: string }[] = [
-  { value: 'monitoring', label: 'Monitoring' },
-  { value: 'hospital_transfer', label: 'Hospital Transfer' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'other', label: 'Other' },
-];
-
-// ─── Props ────────────────────────────────────────────────────────────────────
-
-interface AddToLineListModalProps {
+interface Props {
   notification: AppNotification;
   onClose: () => void;
-  onSaved: () => void;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+/** Derive a human-readable symptom class and infectionCategory from the notification message/refs. */
+function deriveSymptomClass(notif: AppNotification): {
+  label: string;
+  infectionCategory: string;
+  infectionSite: string;
+} {
+  const msg = (notif.message || '').toLowerCase();
+  if (msg.includes('resp') || msg.includes('pneumonia') || msg.includes('covid') || msg.includes('influenza') || msg.includes('rsv') || msg.includes('uri') || msg.includes('cough') || msg.includes('bronchitis')) {
+    return { label: 'Respiratory', infectionCategory: 'Pneumonia', infectionSite: 'Respiratory Tract' };
+  }
+  if (msg.includes('gi') || msg.includes('diarrhea') || msg.includes('vomit') || msg.includes('gastro') || msg.includes('c. diff') || msg.includes('cdiff') || msg.includes('norovirus') || msg.includes('nausea')) {
+    return { label: 'GI', infectionCategory: 'GI', infectionSite: 'GI Tract' };
+  }
+  if (msg.includes('uti') || msg.includes('urinary') || msg.includes('cystitis') || msg.includes('pyelonephritis')) {
+    return { label: 'UTI', infectionCategory: 'UTI', infectionSite: 'Urinary Tract' };
+  }
+  return { label: 'Unknown', infectionCategory: 'Other', infectionSite: 'Other' };
+}
 
-/** Hours window used to detect duplicate line list entries for the same resident + symptomClass. */
-const DUPLICATE_WINDOW_HOURS = 96;
+const MS_96H = 96 * 60 * 60 * 1000;
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export const AddToLineListModal: React.FC<AddToLineListModalProps> = ({
-  notification,
-  onClose,
-  onSaved,
-}) => {
+export const AddToLineListModal: React.FC<Props> = ({ notification, onClose }) => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
 
-  const payload = notification.payload;
-  const residentId = payload?.residentId ?? notification.residentId ?? '';
-  const symptomClass: SymptomClass = payload?.symptomClass ?? 'resp';
-  const detectedAt = payload?.detectedAt ?? notification.createdAtISO;
-
-  const resident: Resident | undefined = residentId ? store.residents?.[residentId] : undefined;
-
-  // ─── Form state ───────────────────────────────────────────────────────────
-
-  const [onsetDateISO, setOnsetDateISO] = useState<string>(
-    detectedAt ? detectedAt.slice(0, 16) : new Date().toISOString().slice(0, 16)
+  const resident = notification.residentId ? store.residents[notification.residentId] : undefined;
+  const { label: symptomClass, infectionCategory, infectionSite } = useMemo(
+    () => deriveSymptomClass(notification),
+    [notification]
   );
-  const [selectedSymptoms, setSelectedSymptoms] = useState<Set<SymptomTag>>(new Set());
-  const [fever, setFever] = useState<boolean>(false);
-  const [isolationInitiated, setIsolationInitiated] = useState<boolean>(false);
-  const [isolationStatus, setIsolationStatus] = useState<string>('');
-  const [testOrdered, setTestOrdered] = useState<boolean>(false);
-  const [providerNotified, setProviderNotified] = useState<boolean>(false);
-  const [disposition, setDisposition] = useState<LineListDisposition | ''>('');
-  const [notes, setNotes] = useState<string>(payload?.notesSnippet ?? '');
 
-  const [errors, setErrors] = useState<string[]>([]);
-  const [duplicateEntry, setDuplicateEntry] = useState<LineListEvent | null>(null);
-  const [showDupeConfirm, setShowDupeConfirm] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [isolationType, setIsolationType] = useState('Contact');
 
-  // ─── Duplicate check ──────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!residentId) return;
-    const ninetySixHoursAgo = new Date(Date.now() - DUPLICATE_WINDOW_HOURS * 60 * 60 * 1000);
-    const existing = (Object.values(store.lineListEvents ?? {}) as LineListEvent[]).find(
-      (e: LineListEvent) =>
-        e.residentId === residentId &&
-        e.symptomClass === symptomClass &&
-        new Date(e.createdAt) > ninetySixHoursAgo
+  /** Check if an active IPEvent for same resident+category exists within 96h (dedup). */
+  const existingEntry = useMemo<IPEvent | undefined>(() => {
+    if (!notification.residentId) return undefined;
+    const cutoff = Date.now() - MS_96H;
+    return Object.values(store.infections || {}).find(
+      ip =>
+        ip.residentRef.kind === 'mrn' &&
+        ip.residentRef.id === notification.residentId &&
+        ip.status === 'active' &&
+        ip.infectionCategory === infectionCategory &&
+        new Date(ip.createdAt).getTime() >= cutoff
     );
-    setDuplicateEntry(existing ?? null);
-  }, [residentId, symptomClass, store.lineListEvents]);
-
-  // ─── Symptom options ──────────────────────────────────────────────────────
-
-  const symptomOptions =
-    symptomClass === 'resp'
-      ? RESP_SYMPTOMS
-      : GI_SYMPTOMS;
-
-  const toggleSymptom = (tag: SymptomTag) => {
-    setSelectedSymptoms((prev) => {
-      const next = new Set(prev);
-      if (next.has(tag)) {
-        next.delete(tag);
-      } else {
-        next.add(tag);
-      }
-      return next;
-    });
-  };
-
-  // ─── Validation ───────────────────────────────────────────────────────────
-
-  const validate = (): boolean => {
-    const errs: string[] = [];
-    if (!residentId) errs.push('Resident is required.');
-    if (!onsetDateISO) errs.push('Symptom onset date/time is required.');
-    if (selectedSymptoms.size === 0) errs.push('At least one symptom must be selected.');
-    setErrors(errs);
-    return errs.length === 0;
-  };
-
-  // ─── Save ─────────────────────────────────────────────────────────────────
-
-  const buildRecord = (existingId?: string): LineListEvent => {
-    const now = new Date().toISOString();
-    return {
-      id: existingId ?? uuidv4(),
-      facilityId: activeFacilityId,
-      residentId,
-      symptomClass,
-      onsetDateISO: new Date(onsetDateISO).toISOString(),
-      symptoms: Array.from(selectedSymptoms) as SymptomTag[],
-      fever,
-      isolationInitiated,
-      isolationStatus: isolationStatus || undefined,
-      testOrdered,
-      providerNotified,
-      disposition: disposition || undefined,
-      notes: notes || undefined,
-      sourceNotificationId: notification.id,
-      sourceEventId: payload?.sourceEventId,
-      createdAt: existingId && duplicateEntry ? duplicateEntry.createdAt : now,
-      updatedAt: now,
-    };
-  };
-
-  const persistSave = (record: LineListEvent) => {
-    updateDB((draft: any) => {
-      const facilityData = draft.data.facilityData[activeFacilityId];
-      if (!facilityData.lineListEvents) facilityData.lineListEvents = {};
-      facilityData.lineListEvents[record.id] = record;
-
-      // Mark notification as acted
-      if (facilityData.notifications?.[notification.id]) {
-        facilityData.notifications[notification.id].status = 'read';
-        facilityData.notifications[notification.id].actedAt = new Date().toISOString();
-        facilityData.notifications[notification.id].lineListRecordId = record.id;
-      }
-    });
-    onSaved();
-  };
+  }, [store.infections, notification.residentId, infectionCategory]);
 
   const handleSave = () => {
-    if (!validate()) return;
+    if (!notification.residentId) return;
 
-    if (duplicateEntry && !showDupeConfirm) {
-      setShowDupeConfirm(true);
-      return;
-    }
+    const now = new Date().toISOString();
+    const ipId = existingEntry ? existingEntry.id : uuidv4();
 
-    const record = buildRecord(showDupeConfirm && duplicateEntry ? duplicateEntry.id : undefined);
-    persistSave(record);
+    updateDB(draft => {
+      const fd = draft.data.facilityData[activeFacilityId];
+
+      if (existingEntry) {
+        // Update existing entry — append notes
+        const existing = fd.infections[ipId];
+        if (existing) {
+          existing.notes = [existing.notes, notes].filter(Boolean).join('\n');
+          existing.updatedAt = now;
+        }
+      } else {
+        // Create new IPEvent
+        fd.infections[ipId] = {
+          id: ipId,
+          residentRef: { kind: 'mrn', id: notification.residentId },
+          status: 'active',
+          infectionCategory,
+          infectionSite,
+          isolationType,
+          locationSnapshot:
+            resident?.currentUnit || resident?.currentRoom
+              ? { unit: resident.currentUnit ?? undefined, room: resident.currentRoom ?? undefined, capturedAt: now }
+              : undefined,
+          notes: notes || undefined,
+          createdAt: now,
+          updatedAt: now,
+        } satisfies IPEvent;
+      }
+
+      // Mark notification as acted
+      if (fd.notifications[notification.id]) {
+        fd.notifications[notification.id].actedAt = now;
+        fd.notifications[notification.id].lineListEventId = ipId;
+        fd.notifications[notification.id].status = 'read';
+      }
+    });
+
+    onClose();
   };
-
-  const handleCreateNew = () => {
-    const record = buildRecord(); // no existingId → new record
-    persistSave(record);
-  };
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 bg-blue-50 shrink-0">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-bold text-neutral-900">Add to Line List</h2>
-            <span
-              className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                symptomClass === 'resp'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-green-100 text-green-700'
-              }`}
-            >
-              {symptomClass === 'resp' ? 'Respiratory' : 'GI'}
-            </span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-white/50 rounded-md transition-colors"
-          >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
+          <h2 className="text-lg font-bold text-neutral-900">Add to Line List</h2>
+          <button onClick={onClose} className="p-1.5 text-neutral-400 hover:text-neutral-600 rounded-md">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-          {/* Resident info (read-only) */}
-          <div className="bg-neutral-50 rounded-lg border border-neutral-200 p-4 space-y-1">
-            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">Resident</p>
-            <p className="text-base font-bold text-neutral-900">{resident?.displayName ?? residentId}</p>
-            <div className="flex flex-wrap gap-4 text-xs text-neutral-600">
-              {resident?.mrn && <span>MRN: {resident.mrn}</span>}
-              {(resident?.currentUnit || resident?.currentRoom) && (
-                <span>
-                  Location: {resident.currentUnit ?? 'Unknown'}
-                  {resident.currentRoom ? ` — ${resident.currentRoom}` : ''}
-                </span>
-              )}
-              <span>
-                Detected: {new Date(detectedAt).toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          {/* Duplicate warning */}
-          {duplicateEntry && !showDupeConfirm && (
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-800">
-                An active{' '}
-                <strong>{symptomClass === 'resp' ? 'Respiratory' : 'GI'}</strong> line list
-                entry already exists for this resident within the last 96 hours (created{' '}
-                {new Date(duplicateEntry.createdAt).toLocaleString()}). Saving will{' '}
-                <strong>update</strong> that existing entry by default.
-              </p>
-            </div>
-          )}
-
-          {/* Dupe confirm dialog */}
-          {showDupeConfirm && (
-            <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-3">
-              <p className="text-sm font-semibold text-amber-900">
-                Duplicate entry detected. What would you like to do?
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => { const record = buildRecord(duplicateEntry!.id); persistSave(record); }}
-                  className="px-3 py-1.5 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700 transition-colors"
-                >
-                  Update existing entry
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCreateNew}
-                  className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-md text-sm font-medium hover:bg-amber-50 transition-colors"
-                >
-                  Create new entry
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDupeConfirm(false)}
-                  className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Validation errors */}
-          {errors.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
-              {errors.map((e, i) => (
-                <p key={i} className="text-xs text-red-700 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3 shrink-0" />
-                  {e}
-                </p>
-              ))}
-            </div>
-          )}
-
-          {/* Onset date */}
+        <div className="p-6 space-y-4">
+          {/* Resident */}
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Symptom Onset Date / Time <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="datetime-local"
-              value={onsetDateISO}
-              onChange={(e) => setOnsetDateISO(e.target.value)}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Symptoms checklist */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              Symptoms <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(symptomOptions as { tag: SymptomTag; label: string }[]).map(({ tag, label }) => (
-                <label
-                  key={tag}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer text-sm transition-colors ${
-                    selectedSymptoms.has(tag)
-                      ? 'bg-blue-50 border-blue-400 text-blue-800'
-                      : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedSymptoms.has(tag)}
-                    onChange={() => toggleSymptom(tag)}
-                    className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Fever toggle */}
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="fever"
-              checked={fever}
-              onChange={(e) => setFever(e.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="fever" className="text-sm font-medium text-neutral-700">
-              Fever present?
-            </label>
-          </div>
-
-          {/* Isolation */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="isolationInitiated"
-                checked={isolationInitiated}
-                onChange={(e) => setIsolationInitiated(e.target.checked)}
-                className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="isolationInitiated" className="text-sm font-medium text-neutral-700">
-                Isolation initiated?
-              </label>
-            </div>
-            {isolationInitiated && (
-              <input
-                type="text"
-                placeholder="Isolation status / type (optional)"
-                value={isolationStatus}
-                onChange={(e) => setIsolationStatus(e.target.value)}
-                className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Resident</p>
+            <p className="text-sm font-medium text-neutral-900">{resident?.displayName || notification.residentId || 'Unknown'}</p>
+            {resident && (
+              <p className="text-xs text-neutral-500">
+                {[resident.currentUnit, resident.currentRoom].filter(Boolean).join(' – ')}
+              </p>
             )}
           </div>
 
-          {/* Test & provider */}
-          <div className="flex flex-wrap gap-6">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="testOrdered"
-                checked={testOrdered}
-                onChange={(e) => setTestOrdered(e.target.checked)}
-                className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="testOrdered" className="text-sm font-medium text-neutral-700">
-                Test ordered?
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="providerNotified"
-                checked={providerNotified}
-                onChange={(e) => setProviderNotified(e.target.checked)}
-                className="h-4 w-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="providerNotified" className="text-sm font-medium text-neutral-700">
-                Provider notified?
-              </label>
-            </div>
+          {/* Symptom class */}
+          <div>
+            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Symptom Class (Detected)</p>
+            <p className="text-sm text-neutral-900">{symptomClass}</p>
           </div>
 
-          {/* Disposition */}
+          {/* Detected at */}
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Disposition
-            </label>
-            <select
-              value={disposition}
-              onChange={(e) => setDisposition(e.target.value as LineListDisposition | '')}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">— Select disposition —</option>
-              {DISPOSITIONS.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Detected At</p>
+            <p className="text-sm text-neutral-900">{new Date(notification.createdAtISO).toLocaleString()}</p>
           </div>
+
+          {/* Dedup notice */}
+          {existingEntry && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800">
+                An active line list entry for this resident and symptom class already exists within the last 96 hours.
+                Any notes you add will be appended to that entry.
+              </p>
+            </div>
+          )}
+
+          {/* Isolation type (only for new entries) */}
+          {!existingEntry && (
+            <div>
+              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+                Isolation / Precaution Type
+              </label>
+              <select
+                value={isolationType}
+                onChange={e => setIsolationType(e.target.value)}
+                className="w-full border border-neutral-300 rounded-md text-sm px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                {['Contact', 'Droplet', 'Airborne', 'Contact + Droplet', 'Droplet + Contact', 'Standard', 'None'].map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-neutral-700 mb-1">
-              Onset narrative / notes
+            <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+              Notes (optional)
             </label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={e => setNotes(e.target.value)}
               rows={3}
-              className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-              placeholder="Optional notes about symptom onset, context, or clinical details…"
+              placeholder="Clinical context, additional details..."
+              className="w-full border border-neutral-300 rounded-md text-sm px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
             />
           </div>
         </div>
 
-        {/* Footer */}
-        {!showDupeConfirm && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-200 bg-neutral-50 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              Save to Line List
-            </button>
-          </div>
-        )}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-neutral-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-md hover:bg-neutral-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+          >
+            <Save className="w-4 h-4" />
+            {existingEntry ? 'Update Entry' : 'Add to Line List'}
+          </button>
+        </div>
       </div>
     </div>
   );
