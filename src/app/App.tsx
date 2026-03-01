@@ -8,6 +8,7 @@ import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
 import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
 import { FloorMap } from "../features/Heatmap/FloorMap";
+import { Floorplan } from "../features/Floorplan";
 import { ResidentChat } from "../features/Notes";
 import { ShiftLogPage } from "../features/Notes/ShiftLogPage";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
@@ -38,11 +39,18 @@ import {
   PenSquare,
   ClipboardCheck,
   Bell,
-  Database
+  Database,
+  Map,
+  Activity
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 // --- Layout Shell ---
+
+const FloorplanPage = () => {
+  const navigate = useNavigate();
+  return <Floorplan onBack={() => navigate(-1)} />;
+};
 
 const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: any, label: string, badge?: number, alertBadge?: boolean }) => {
   return (
@@ -226,6 +234,8 @@ const AppShell = () => {
           <nav className="p-4 space-y-1" aria-label="App sections">
             <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
             <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
+            <SidebarLink to="/floorplan" icon={Map} label="Floor Plan" />
+            <SidebarLink to="/heatmap" icon={Activity} label="Heatmap" />
             <SidebarLink to="/staff" icon={Users} label="Staff" />
             
             <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
@@ -250,6 +260,8 @@ const AppShell = () => {
               <Routes>
                 <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
+                <Route path="/floorplan" element={<PageTransition><FloorplanPage /></PageTransition>} />
+                <Route path="/heatmap" element={<PageTransition><FloorplanPage /></PageTransition>} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><ShiftLogPage /></PageTransition>} />
