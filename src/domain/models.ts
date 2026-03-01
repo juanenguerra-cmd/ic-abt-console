@@ -489,8 +489,8 @@ export interface AppNotification {
   payload?: LineListNotificationPayload;
   /** ISO timestamp set when the user completes the recommended action. */
   actedAt?: ISO;
-  /** ID of the LineListEvent (IP event) created/updated as a result of acting on this notification. */
-  lineListEventId?: string;
+  /** ID of the LineListEvent created from this notification as a result of acting on it. */
+  lineListRecordId?: string;
 
 }
 

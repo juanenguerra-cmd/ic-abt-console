@@ -96,7 +96,7 @@ export const AddToLineListModal: React.FC<Props> = ({ notification, onClose, onS
       // Mark notification as acted
       if (fd.notifications[notification.id]) {
         fd.notifications[notification.id].actedAt = now;
-        fd.notifications[notification.id].lineListEventId = ipId;
+        fd.notifications[notification.id].lineListRecordId = ipId;
         fd.notifications[notification.id].status = 'read';
       }
     });
