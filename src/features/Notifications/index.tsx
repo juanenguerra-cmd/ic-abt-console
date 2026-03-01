@@ -67,6 +67,7 @@ export const NotificationsPage: React.FC = () => {
   const [expandedVaxGroups, setExpandedVaxGroups] = useState<Set<string>>(new Set());
   const [selectedVaxGroups, setSelectedVaxGroups] = useState<Set<string>>(new Set());
   const [lineListModalNotif, setLineListModalNotif] = useState<AppNotification | null>(null);
+  const [lineListSavedId, setLineListSavedId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   type GroupResident = {
@@ -731,12 +732,6 @@ export const NotificationsPage: React.FC = () => {
         </div>
       )}
     </div>
-    {lineListModalNotif && (
-      <AddToLineListModal
-        notification={lineListModalNotif}
-        onClose={() => setLineListModalNotif(null)}
-      />
-    )}
     </>
   );
 };
