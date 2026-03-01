@@ -87,11 +87,13 @@ export const SettingsConsole: React.FC = () => {
   const facility = db.data.facilities.byId[activeFacilityId];
   const [facilityName, setFacilityName] = useState(facility?.name || "");
   const [bedCapacity, setBedCapacity] = useState(facility?.bedCapacity?.toString() || "");
+  const [auditorName, setAuditorName] = useState(facility?.auditorName || "");
 
   useEffect(() => {
     if (facility) {
       setFacilityName(facility.name);
       setBedCapacity(facility.bedCapacity?.toString() || "");
+      setAuditorName(facility.auditorName || "");
     }
   }, [facility]);
 
@@ -101,6 +103,7 @@ export const SettingsConsole: React.FC = () => {
       if (f) {
         f.name = facilityName;
         f.bedCapacity = bedCapacity ? parseInt(bedCapacity, 10) : undefined;
+        f.auditorName = auditorName.trim() || undefined;
         f.updatedAt = new Date().toISOString();
       }
     });
@@ -211,6 +214,16 @@ export const SettingsConsole: React.FC = () => {
                 type="number" 
                 value={bedCapacity}
                 onChange={e => setBedCapacity(e.target.value)}
+                className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 mb-1">Auditor / User Name</label>
+              <input 
+                type="text" 
+                value={auditorName}
+                onChange={e => setAuditorName(e.target.value)}
+                placeholder="e.g. Juan Anguera"
                 className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
