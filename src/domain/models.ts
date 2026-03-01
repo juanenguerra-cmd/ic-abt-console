@@ -121,6 +121,12 @@ export interface IPEvent {
   createdAt: ISO;
   updatedAt: ISO;
   resolvedAt?: ISO;
+  /** Device types present at onset (e.g. "Urinary Catheter"). Stored top-level for NHSN checker. */
+  deviceTypes?: string[];
+  /** NHSN LTC CAUTI surveillance verdict persisted on save. */
+  nhsnCautiMet?: boolean | null;
+  /** NHSN LTC C. diff LabID surveillance verdict persisted on save. */
+  nhsnCdiffLabIdMet?: boolean | null;
 }
 
 export interface VaxEvent {
