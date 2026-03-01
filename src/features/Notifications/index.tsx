@@ -55,6 +55,9 @@ export const useNotifications = () => {
   return { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead };
 };
 
+/** Duration (ms) for which the "saved" success toast is displayed. */
+const TOAST_DISPLAY_DURATION_MS = 4000;
+
 export const NotificationsPage: React.FC = () => {
   const { store } = useFacilityData();
   const { notifications, historyNotifications, clearNotification, markAsRead, markAllAsRead } = useNotifications();
@@ -706,6 +709,27 @@ export const NotificationsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Add to Line List modal */}
+      {lineListModalNotif && (
+        <AddToLineListModal
+          notification={lineListModalNotif}
+          onClose={() => setLineListModalNotif(null)}
+          onSaved={() => {
+            setLineListSavedId(lineListModalNotif.id);
+            setLineListModalNotif(null);
+            setTimeout(() => setLineListSavedId(null), TOAST_DISPLAY_DURATION_MS);
+          }}
+        />
+      )}
+
+      {/* Success toast */}
+      {lineListSavedId && (
+        <div className="fixed bottom-6 right-6 z-[9999] bg-emerald-600 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          Line list entry saved successfully.
+        </div>
+      )}
     </div>
     {lineListModalNotif && (
       <AddToLineListModal

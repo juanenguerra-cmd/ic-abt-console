@@ -1,4 +1,4 @@
-import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident, InfectionControlAuditItem } from '../../domain/models';
+import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident, InfectionControlAuditItem, LineListNotificationPayload, SymptomClass } from '../../domain/models';
 
 export const runDetectionPipeline = (
   store: FacilityStore,
@@ -58,7 +58,9 @@ export const runDetectionPipeline = (
     message: string,
     refs: any,
     clusterDetails?: AppNotification['clusterDetails'],
-    unitOverride?: string
+    unitOverride?: string,
+    action?: AppNotification['action'],
+    payload?: LineListNotificationPayload
   ) => {
     // For cluster notifications, residentId might be undefined, but we need an ID.
     // If residentId is undefined, we use the unitOverride as part of the ID.
@@ -82,7 +84,9 @@ export const runDetectionPipeline = (
       message,
       refs,
       ruleId,
-      clusterDetails
+      clusterDetails,
+      ...(action ? { action } : {}),
+      ...(payload ? { payload } : {}),
     });
   };
 
@@ -107,13 +111,26 @@ export const runDetectionPipeline = (
       
       if (hasResp || hasGi) {
         const typeStr = hasResp ? 'Respiratory' : 'GI';
+        const symptomClass: SymptomClass = hasResp ? 'resp' : 'gi';
         addNotif(
           'abt_syndrome_rule',
           'LINE_LIST_REVIEW',
           resId,
           abt.id,
           `${name || 'Unknown Resident'} started on antibiotic for ${typeStr} indication. Consider line list inclusion.`,
-          { abtId: abt.id }
+          { abtId: abt.id },
+          undefined,
+          undefined,
+          'add_to_line_list',
+          resId
+            ? {
+                residentId: resId,
+                symptomClass,
+                detectedAt: nowISO,
+                sourceEventId: abt.id,
+                notesSnippet: abt.indication || abt.syndromeCategory,
+              }
+            : undefined
         );
       }
 
