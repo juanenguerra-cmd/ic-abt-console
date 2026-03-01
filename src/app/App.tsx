@@ -87,6 +87,8 @@ const AppShell = () => {
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isFacilitySwitcherOpen, setIsFacilitySwitcherOpen] = React.useState(false);
+  const facilitySwitcherRef = React.useRef<HTMLDivElement>(null);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
   const [lastBackupLabel, setLastBackupLabel] = React.useState<string | null>(null);
   const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
@@ -115,6 +117,17 @@ const AppShell = () => {
       setLastBackupLabel('No backup');
     }
   }, []);
+
+  React.useEffect(() => {
+    if (!isFacilitySwitcherOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (facilitySwitcherRef.current && !facilitySwitcherRef.current.contains(e.target as Node)) {
+        setIsFacilitySwitcherOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [isFacilitySwitcherOpen]);
 
   const facilities = Object.values(db.data.facilities.byId) as any[];
   const activeFacility = db.data.facilities.byId[activeFacilityId];
@@ -160,11 +173,13 @@ const AppShell = () => {
         <div className="flex items-center gap-3">
           <GlobalSearch />
 
-          <div className="relative group">
+          <div className="relative" ref={facilitySwitcherRef}>
             <button
               data-testid="facility-switcher-button"
               aria-label={`Active facility: ${activeFacility?.name || "Select Facility"}. Click to switch.`}
               aria-haspopup="listbox"
+              aria-expanded={isFacilitySwitcherOpen}
+              onClick={() => setIsFacilitySwitcherOpen(prev => !prev)}
               className="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 px-3 py-1.5 rounded-md hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all active:scale-95"
             >
               <span>{activeFacility?.name || "Select Facility"}</span>
@@ -172,22 +187,27 @@ const AppShell = () => {
             </button>
             
             {/* Facility Switcher Dropdown */}
-            <div role="listbox" aria-label="Facilities" className="absolute right-0 top-full mt-1 w-56 bg-white rounded-md shadow-lg border border-neutral-200 py-1 hidden group-hover:block">
-              {facilities.map(f => (
-                <button
-                  key={f.id}
-                  data-testid={`facility-option-${f.id}`}
-                  role="option"
-                  aria-selected={activeFacilityId === f.id}
-                  onClick={() => setActiveFacilityId(f.id)}
-                  className={`w-full text-left px-4 py-2 text-sm ${
-                    activeFacilityId === f.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  {f.name}
-                </button>
-              ))}
-            </div>
+            {isFacilitySwitcherOpen && (
+              <div role="listbox" aria-label="Facilities" className="absolute right-0 top-full mt-1 w-56 bg-white rounded-md shadow-lg border border-neutral-200 py-1">
+                {facilities.map(f => (
+                  <button
+                    key={f.id}
+                    data-testid={`facility-option-${f.id}`}
+                    role="option"
+                    aria-selected={activeFacilityId === f.id}
+                    onClick={() => {
+                      setActiveFacilityId(f.id);
+                      setIsFacilitySwitcherOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-sm ${
+                      activeFacilityId === f.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-neutral-700 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           
           {/* G7: Last backup badge */}
