@@ -9,6 +9,8 @@ import './linelist-print.css';
 // ─── RowModel ────────────────────────────────────────────────────────────────
 
 export interface RowModel {
+  eventId?: string;
+  onsetDateISO?: string;
   room: string;
   unit: string;
   age: string;
@@ -183,6 +185,8 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
       const feverVal = ev.fever === true ? 'Y' : ev.fever === false ? 'N' : 'U';
 
       return {
+        eventId: ev.id,
+        onsetDateISO: ev.onsetDateISO,
         room: resident?.currentRoom ?? '',
         unit: resident?.currentUnit ?? '',
         age: computeAge(resident?.dob, ev.onsetDateISO),
