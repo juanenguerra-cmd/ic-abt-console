@@ -121,6 +121,14 @@ export const Dashboard: React.FC = () => {
     return stored ? Math.min(10, Math.max(1, parseInt(stored, 10))) : 5;
   });
 
+  // Rolling clock for the 96-hour window — refreshes every 60 seconds so
+  // stale indicators expire automatically without a manual page reload.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   React.useEffect(() => {
     if ((location.state as { openModal?: string } | null)?.openModal === 'precautions') {
       setShowPrecautionsModal(true);
@@ -147,15 +155,18 @@ export const Dashboard: React.FC = () => {
     return { ...layout, rooms: layout.rooms.filter(r => roomsInUnit.has(r.label || "")) };
   }, [layout, selectedUnit, store.residents]);
 
+  const perResidentIndicators = useMemo(
+    () => computeSymptomIndicators(store, nowMs),
+    [store, nowMs]
+  );
+
   const symptomIndicators = useMemo((): Record<string, SymptomIndicator> => {
-    const nowMs = Date.now();
-    const perResident = computeSymptomIndicators(store, nowMs);
     const perRoom: Record<string, SymptomIndicator> = {};
     (Object.values(store.residents || {}) as Resident[])
       .filter(r => !r.isHistorical && !r.backOfficeOnly)
       .forEach(res => {
         if (!res.currentRoom) return;
-        const sig = perResident[res.mrn];
+        const sig = perResidentIndicators[res.mrn];
         if (!sig?.respiratory && !sig?.gi) return;
         const room = filteredLayout.rooms.find(
           r => r.label === res.currentRoom || r.label === res.currentRoom!.replace(/^\d/, '')
@@ -168,7 +179,7 @@ export const Dashboard: React.FC = () => {
         };
       });
     return perRoom;
-  }, [store, filteredLayout.rooms]);
+  }, [perResidentIndicators, store.residents, filteredLayout.rooms]);
 
   const roomResidentsMap = useMemo(() => {
     const map: Record<string, Resident[]> = {};
@@ -590,7 +601,6 @@ export const Dashboard: React.FC = () => {
           {selectedRoomId && (() => {
             const residents = roomResidentsMap[selectedRoomId] ?? [];
             const roomLabel = filteredLayout.rooms.find(r => r.roomId === selectedRoomId)?.label ?? selectedRoomId;
-            const roomIndicator = symptomIndicators[selectedRoomId] ?? { respiratory: false, gi: false };
             return (
               <div className="mt-3 bg-neutral-50 border border-neutral-200 rounded-lg p-4 space-y-2 relative">
                 <button
@@ -603,16 +613,18 @@ export const Dashboard: React.FC = () => {
                 {residents.length === 0 ? (
                   <p className="text-sm text-neutral-400">Unoccupied</p>
                 ) : (
-                  residents.map(r => (
+                  residents.map(r => {
+                    const residentIndicator = perResidentIndicators[r.mrn] ?? { respiratory: false, gi: false };
+                    return (
                     <div key={r.mrn} className="flex items-center justify-between bg-white border border-neutral-200 rounded-md px-3 py-2">
                       <div>
                         <p className="text-sm font-medium text-neutral-800">{r.displayName}</p>
                         <p className="text-xs text-neutral-400">MRN: {r.mrn}</p>
                         <div className="flex gap-1 mt-0.5">
-                          {roomIndicator.respiratory && (
+                          {residentIndicator.respiratory && (
                             <span className="text-[9px] font-bold bg-orange-500 text-white px-1 rounded">Resp 96h</span>
                           )}
-                          {roomIndicator.gi && (
+                          {residentIndicator.gi && (
                             <span className="text-[9px] font-bold bg-purple-500 text-white px-1 rounded">GI 96h</span>
                           )}
                         </div>
@@ -624,7 +636,8 @@ export const Dashboard: React.FC = () => {
                         View Profile →
                       </button>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             );
