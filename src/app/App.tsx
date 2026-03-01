@@ -26,6 +26,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { FloorMap } from '../features/Heatmap/FloorMap';
+import { LineListReportPage } from '../features/LineListReport';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -319,6 +320,7 @@ const AppShell = () => {
             {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
             {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
             {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
+            {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
             {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
             {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
             {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
@@ -349,6 +351,7 @@ const AppShell = () => {
                 <Route path="/reports" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
                 <Route path="/reports/forms" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
                 <Route path="/reports/antibiogram" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AntibiogramPage /></RoleGuard></PageTransition>} />
+                <Route path="/linelist-report" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><LineListReportPage /></RoleGuard></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><InfectionControlAuditCenter /></RoleGuard></PageTransition>} />
                 <Route path="/report-builder" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><ReportBuilder /></RoleGuard></PageTransition>} />
                 <Route path="/print/audit-report" element={<AuditReportPrint />} />
