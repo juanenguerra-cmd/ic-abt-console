@@ -3,6 +3,7 @@ import { useFacilityData } from '../../app/providers';
 import { IPEvent, Resident, FloorLayout } from '../../domain/models';
 import { GripVertical } from 'lucide-react';
 import { loadLayout, mergeLayout, resetLayout, saveLayout } from '../../utils/floorMapLayout';
+import { SymptomIndicator } from '../../utils/symptomIndicators';
 
 export type RoomStatus = "normal" | "isolation" | "outbreak" | "ebp";
 
@@ -11,6 +12,8 @@ interface FloorMapProps {
   facilityId: string;
   unitId?: string;
   roomStatuses?: Record<string, RoomStatus>;
+  /** Per-room symptom indicators computed from the rolling 96-hour window. Key is roomId. */
+  symptomIndicators?: Record<string, SymptomIndicator>;
   onRoomClick?: (roomId: string) => void;
 }
 
@@ -26,6 +29,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   facilityId,
   unitId = 'all',
   roomStatuses = {},
+  symptomIndicators = {},
   onRoomClick,
 }) => {
   const { store } = useFacilityData();
@@ -62,7 +66,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
   const canvasWidth = Math.max(maxX + 40, 800);
   const canvasHeight = Math.max(maxY + 40, 400);
 
-  const getRoomTooltip = (roomLabel: string) => {
+  const getRoomTooltip = (roomLabel: string, roomId: string) => {
     const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentRoom === roomLabel || r.currentRoom?.replace(/^\d/, '') === roomLabel);
     if (residents.length === 0) return `Room ${roomLabel} (Unoccupied)`;
 
@@ -74,7 +78,12 @@ export const FloorMap: React.FC<FloorMapProps> = ({
         ip.isolationType
       );
       const precautionText = precaution ? `Precaution: ${precaution.isolationType}` : 'No Precautions';
-      return `${res.displayName} - ${precautionText}`;
+      const indicator = symptomIndicators[roomId];
+      const symptomParts: string[] = [];
+      if (indicator?.respiratory) symptomParts.push('Respiratory (96h)');
+      if (indicator?.gi) symptomParts.push('GI (96h)');
+      const symptomText = symptomParts.length > 0 ? ` | ⚠ ${symptomParts.join(', ')}` : '';
+      return `${res.displayName} - ${precautionText}${symptomText}`;
     }).join('\n');
   };
 
@@ -204,6 +213,32 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                   }`}></span>
                 </div>
               )}
+
+              {/* 96-hour Symptom Indicators */}
+              {(() => {
+                const indicator = symptomIndicators[room.roomId];
+                if (!indicator?.respiratory && !indicator?.gi) return null;
+                return (
+                  <div className="absolute top-0.5 left-0.5 flex flex-col gap-0.5">
+                    {indicator.respiratory && (
+                      <span
+                        title="Respiratory symptom signal within 96h"
+                        className="text-[9px] font-bold leading-none bg-orange-500 text-white px-0.5 rounded"
+                      >
+                        R
+                      </span>
+                    )}
+                    {indicator.gi && (
+                      <span
+                        title="GI symptom signal within 96h"
+                        className="text-[9px] font-bold leading-none bg-purple-500 text-white px-0.5 rounded"
+                      >
+                        G
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               
               {/* Occupied Indicator */}
               {(() => {
@@ -218,7 +253,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                 return null;
               })()}
               <div className="absolute bottom-full mb-2 w-max px-2 py-1 bg-neutral-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 whitespace-pre-wrap">
-                {getRoomTooltip(room.label || room.roomId)}
+                {getRoomTooltip(room.label || room.roomId, room.roomId)}
               </div>
             </div>
           );
@@ -236,6 +271,14 @@ export const FloorMap: React.FC<FloorMapProps> = ({
             </span>
           </div>
         ))}
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold bg-orange-500 text-white px-1 rounded">R</span>
+          <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">Respiratory (96h)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] font-bold bg-purple-500 text-white px-1 rounded">G</span>
+          <span className="text-xs font-bold text-neutral-600 uppercase tracking-wide">GI (96h)</span>
+        </div>
       </div>
     </div>
   );
