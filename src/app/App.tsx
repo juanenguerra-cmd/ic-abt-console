@@ -24,6 +24,7 @@ import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
+import UserGuidePage from "../pages/UserGuidePage";
 import { FloorMap } from '../features/Heatmap/FloorMap';
 
 import { LockScreen } from './LockScreen';
@@ -44,7 +45,8 @@ import {
   Bell,
   Database,
   Map,
-  Activity
+  Activity,
+  BookOpen
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -320,6 +322,7 @@ const AppShell = () => {
             {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
             {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
             {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
+            <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
             {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
             
             <div className="pt-4 mt-4 border-t border-neutral-100">
@@ -352,6 +355,7 @@ const AppShell = () => {
                 <Route path="/quarantine" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><div className="p-6"><QuarantineInbox /></div></RoleGuard></PageTransition>} />
                 <Route path="/settings" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><div className="p-6"><SettingsConsole /></div></RoleGuard></PageTransition>} />
                 <Route path="/back-office" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><BackOfficePage /></RoleGuard></PageTransition>} />
+                <Route path="/user-guide" element={<PageTransition><UserGuidePage /></PageTransition>} />
                 <Route path="/not-authorised" element={<PageTransition><div className="p-6"><NotAuthorisedPage /></div></PageTransition>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
