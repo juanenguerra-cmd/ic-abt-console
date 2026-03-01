@@ -186,7 +186,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
         createdAt: existingAbt?.createdAt || now,
         updatedAt: now,
       };
-    });
+    }, { action: existingAbt ? 'update' : 'create', entityType: 'ABTCourse', entityId: existingAbt?.id || medication.trim() });
 
     onClose();
   };

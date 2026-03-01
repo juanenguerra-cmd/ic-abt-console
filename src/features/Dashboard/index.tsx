@@ -212,9 +212,60 @@ export const Dashboard: React.FC = () => {
   const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v.status === 'given').length;
   const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
 
+  // Flu/COVID-19 season banner
+  const nowForSeason = new Date();
+  const seasonYear = nowForSeason.getMonth() < 8 ? nowForSeason.getFullYear() - 1 : nowForSeason.getFullYear();
+  const fluSeasonStart = new Date(seasonYear, 9, 1); // Oct 1
+  const fluSeasonEnd = new Date(seasonYear + 1, 4, 15); // May 15
+  const isFlnSeason = nowForSeason >= fluSeasonStart && nowForSeason <= fluSeasonEnd;
+
+  const activeResidentMrns = new Set(
+    (Object.values(store.residents || {}) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly && r.status === 'Active')
+      .map(r => r.mrn)
+  );
+  const totalActiveResidents = activeResidentMrns.size;
+
+  // Flu coverage: residents with a flu shot given this season
+  const fluVaxMrns = new Set<string>();
+  const covidVaxMrns = new Set<string>();
+  (Object.values(store.vaxEvents || {}) as any[]).forEach((vax: any) => {
+    const resId = vax.residentRef?.id;
+    if (!resId || !activeResidentMrns.has(resId)) return;
+    const vaccineLower = (vax.vaccine || '').toLowerCase();
+    if (vax.status === 'given' && vax.dateGiven) {
+      const givenDate = new Date(vax.dateGiven);
+      if (vaccineLower.includes('flu') || vaccineLower.includes('influenza')) {
+        if (givenDate >= fluSeasonStart) fluVaxMrns.add(resId);
+      }
+      if (vaccineLower.includes('covid') || vaccineLower.includes('covid-19') || vaccineLower.includes('sars')) {
+        covidVaxMrns.add(resId);
+      }
+    }
+  });
+  const fluCoverage = totalActiveResidents > 0 ? Math.round((fluVaxMrns.size / totalActiveResidents) * 100) : null;
+  const covidCoverage = totalActiveResidents > 0 ? Math.round((covidVaxMrns.size / totalActiveResidents) * 100) : null;
+
   return (
     <>
       <div className="p-6 space-y-6">
+        {/* Flu/COVID-19 Season Banner */}
+        {isFlnSeason && (fluCoverage !== null || covidCoverage !== null) && (
+          <div className={`rounded-lg border px-4 py-3 flex flex-wrap items-center gap-4 text-sm ${(fluCoverage !== null && fluCoverage < 80) ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300'}`}>
+            <span className="font-semibold text-neutral-800">🍂 Flu Season Active ({fluSeasonStart.getFullYear()}–{fluSeasonEnd.getFullYear()})</span>
+            {fluCoverage !== null && (
+              <span className={`font-medium ${fluCoverage >= 80 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                Flu Vaccine: {fluCoverage}% ({fluVaxMrns.size}/{totalActiveResidents} residents)
+              </span>
+            )}
+            {covidCoverage !== null && (
+              <span className={`font-medium ${covidCoverage >= 80 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                COVID-19: {covidCoverage}% ({covidVaxMrns.size}/{totalActiveResidents} residents)
+              </span>
+            )}
+            <button onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="ml-auto text-xs underline text-neutral-600 hover:text-neutral-900">View Vaccination Board →</button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div onClick={() => setShowCensusModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
             <div className="flex items-center justify-between">

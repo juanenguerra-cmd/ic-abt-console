@@ -232,10 +232,11 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       alert("Precaution start date cannot be before onset date.");
       return;
     }
+    const newIpId = uuidv4();
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       const now = new Date().toISOString();
-      const ipId = existingIp?.id || uuidv4();
+      const ipId = existingIp?.id || newIpId;
 
       const residentRef = residentId.startsWith("Q:") 
         ? { kind: "quarantine" as const, id: residentId }
@@ -281,7 +282,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
         createdAt: existingIp?.createdAt || now,
         updatedAt: now,
       };
-    });
+    }, { action: existingIp ? 'update' : 'create', entityType: 'IPEvent', entityId: existingIp?.id || newIpId });
 
     onClose();
   };

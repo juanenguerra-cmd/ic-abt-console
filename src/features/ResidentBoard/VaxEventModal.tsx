@@ -145,7 +145,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
           updatedAt: now,
         };
       }
-    });
+    }, { action: existingVax ? 'update' : 'create', entityType: 'VaxEvent', entityId: existingVax?.id || vaccine.trim() });
 
     if (closeOnSuccess) {
       onClose();
