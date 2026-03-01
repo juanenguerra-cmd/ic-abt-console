@@ -3,12 +3,13 @@ import { useFacilityData, useDatabase } from "../../app/providers";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
 import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { LineListReportTab } from "./LineListReportTab";
 
 export const OutbreakManager: React.FC = () => {
   const { store } = useFacilityData();
   const { updateDB } = useDatabase();
   const [activeOutbreakId, setActiveOutbreakId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"linelist" | "sitrep">("linelist");
+  const [activeTab, setActiveTab] = useState<"linelist" | "sitrep" | "report">("linelist");
 
   const outbreaks = (Object.values(store.outbreaks) as Outbreak[]).sort((a, b) => 
     new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
@@ -112,6 +113,16 @@ export const OutbreakManager: React.FC = () => {
                   Line List
                 </button>
                 <button
+                  onClick={() => setActiveTab("report")}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    activeTab === "report" 
+                      ? "bg-white text-neutral-900 shadow-sm" 
+                      : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                >
+                  Line List Report
+                </button>
+                <button
                   onClick={() => setActiveTab("sitrep")}
                   className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
                     activeTab === "sitrep" 
@@ -128,6 +139,8 @@ export const OutbreakManager: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {activeTab === "linelist" ? (
                 <LineListView outbreakId={currentOutbreak.id} />
+              ) : activeTab === "report" ? (
+                <LineListReportTab outbreakId={currentOutbreak.id} />
               ) : (
                 <SitrepView outbreakId={currentOutbreak.id} />
               )}

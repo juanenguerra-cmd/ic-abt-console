@@ -6,6 +6,45 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Editable line-list cells ──────────────────────────────────────────────── */
+
+/* Cell was auto-filled from app data, not yet manually edited */
+.editable-cell.autofill {
+  color: #1a3a6e;
+  font-weight: 600;
+  background-color: #f0f4ff;
+}
+
+/* Cell has been manually edited and saved */
+.editable-cell.overridden {
+  color: #7c3d00;
+  font-weight: 600;
+  background-color: #fff8e1;
+}
+
+/* Focused cell */
+.editable-cell:focus {
+  background-color: #fffde7;
+  box-shadow: inset 0 0 0 2px #4f6ef7;
+  outline: none;
+}
+
+/* On print: ALL cells look identical */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .editable-cell,
+  .editable-cell.autofill,
+  .editable-cell.overridden {
+    color: #000 !important;
+    background: #fff !important;
+    font-weight: normal !important;
+    box-shadow: none !important;
+    font-size: 6.5pt !important;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;
