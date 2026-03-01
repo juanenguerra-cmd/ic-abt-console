@@ -21,6 +21,48 @@ const DATASET_LABELS: Record<MigrationDatasetType, string> = {
   VAX: "VAX",
 };
 
+// ─── PATCH A: ABT Raw Staging — Dropdown Options & Cascade ─────────────────────
+
+const SOURCE_OPTIONS = [
+  "", "Urinary", "Respiratory", "Skin", "GI", "Bloodstream",
+  "Bone", "Eye", "Ear", "Oral", "CNS", "Cardiovascular",
+  "Chronic", "Prophylaxis", "Other",
+];
+
+const CATEGORY_OPTIONS = [
+  "", "UTI", "LRTI", "URTI", "SSTI", "CDI", "Gastroenteritis",
+  "BSI", "Osteomyelitis", "Eye Infection", "Otitis", "Dental",
+  "Suppression", "Prophylaxis", "H. Pylori", "Meningitis",
+  "Endocarditis", "Other",
+];
+
+const SYNDROME_OPTIONS = [
+  "", "Genitourinary", "Respiratory", "Skin/Soft Tissue",
+  "Gastrointestinal", "Bloodstream", "Musculoskeletal",
+  "Eye/Ear", "Oral", "CNS", "Cardiovascular",
+  "Chronic Suppression", "Prophylaxis", "Other",
+];
+
+/**
+ * Changing Source of Infection auto-fills the most likely
+ * Category and Syndrome. User can still override both independently.
+ */
+const INDICATION_CASCADE: Record<string, { category: string; syndrome: string }> = {
+  Urinary:        { category: "UTI",           syndrome: "Genitourinary"       },
+  Respiratory:    { category: "LRTI",          syndrome: "Respiratory"         },
+  Skin:           { category: "SSTI",          syndrome: "Skin/Soft Tissue"    },
+  GI:             { category: "CDI",           syndrome: "Gastrointestinal"    },
+  Bloodstream:    { category: "BSI",           syndrome: "Bloodstream"         },
+  Bone:           { category: "Osteomyelitis", syndrome: "Musculoskeletal"     },
+  Eye:            { category: "Eye Infection", syndrome: "Eye/Ear"             },
+  Ear:            { category: "Otitis",        syndrome: "Eye/Ear"             },
+  Oral:           { category: "Dental",        syndrome: "Oral"                },
+  CNS:            { category: "Meningitis",    syndrome: "CNS"                 },
+  Cardiovascular: { category: "Endocarditis",  syndrome: "Cardiovascular"      },
+  Chronic:        { category: "Suppression",   syndrome: "Chronic Suppression" },
+  Prophylaxis:    { category: "Prophylaxis",   syndrome: "Prophylaxis"         },
+};
+
 export const CsvMigrationWizard: React.FC = () => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -47,7 +89,6 @@ export const CsvMigrationWizard: React.FC = () => {
     () => mapping.filter((item) => !item.mappedField).map((item) => item.column),
     [mapping]
   );
-
 
   const hasRawErrors = useMemo(() => {
     if (datasetType === "ABT") return rawAbtRows.some((row) => row.status === "ERROR" && !row.skip);
@@ -235,19 +276,13 @@ export const CsvMigrationWizard: React.FC = () => {
     setImportErrors(summary.errors);
   };
 
+  // ─── PATCH B: parseRawImport — prescriber enrichment removed ─────────────────────
   const parseRawImport = () => {
     if (datasetType === "ABT") {
-      const parsed = parseRawAbtOrderListing(rawAbtText).map((row) => {
-        const residentByMrn = residents.find((resident) => resident.mrn === row.mrn);
-        return {
-          ...row,
-          prescriber: residentByMrn?.attendingMD || residentByMrn?.lastKnownAttendingMD || "",
-        };
-      });
+      const parsed = parseRawAbtOrderListing(rawAbtText);
       setRawAbtRows(applyAbtDuplicateMarking(parsed));
       return;
     }
-
     if (datasetType === "VAX") {
       const parsed = parseRawVaxList(rawVaxText, vaxTypeSelection, vaxStatusSelection);
       setRawVaxRows(applyVaxDuplicateMarking(parsed));
@@ -270,33 +305,36 @@ export const CsvMigrationWizard: React.FC = () => {
       facility.abts = facility.abts || {};
       facility.vaxEvents = facility.vaxEvents || {};
 
+      // ─── PATCH C: ABT commit block — prescriber removed ───────────────────
       if (datasetType === "ABT") {
         rawAbtRows.forEach((row) => {
           if (row.skip || row.status === "ERROR") {
             skipped += 1;
             if (row.status === "ERROR") errorsSkipped += 1;
-            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
+            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate")))
+              duplicatesSkipped += 1;
             return;
           }
 
           const id = uuidv4();
           facility.abts[id] = {
             id,
-            residentRef: { kind: "mrn", id: row.mrn },
-            status: row.orderStatusRaw.toLowerCase().includes("complete") ? "completed" : "active",
-            medication: row.medicationName || row.orderSummaryRaw,
-            dose: row.dose || undefined,
-            route: row.routeNormalized || row.routeRaw || undefined,
-            frequency: row.frequencyNormalized || row.frequencyRaw || undefined,
-            indication: row.indicationRaw || undefined,
-            infectionSource: row.sourceOfInfection || undefined,
-            syndromeCategory: row.syndrome || undefined,
-            startDate: row.startDate || undefined,
-            endDate: row.endDate || undefined,
-            prescriber: row.prescriber || undefined,
-            notes: row.endDateWasComputed ? "End date computed from extracted duration." : undefined,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            residentRef:      { kind: "mrn", id: row.mrn },
+            status:           row.orderStatusRaw.toLowerCase().includes("complete") ? "completed" : "active",
+            medication:       row.medicationName || row.orderSummaryRaw,
+            dose:             row.dose             || undefined,
+            route:            row.routeNormalized  || row.routeRaw  || undefined,
+            frequency:        row.frequencyNormalized || row.frequencyRaw || undefined,
+            indication:       row.indicationRaw    || undefined,
+            infectionSource:  row.sourceOfInfection || undefined,
+            syndromeCategory: row.syndrome          || undefined,
+            startDate:        row.startDate         || undefined,
+            endDate:          row.endDate           || undefined,
+            notes:            row.endDateWasComputed
+                                ? "End date computed from extracted duration."
+                                : undefined,
+            createdAt:        new Date().toISOString(),
+            updatedAt:        new Date().toISOString(),
           };
           imported += 1;
         });
@@ -307,7 +345,8 @@ export const CsvMigrationWizard: React.FC = () => {
           if (row.skip || row.status === "ERROR") {
             skipped += 1;
             if (row.status === "ERROR") errorsSkipped += 1;
-            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
+            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate")))
+              duplicatesSkipped += 1;
             return;
           }
 
@@ -550,28 +589,195 @@ export const CsvMigrationWizard: React.FC = () => {
             <button onClick={commitRawImport} disabled={hasRawErrors} className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm">Commit Import</button>
           </div>
 
+          {/* PATCH D: ABT RAW staging table — full editable preview with dropdowns */}
           {datasetType === "ABT" && rawAbtRows.length > 0 && (
             <div className="overflow-x-auto border border-neutral-200 rounded-md">
               <table className="min-w-full text-xs">
                 <thead className="bg-neutral-50">
                   <tr>
-                    <th className="px-2 py-1">Status</th><th className="px-2 py-1">Skip</th><th className="px-2 py-1">MRN</th><th className="px-2 py-1">Name</th><th className="px-2 py-1">Medication</th><th className="px-2 py-1">Start</th><th className="px-2 py-1">End</th><th className="px-2 py-1">Route</th><th className="px-2 py-1">Frequency</th>
+                    <th className="px-2 py-1">Status</th>
+                    <th className="px-2 py-1">Skip</th>
+                    <th className="px-2 py-1">MRN</th>
+                    <th className="px-2 py-1">Name</th>
+                    <th className="px-2 py-1">Medication</th>
+                    <th className="px-2 py-1">Dose</th>
+                    <th className="px-2 py-1">Route</th>
+                    <th className="px-2 py-1">Frequency</th>
+                    <th className="px-2 py-1">Start</th>
+                    <th className="px-2 py-1">End</th>
+                    <th className="px-2 py-1">Indication</th>
+                    <th className="px-2 py-1">Source of Infection</th>
+                    <th className="px-2 py-1">Category</th>
+                    <th className="px-2 py-1">Syndrome</th>
+                    <th className="px-2 py-1">Flags</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rawAbtRows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="px-2 py-1">{statusBadge(row.status)}</td>
-                      <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, skip: event.target.checked } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.mrn} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, mrn: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.residentNameRaw} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, residentNameRaw: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.medicationName} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, medicationName: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.startDate} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, startDate: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.endDate} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, endDate: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.routeNormalized} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, routeNormalized: event.target.value } : item))} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.frequencyNormalized} onChange={(event) => setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, frequencyNormalized: event.target.value } : item))} /></td>
-                    </tr>
-                  ))}
+                  {rawAbtRows.map((row) => {
+                    const updateField = (
+                      field: keyof RawAbtStagingRow,
+                      value: string | boolean
+                    ) =>
+                      setRawAbtRows((prev) =>
+                        prev.map((item) =>
+                          item.id === row.id ? { ...item, [field]: value } : item
+                        )
+                      );
+                    return (
+                      <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
+                        <td className="px-2 py-1">{statusBadge(row.status)}</td>
+
+                        {/* Skip */}
+                        <td className="px-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={row.skip}
+                            onChange={(e) => updateField("skip", e.target.checked)}
+                          />
+                        </td>
+
+                        {/* MRN */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-20 text-xs"
+                            value={row.mrn}
+                            onChange={(e) => updateField("mrn", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Name */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-28 text-xs"
+                            value={row.residentNameRaw}
+                            onChange={(e) => updateField("residentNameRaw", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Medication */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-32 text-xs"
+                            value={row.medicationName}
+                            onChange={(e) => updateField("medicationName", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Dose */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-16 text-xs"
+                            value={row.dose}
+                            onChange={(e) => updateField("dose", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Route */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-14 text-xs"
+                            value={row.routeNormalized}
+                            onChange={(e) => updateField("routeNormalized", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Frequency */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-16 text-xs"
+                            value={row.frequencyNormalized}
+                            onChange={(e) => updateField("frequencyNormalized", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Start Date */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-24 text-xs"
+                            value={row.startDate}
+                            onChange={(e) => updateField("startDate", e.target.value)}
+                          />
+                        </td>
+
+                        {/* End Date */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-24 text-xs"
+                            value={row.endDate}
+                            onChange={(e) => updateField("endDate", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Indication (raw) */}
+                        <td className="px-2 py-1">
+                          <input
+                            className="border rounded p-1 w-24 text-xs"
+                            value={row.indicationRaw}
+                            onChange={(e) => updateField("indicationRaw", e.target.value)}
+                          />
+                        </td>
+
+                        {/* Source of Infection — dropdown, cascades Category + Syndrome */}
+                        <td className="px-2 py-1">
+                          <select
+                            className="border rounded p-1 text-xs w-28"
+                            value={row.sourceOfInfection}
+                            onChange={(e) => {
+                              const src = e.target.value;
+                              const cascade = INDICATION_CASCADE[src];
+                              setRawAbtRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? {
+                                        ...item,
+                                        sourceOfInfection:  src,
+                                        indicationCategory: cascade?.category ?? item.indicationCategory,
+                                        syndrome:           cascade?.syndrome  ?? item.syndrome,
+                                      }
+                                    : item
+                                )
+                              );
+                            }}
+                          >
+                            {SOURCE_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt || "— select —"}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Indication Category — dropdown, independently editable */}
+                        <td className="px-2 py-1">
+                          <select
+                            className="border rounded p-1 text-xs w-28"
+                            value={row.indicationCategory}
+                            onChange={(e) => updateField("indicationCategory", e.target.value)}
+                          >
+                            {CATEGORY_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt || "— select —"}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Syndrome — dropdown, independently editable */}
+                        <td className="px-2 py-1">
+                          <select
+                            className="border rounded p-1 text-xs w-28"
+                            value={row.syndrome}
+                            onChange={(e) => updateField("syndrome", e.target.value)}
+                          >
+                            {SYNDROME_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt || "— select —"}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Flags */}
+                        <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">
+                          {row.errors.concat(row.warnings).join("; ")}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
