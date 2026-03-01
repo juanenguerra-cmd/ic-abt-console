@@ -117,3 +117,19 @@ This guide explains what each major screen does and when to use it.
 
 ## Quick Navigation Tip
 If your deployment includes global search, use it to jump quickly to residents or records rather than navigating screen-by-screen.
+
+---
+
+## Data Field Walkthrough / Data Dictionary
+
+For a complete reference of every data field in the system — including data types, validation rules, storage locations, join keys, and deprecation notes — see the **[Data Field Reference Library](./data-field-reference.md)**.
+
+The Data Field Reference covers all entity types (Resident, IP Events, ABT/Antibiotics, Vax, Line List, Staff, Outbreaks, Audits, Notifications, Shift Log, Survey Packets, and more) and includes:
+
+- Field-by-field metadata tables for every domain model
+- Event contract (common required fields across all entities)
+- Coverage & parity guidance (canonical join keys, report vs. drill-down mismatches)
+- Developer checklist for adding or modifying fields
+- Critical field examples with code snippets
+
+> **In-app location:** Open the left sidebar → **User Guide** → scroll to the **Data Field Reference** section or click the **Data Field Reference** link at the top of the page.
