@@ -1,7 +1,12 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+// SINGLE SOURCE OF TRUTH for all domain types.
+// Do NOT add types to src/types.ts — that file is a deprecated re-export shim.
+// ═══════════════════════════════════════════════════════════════════════════════
+
 export type ISO = string;
 
-export type ResidentRef = 
-  | { kind: "mrn"; id: string } 
+export type ResidentRef =
+  | { kind: "mrn"; id: string }
   | { kind: "quarantine"; id: string };
 
 export interface Alias {
@@ -25,6 +30,8 @@ export interface Resident {
   status?: "Active" | "Discharged" | "Deceased";
   payor?: string;
   primaryDiagnosis?: string;
+  /** Extended free-text description of primary diagnosis (from ADT / census import). */
+  primaryDiagnosisText?: string;
   cognitiveStatus?: "Intact" | "Mildly Impaired" | "Severely Impaired" | "Unknown";
   allergies?: string[];
   identityAliases?: Alias[];
@@ -32,11 +39,24 @@ export interface Resident {
   updatedAt: ISO;
   isHistorical?: boolean;
   backOfficeOnly?: boolean;
+  /** Superset union: 'csv-import' (hyphenated) was used in an early schema version. */
   historicalSource?: 'manual' | 'csv_import' | 'csv-import';
   lastKnownUnit?: string;
   lastKnownRoom?: string;
   lastKnownAttendingMD?: string;
   dischargedAt?: ISO;
+  /** ISO timestamp of the last census file in which this resident appeared. */
+  lastSeenOnCensusAt?: ISO;
+  /** Set when a resident is soft-deleted from the active census without a discharge event. */
+  deactivatedAt?: ISO;
+  dischargeReason?: string;
+  /** Snapshot of location / MD at the time of deactivation. */
+  deactivationSnapshot?: {
+    unit: string;
+    room: string;
+    attendingMD: string;
+    admissionDate: string;
+  };
 }
 
 export interface QuarantineResident {
@@ -72,7 +92,8 @@ export interface ABTCourse {
   organismIdentified?: string;
   sensitivitySummary?: string;
   diagnostics?: object;
-  locationSnapshot?: { unit?: string; room?: string };
+  /** Location snapshot captured at the time of record creation. */
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO };
   prescriber?: string;
   notes?: string;
   createdAt: ISO;
@@ -93,7 +114,7 @@ export interface IPEvent {
   specimenCollectedDate?: string;
   labResultDate?: string;
   outbreakId?: string;
-  locationSnapshot?: { unit?: string; room?: string };
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO };
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
@@ -105,6 +126,11 @@ export interface VaxEvent {
   residentRef: ResidentRef;
   vaccine: string;
   status: "given" | "due" | "overdue" | "declined" | "scheduled" | "contraindicated" | "documented-historical";
+  /**
+   * @deprecated Use dateGiven.
+   * Both fields exist for backward compatibility with records written before the rename.
+   * New records should write dateGiven only. Readers should prefer dateGiven ?? administeredDate.
+   */
   administeredDate?: string;
   dateGiven?: string;
   dose?: "1st" | "2nd" | "Booster" | "Single";
@@ -115,7 +141,7 @@ export interface VaxEvent {
   dueDate?: string;
   offerDate?: string;
   declineReason?: string;
-  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO; };
+  locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO };
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
@@ -139,17 +165,22 @@ export interface Staff {
   displayName: string;
   firstName?: string;
   lastName?: string;
+  /** External HR / payroll employee identifier. */
+  employeeId?: string;
   role?: string;
-  status: "active"|"inactive";
+  department?: string;
+  status: "active" | "inactive";
   hireDate?: string;
   terminationDate?: string;
+  createdAt: ISO;
+  updatedAt: ISO;
 }
 
 export interface StaffVaxEvent {
   id: string;
   staffId: string;
   vaccine: string;
-  status: "given"|"due"|"overdue"|"declined"|"scheduled"|"contraindicated";
+  status: "given" | "due" | "overdue" | "declined" | "scheduled" | "contraindicated";
   dateGiven?: string;
   dueDate?: string;
   offerDate?: string;
@@ -162,11 +193,21 @@ export interface StaffVaxEvent {
 export interface FitTestEvent {
   id: string;
   staffId: string;
+  /** Canonical date field. Readers should prefer date ?? fitTestDate. */
   date: string;
   maskType: string;
   maskSize: string;
   passed: boolean;
   nextDueDate: string;
+  /**
+   * @deprecated Use date.
+   * Kept for backward compatibility with records written by the original fit-test schema.
+   */
+  fitTestDate?: string;
+  respiratorType?: string;
+  model?: string;
+  method?: string;
+  result?: string;
   notes?: string;
   createdAt: ISO;
   updatedAt: ISO;
@@ -415,7 +456,7 @@ export interface UnifiedDB {
   updatedAt: ISO;
   integrity: { lastGoodWriteAt?: ISO; lastGoodBytes?: number };
   data: {
-    facilities: { byId: Record<string, Facility>; activeFacilityId: string; };
-    facilityData: Record<string, FacilityStore>; 
+    facilities: { byId: Record<string, Facility>; activeFacilityId: string };
+    facilityData: Record<string, FacilityStore>;
   };
 }
