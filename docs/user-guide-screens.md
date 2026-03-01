@@ -124,8 +124,10 @@ If your deployment includes global search, use it to jump quickly to residents o
 **Purpose:** Provide a complete field-by-field reference for all system entities and events.
 
 **Use it to:**
-- Verify field meaning, requiredness, and storage location before adding features.
-- Align report joins and drill-down behavior to canonical keys.
-- Review compatibility rules for deprecated fields (for example `dateGiven` vs `administeredDate`).
+- Review what information is collected in each category using plain language.
+- Prepare survey walkthroughs and leadership reviews with a non-technical table format.
+- Verify where information is entered and why it is collected.
 
-**Reference:** See [Data Field Reference Library](./data-field-reference.md).
+**Reference:** See [Information Collected Library](./data-field-reference.md).
+
+**In-app quick action:** Open **Data Field Walkthrough Table (New Window)** from the User Guide page.

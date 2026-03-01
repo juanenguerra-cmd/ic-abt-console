@@ -74,6 +74,11 @@ type GuideTab = "overview" | "walkthrough" | "dataReference";
 export default function UserGuidePage() {
   const [activeTab, setActiveTab] = useState<GuideTab>("overview");
 
+  const openWalkthroughWindow = () => {
+    window.open('/data-field-walkthrough.html', '_blank', 'noopener,noreferrer');
+  };
+
+
   const tabContent = useMemo(() => {
     if (activeTab === "walkthrough") return <MarkdownViewer content={userGuideScreensDoc} />;
     if (activeTab === "dataReference") return <MarkdownViewer content={dataFieldReferenceDoc} />;
@@ -112,6 +117,13 @@ export default function UserGuidePage() {
       </section>
 
       <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3">
+        <button
+          type="button"
+          onClick={openWalkthroughWindow}
+          className="px-3 py-1.5 text-sm rounded-md border bg-emerald-50 text-emerald-800 border-emerald-300"
+        >
+          Data Field Walkthrough Table (New Window)
+        </button>
         <button
           type="button"
           onClick={() => setActiveTab("overview")}
