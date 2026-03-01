@@ -484,14 +484,14 @@ export interface AppNotification {
   };
   ruleId: string;
 
+  /** Set when a user acts on the notification. ISO timestamp. */
+  actedAt?: ISO;
+  /** ID of the LineListEvent created/updated as a result of acting on this notification. */
+  lineListRecordId?: string;
   /** Present on LINE_LIST_REVIEW notifications that recommend line listing. */
   action?: 'add_to_line_list';
   /** Structured context for the recommended line list action. */
   payload?: LineListNotificationPayload;
-  /** ISO timestamp set when the user completes the recommended action. */
-  actedAt?: ISO;
-  /** ID of the LineListEvent created from this notification as a result of acting on it. */
-  lineListRecordId?: string;
 
 }
 
