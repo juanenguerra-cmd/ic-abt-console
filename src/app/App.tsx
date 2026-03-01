@@ -318,7 +318,7 @@ const AppShell = () => {
             {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
             {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
             {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
-            <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />
+            {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
             {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
             {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
             
@@ -339,7 +339,7 @@ const AppShell = () => {
                 <Route path="/heatmap" element={<PageTransition><HeatmapPage /></PageTransition>} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
-                <Route path="/chat" element={<PageTransition><ShiftLogPage /></PageTransition>} />
+                <Route path="/chat" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ShiftLogPage /></RoleGuard></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><NoteGenerator /></RoleGuard></PageTransition>} />
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />

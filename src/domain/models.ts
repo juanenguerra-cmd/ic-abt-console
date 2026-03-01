@@ -5,7 +5,8 @@
 
 export type ISO = string;
 
-export type { UserRole } from '../types';
+import type { UserRole } from '../types/roles';
+export type { UserRole } from '../types/roles';
 
 export type ResidentRef =
   | { kind: "mrn"; id: string }
