@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer } from 'lucide-react';
+import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer, ListPlus } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
+import { AddToLineListModal } from './AddToLineListModal';
 
 export const useNotifications = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -62,6 +63,7 @@ export const NotificationsPage: React.FC = () => {
   const [unitFilter, setUnitFilter] = useState<string>('all');
   const [expandedVaxGroups, setExpandedVaxGroups] = useState<Set<string>>(new Set());
   const [selectedVaxGroups, setSelectedVaxGroups] = useState<Set<string>>(new Set());
+  const [lineListModalNotif, setLineListModalNotif] = useState<AppNotification | null>(null);
   const navigate = useNavigate();
 
   type GroupResident = {
@@ -408,6 +410,7 @@ export const NotificationsPage: React.FC = () => {
   };
 
   return (
+    <>
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100 p-6">
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 flex flex-col h-full overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-neutral-50 shrink-0">
@@ -665,6 +668,20 @@ export const NotificationsPage: React.FC = () => {
                             Open Record
                           </button>
                         )}
+                        {(notif.category === 'LINE_LIST_REVIEW' || notif.category === 'SYMPTOM_WATCH') && notif.residentId && !notif.actedAt && (
+                          <button
+                            onClick={() => setLineListModalNotif(notif)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 rounded-md hover:bg-blue-100 text-xs font-medium transition-colors"
+                          >
+                            <ListPlus className="w-3.5 h-3.5" />
+                            Add to Line List
+                          </button>
+                        )}
+                        {(notif.category === 'LINE_LIST_REVIEW' || notif.category === 'SYMPTOM_WATCH') && notif.actedAt && (
+                          <span className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md">
+                            ✓ Added to Line List
+                          </span>
+                        )}
                         {!isRead && (
                           <button 
                             onClick={() => markAsRead(notif.id)}
@@ -690,5 +707,12 @@ export const NotificationsPage: React.FC = () => {
         </div>
       </div>
     </div>
+    {lineListModalNotif && (
+      <AddToLineListModal
+        notification={lineListModalNotif}
+        onClose={() => setLineListModalNotif(null)}
+      />
+    )}
+    </>
   );
 };

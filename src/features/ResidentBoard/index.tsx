@@ -15,6 +15,16 @@ import { QuarantineLinkModal } from "./QuarantineLinkModal";
 import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
 import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
+import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
+import { computeSymptomIndicators } from "../../utils/symptomIndicators";
+
+/** Colour lookup for Kanban tile strips and tinted backgrounds by signal strip type. */
+const TILE_COLORS: Record<string, { strip: string; bg: string }> = {
+  yellow: { strip: '#eab308', bg: 'rgba(234,179,8,0.05)' },
+  blue:   { strip: '#3b82f6', bg: 'rgba(59,130,246,0.05)' },
+  green:  { strip: '#22c55e', bg: 'rgba(34,197,94,0.05)' },
+  none:   { strip: 'transparent', bg: 'transparent' },
+};
 
 export const ResidentBoard: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -31,6 +41,7 @@ export const ResidentBoard: React.FC = () => {
   const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
   const [filterLast24h, setFilterLast24h] = useState(() => searchParams.get('last24h') === 'true');
   const [filterNeedsReview, setFilterNeedsReview] = useState(() => searchParams.get('needsReview') === 'true');
+  const [showAllActiveResidents, setShowAllActiveResidents] = useState(false);
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -113,6 +124,17 @@ export const ResidentBoard: React.FC = () => {
   const vaxEvents = Object.values(store.vaxEvents || {}) as any[];
   const today = new Date().toISOString().split('T')[0];
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  // Pre-compute symptom map + signal map once per store snapshot
+  const symptomMap = useMemo(() => computeSymptomIndicators(store, Date.now()), [store]);
+  const signalMap = useMemo<Record<string, ResidentSignals>>(() => {
+    const nowMs = Date.now();
+    const map: Record<string, ResidentSignals> = {};
+    residents.forEach(r => {
+      map[r.mrn] = computeResidentSignals(r.mrn, store, nowMs, symptomMap);
+    });
+    return map;
+  }, [store, residents, symptomMap]);
   
   // Calculate age
   const getAge = (dob?: string) => {
@@ -168,9 +190,18 @@ export const ResidentBoard: React.FC = () => {
 
       if (filterUnit && r.currentUnit?.trim() !== filterUnit) return false;
 
+      // Default signal filter: when no explicit toggle is active and showAllActiveResidents is OFF,
+      // only show residents who have at least one IC-relevant signal.
+      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterLast24h && !filterNeedsReview && !filterUnit) {
+        const sigs = signalMap[r.mrn];
+        if (sigs && !sigs.hasActivePrecaution && !sigs.hasEbp && !sigs.hasActiveAbt && !sigs.hasDueVax && !sigs.hasRecentSymptoms96h) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo]);
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap]);
 
   // Group by Unit
   // The prompt asks for Unit 2, Unit 3, Unit 4. We'll group dynamically based on currentUnit.
@@ -480,6 +511,15 @@ export const ResidentBoard: React.FC = () => {
           >
             Active Only
           </button>
+          <div className="w-px h-5 bg-neutral-300 mx-1" aria-hidden="true" />
+          <button
+            onClick={() => setShowAllActiveResidents(v => !v)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${showAllActiveResidents ? 'bg-neutral-800 border-neutral-800 text-white' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={showAllActiveResidents}
+            title="When OFF, only residents with active precautions, ABT, due vaccines, or recent symptoms are shown"
+          >
+            Show all active residents
+          </button>
           {filterUnit && (
             <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium border border-indigo-300">
               Unit: {filterUnit}
@@ -606,10 +646,8 @@ export const ResidentBoard: React.FC = () => {
                 {unitResidents.map(resident => {
                   const hasAllergies = resident.allergies && resident.allergies.length > 0;
                   const isActive = resident.status === "Active";
-                  const hasABT = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === resident.mrn);
-                  const hasIP = activeInfections.some(i => i.residentRef.kind === "mrn" && i.residentRef.id === resident.mrn);
-                  const vaxDue = vaxEvents.some(v => v.residentRef.kind === "mrn" && v.residentRef.id === resident.mrn && (v.status === "due" || v.status === "overdue"));
-                  const hasSymptom = false; // Mocked for now as SymptomEvent is not in the schema
+                  const sigs = signalMap[resident.mrn] || { hasActivePrecaution: false, hasEbp: false, hasActiveAbt: false, hasDueVax: false, hasRecentSymptoms96h: false, strip: 'none' as const };
+                  const tileColor = TILE_COLORS[sigs.strip] ?? TILE_COLORS.none;
                   
                   const isSelected = selectedResidentId === resident.mrn;
 
@@ -623,10 +661,15 @@ export const ResidentBoard: React.FC = () => {
                         // So we set selected AND open modal.
                         setShowProfileModal(true);
                       }}
-                      className={`bg-white border rounded-lg p-3 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                      style={{ background: tileColor.bg }}
+                      className={`relative border rounded-lg cursor-pointer transition-all shadow-sm hover:shadow-md overflow-hidden ${
                         isSelected ? "border-indigo-500 ring-1 ring-indigo-500" : "border-neutral-200"
                       }`}
                     >
+                      {/* Left colour strip */}
+                      <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: tileColor.strip }} />
+                      {/* Tile content with left offset for strip */}
+                      <div className="pl-4 pr-3 py-3">
                       {/* Header Row */}
                       <div className="flex justify-between items-start mb-1">
                         <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
@@ -703,26 +746,32 @@ export const ResidentBoard: React.FC = () => {
                             Active
                           </span>
                         )}
-                        {hasABT && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white shadow-sm uppercase tracking-wider">
-                            ABT
-                          </span>
-                        )}
-                        {hasIP && (
+                        {sigs.hasActivePrecaution && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
-                            IP
+                            Isolation
                           </span>
                         )}
-                        {vaxDue && (
+                        {sigs.hasEbp && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500 text-white shadow-sm uppercase tracking-wider">
+                            EBP
+                          </span>
+                        )}
+                        {sigs.hasActiveAbt && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white shadow-sm uppercase tracking-wider">
+                            ABT Active
+                          </span>
+                        )}
+                        {sigs.hasDueVax && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500 text-white shadow-sm uppercase tracking-wider">
-                            Vax Due
+                            VAX Due
                           </span>
                         )}
-                        {hasSymptom && (
+                        {sigs.hasRecentSymptoms96h && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500 text-white shadow-sm uppercase tracking-wider">
-                            Symptom
+                            Sx ≤96h
                           </span>
                         )}
+                      </div>
                       </div>
                     </div>
                   );

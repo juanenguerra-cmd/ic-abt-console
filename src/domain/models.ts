@@ -419,6 +419,10 @@ export interface AppNotification {
     noteId?: string;
   };
   ruleId: string;
+  /** Set when a user acts on the notification (e.g. "Add to Line List"). ISO timestamp. */
+  actedAt?: ISO;
+  /** ID of the IPEvent created/updated when the notification was acted upon. */
+  lineListEventId?: string;
 }
 
 export interface MutationLogEntry {
