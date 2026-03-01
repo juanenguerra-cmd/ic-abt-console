@@ -1,3 +1,4 @@
+// IC-ABT Console — Version 1.0.0 | © 2026 Juan Enguerra
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
@@ -7,7 +8,6 @@ import { LS_LAST_ACTIVE_TS, IDLE_THRESHOLD_MS, LS_LAST_BACKUP_TS } from "../cons
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
-import { PacketBuilder } from "../features/SurveyPackets/PacketBuilder";
 import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
 import { Floorplan } from "../features/Floorplan";
@@ -70,7 +70,7 @@ const HeatmapPage = () => {
   return <FloorMap layout={layout} facilityId={activeFacilityId} />;
 };
 
-const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: any, label: string, badge?: number, alertBadge?: boolean }) => {
+const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: React.ElementType, label: string, badge?: number, alertBadge?: boolean }) => {
   return (
     <NavLink 
       to={to}
