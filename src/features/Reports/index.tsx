@@ -7,6 +7,7 @@ import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
 import { FileText, Download } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
+import { computeVaccineCoverage } from '../../lib/vaccineCoverage';
 
 
 const residentLabel = (res: any) => {
@@ -87,6 +88,12 @@ const ReportsConsole: React.FC = () => {
             <FileText className="h-4 w-4" />
             Forms
           </button>
+          <button
+            data-testid="vax-coverage-tab-button"
+            onClick={() => handleTabChange('vaxcoverage')}
+            className={`${activeTab === 'vaxcoverage' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Vaccine Coverage
+          </button>
         </nav>
       </div>
 
@@ -98,6 +105,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
         {activeTab === 'forms' && <FormsTab />}
+        {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
       </div>
     </div>
   );
@@ -1343,6 +1351,143 @@ const QapiRollup: React.FC = () => {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+// ─── Vaccine Coverage Report ──────────────────────────────────────────────────
+
+const VaccineCoverageReport: React.FC = () => {
+  const { store } = useFacilityData();
+
+  const result = useMemo(() => computeVaccineCoverage(store), [store]);
+
+  const pct = (n: number) =>
+    result.totalActiveCensus > 0
+      ? ((n / result.totalActiveCensus) * 100).toFixed(1)
+      : '0.0';
+
+  // Derive COVID-19 lookback label from the computed since-date
+  const covidLookbackLabel = useMemo(() => {
+    const sinceMs = new Date(result.covidSinceDate).getTime();
+    const nowMs = Date.now();
+    const days = Math.round((nowMs - sinceMs) / (24 * 60 * 60 * 1000));
+    const months = Math.round(days / 30);
+    return months >= 2 ? `last ${months} months` : `last ${days} days`;
+  }, [result.covidSinceDate]);
+
+  const coverageRows = [
+    {
+      label: 'Influenza (current season)',
+      count: result.influenza,
+      detail: result.fluSeasonWindow
+        ? `Season ${result.fluSeasonWindow.start} → ${result.fluSeasonWindow.end}`
+        : '—',
+    },
+    {
+      label: 'Pneumococcal (lifetime)',
+      count: result.pneumococcal,
+      detail: 'Any qualifying event',
+    },
+    {
+      label: `COVID-19 (${covidLookbackLabel})`,
+      count: result.covid19,
+      detail: `Since ${result.covidSinceDate}`,
+    },
+    {
+      label: 'RSV (lifetime)',
+      count: result.rsv,
+      detail: 'Any qualifying event',
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+        <span className="font-bold text-indigo-900 text-sm">Vaccine Coverage — Active Census</span>
+        <p className="text-xs text-indigo-700 mt-0.5">
+          Counts active residents with at least one qualifying in-house or documented-historical vaccine event.
+        </p>
+      </div>
+
+      {/* Summary counts */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-teal-50">
+          <h3 className="text-base font-bold text-teal-900">Coverage Summary</h3>
+          <p className="text-xs text-teal-700 mt-0.5">
+            Total Active Census: <span className="font-semibold">{result.totalActiveCensus}</span>
+          </p>
+        </div>
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Covered</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Active Census</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Coverage %</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Window</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {coverageRows.map(row => (
+              <tr key={row.label}>
+                <td className="px-4 py-2 font-medium text-neutral-800">{row.label}</td>
+                <td className="px-4 py-2 text-right font-semibold text-neutral-900">{row.count}</td>
+                <td className="px-4 py-2 text-right text-neutral-500">{result.totalActiveCensus}</td>
+                <td className="px-4 py-2 text-right">
+                  <span
+                    className={`font-semibold ${
+                      parseFloat(pct(row.count)) >= 80
+                        ? 'text-green-700'
+                        : parseFloat(pct(row.count)) >= 50
+                        ? 'text-amber-600'
+                        : 'text-red-600'
+                    }`}
+                  >
+                    {pct(row.count)}%
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-xs text-neutral-500">{row.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Unlinked events */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
+          <h3 className="text-base font-bold text-amber-900">Unlinked Vaccine Events</h3>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Qualifying events that could not be matched to an active census resident.
+          </p>
+        </div>
+        <div className="px-6 py-4">
+          <span className="text-3xl font-bold text-amber-700">{result.unlinkedEventCount}</span>
+          <span className="text-sm text-neutral-500 ml-2">event(s) with no active-resident match</span>
+        </div>
+      </div>
+
+      {/* Accuracy risks */}
+      {result.accuracyRisks.length > 0 && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
+            <h3 className="text-base font-bold text-red-900">Accuracy Risks</h3>
+            <p className="text-xs text-red-700 mt-0.5">
+              Issues that may affect report accuracy. Resolve these for a complete count.
+            </p>
+          </div>
+          <ul className="divide-y divide-neutral-100">
+            {result.accuracyRisks.map((risk, i) => (
+              <li key={i} className="px-4 py-3 text-sm text-red-800 flex items-start gap-2">
+                <span className="mt-0.5 text-red-500">⚠</span>
+                <span>{risk}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
