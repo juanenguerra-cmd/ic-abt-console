@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Save, AlertCircle } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { AppNotification, IPEvent } from '../../domain/models';
+import { AppNotification, LineListEvent, SymptomClass } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
@@ -10,23 +10,23 @@ interface Props {
   onSaved?: () => void;
 }
 
-/** Derive a human-readable symptom class and infectionCategory from the notification message/refs. */
+/** Derive a human-readable label and SymptomClass from the notification message/payload. */
 function deriveSymptomClass(notif: AppNotification): {
   label: string;
-  infectionCategory: string;
-  infectionSite: string;
+  symptomClass: SymptomClass;
 } {
+  if (notif.payload?.symptomClass) {
+    const sc = notif.payload.symptomClass;
+    return { label: sc === 'gi' ? 'GI' : 'Respiratory', symptomClass: sc };
+  }
   const msg = (notif.message || '').toLowerCase();
   if (msg.includes('resp') || msg.includes('pneumonia') || msg.includes('covid') || msg.includes('influenza') || msg.includes('rsv') || msg.includes('uri') || msg.includes('cough') || msg.includes('bronchitis')) {
-    return { label: 'Respiratory', infectionCategory: 'Pneumonia', infectionSite: 'Respiratory Tract' };
+    return { label: 'Respiratory', symptomClass: 'resp' };
   }
   if (msg.includes('gi') || msg.includes('diarrhea') || msg.includes('vomit') || msg.includes('gastro') || msg.includes('c. diff') || msg.includes('cdiff') || msg.includes('norovirus') || msg.includes('nausea')) {
-    return { label: 'GI', infectionCategory: 'GI', infectionSite: 'GI Tract' };
+    return { label: 'GI', symptomClass: 'gi' };
   }
-  if (msg.includes('uti') || msg.includes('urinary') || msg.includes('cystitis') || msg.includes('pyelonephritis')) {
-    return { label: 'UTI', infectionCategory: 'UTI', infectionSite: 'Urinary Tract' };
-  }
-  return { label: 'Unknown', infectionCategory: 'Other', infectionSite: 'Other' };
+  return { label: 'Respiratory', symptomClass: 'resp' };
 }
 
 const MS_96H = 96 * 60 * 60 * 1000;
@@ -36,67 +36,67 @@ export const AddToLineListModal: React.FC<Props> = ({ notification, onClose, onS
   const { updateDB } = useDatabase();
 
   const resident = notification.residentId ? store.residents[notification.residentId] : undefined;
-  const { label: symptomClass, infectionCategory, infectionSite } = useMemo(
+  const { label: symptomClass, symptomClass: derivedSymptomClass } = useMemo(
     () => deriveSymptomClass(notification),
     [notification]
   );
 
   const [notes, setNotes] = useState('');
-  const [isolationType, setIsolationType] = useState('Contact');
 
-  /** Check if an active IPEvent for same resident+category exists within 96h (dedup). */
-  const existingEntry = useMemo<IPEvent | undefined>(() => {
+  /** Check if an active LineListEvent for same resident+symptomClass exists within 96h (dedup). */
+  const existingEntry = useMemo<LineListEvent | undefined>(() => {
     if (!notification.residentId) return undefined;
     const cutoff = Date.now() - MS_96H;
-    return Object.values(store.infections || {}).find(
-      ip =>
-        ip.residentRef.kind === 'mrn' &&
-        ip.residentRef.id === notification.residentId &&
-        ip.status === 'active' &&
-        ip.infectionCategory === infectionCategory &&
-        new Date(ip.createdAt).getTime() >= cutoff
+    return Object.values(store.lineListEvents || {}).find(
+      ev =>
+        ev.residentId === notification.residentId &&
+        ev.symptomClass === derivedSymptomClass &&
+        new Date(ev.createdAt).getTime() >= cutoff
     );
-  }, [store.infections, notification.residentId, infectionCategory]);
+  }, [store.lineListEvents, notification.residentId, derivedSymptomClass]);
 
   const handleSave = () => {
     if (!notification.residentId) return;
 
     const now = new Date().toISOString();
-    const ipId = existingEntry ? existingEntry.id : uuidv4();
 
     updateDB(draft => {
       const fd = draft.data.facilityData[activeFacilityId];
+      let recordId: string;
 
       if (existingEntry) {
         // Update existing entry — append notes
-        const existing = fd.infections[ipId];
+        recordId = existingEntry.id;
+        const existing = fd.lineListEvents?.[existingEntry.id];
         if (existing) {
           existing.notes = [existing.notes, notes].filter(Boolean).join('\n');
           existing.updatedAt = now;
         }
       } else {
-        // Create new IPEvent
-        fd.infections[ipId] = {
-          id: ipId,
-          residentRef: { kind: 'mrn', id: notification.residentId },
-          status: 'active',
-          infectionCategory,
-          infectionSite,
-          isolationType,
-          locationSnapshot:
-            resident?.currentUnit || resident?.currentRoom
-              ? { unit: resident.currentUnit ?? undefined, room: resident.currentRoom ?? undefined, capturedAt: now }
-              : undefined,
+        // Create new LineListEvent (no IPEvent or isolation)
+        const lineListEvent: LineListEvent = {
+          id: uuidv4(),
+          facilityId: activeFacilityId,
+          residentId: notification.residentId,
+          symptomClass: derivedSymptomClass,
+          onsetDateISO: now,
+          symptoms: [],
+          isolationInitiated: false,
+          isolationStatus: undefined,
           notes: notes || undefined,
+          sourceNotificationId: notification.id,
           createdAt: now,
           updatedAt: now,
-        } satisfies IPEvent;
+        };
+        fd.lineListEvents = fd.lineListEvents ?? {};
+        fd.lineListEvents[lineListEvent.id] = lineListEvent;
+        recordId = lineListEvent.id;
       }
 
       // Mark notification as acted
       if (fd.notifications[notification.id]) {
         fd.notifications[notification.id].actedAt = now;
-        fd.notifications[notification.id].lineListRecordId = ipId;
+        fd.notifications[notification.id].lineListRecordId = recordId;
         fd.notifications[notification.id].status = 'read';
       }
     });
@@ -147,24 +147,6 @@ export const AddToLineListModal: React.FC<Props> = ({ notification, onClose, onS
                 An active line list entry for this resident and symptom class already exists within the last 96 hours.
                 Any notes you add will be appended to that entry.
               </p>
-            </div>
-          )}
-
-          {/* Isolation type (only for new entries) */}
-          {!existingEntry && (
-            <div>
-              <label className="block text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">
-                Isolation / Precaution Type
-              </label>
-              <select
-                value={isolationType}
-                onChange={e => setIsolationType(e.target.value)}
-                className="w-full border border-neutral-300 rounded-md text-sm px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {['Contact', 'Droplet', 'Airborne', 'Contact + Droplet', 'Droplet + Contact', 'Standard', 'None'].map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
             </div>
           )}
 
