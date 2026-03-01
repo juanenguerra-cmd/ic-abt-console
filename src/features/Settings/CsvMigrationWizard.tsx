@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Download, Upload } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { ABTCourse, Resident, VaxEvent } from "../../domain/models";
+import { ABTCourse, QuarantineResident, Resident, ResidentRef, VaxEvent } from "../../domain/models";
 import { getMigrationTemplate, MigrationDatasetType } from "../../lib/migration/csvTemplates";
 import {
   buildAutoMapping,
@@ -12,7 +12,7 @@ import {
   parseCsv,
 } from "../../lib/migration/csvImport";
 import { AbtCsvStagingRow, evaluateAbtStagingRow, parseAbtCsvToStaging } from "../../parsers/abtCsvParser";
-import { parseRawAbtOrderListing, RawAbtStagingRow } from "../../parsers/rawAbtOrderListingParser";
+import { parseRawAbtOrderListing, RawAbtStagingRow, ResolutionLevel } from "../../parsers/rawAbtOrderListingParser";
 import { parseRawVaxList, RawVaxStagingRow } from "../../parsers/rawVaxListParser";
 
 const DATASET_LABELS: Record<MigrationDatasetType, string> = {
@@ -43,10 +43,6 @@ const SYNDROME_OPTIONS = [
   "Chronic Suppression", "Prophylaxis", "Other",
 ];
 
-/**
- * Changing Source of Infection auto-fills the most likely
- * Category and Syndrome. User can still override both independently.
- */
 const INDICATION_CASCADE: Record<string, { category: string; syndrome: string }> = {
   Urinary:        { category: "UTI",           syndrome: "Genitourinary"       },
   Respiratory:    { category: "LRTI",          syndrome: "Respiratory"         },
@@ -72,6 +68,43 @@ const VAX_TYPE_OPTIONS = [
 const VAX_STATUS_OPTIONS: Array<"Vaccinated" | "Historical" | "Refused"> = [
   "Vaccinated", "Historical", "Refused",
 ];
+
+// ─── 3-Tier Resident Resolution ────────────────────────────────────────────────
+//
+// Tier 1 — Active census:    store.residents where isHistorical !== true
+//           and status is not Discharged / Deceased
+// Tier 2 — Historical list:  store.residents where isHistorical === true
+// Tier 3 — Unresolved:       QuarantineResident created at commit time;
+//           record committed with residentRef: { kind: "quarantine" }
+//
+// The wizard re-runs resolution live on every MRN keystroke in the staging table.
+
+const resolveResident = (
+  mrn: string,
+  residents: Record<string, Resident>
+): { resolution: ResolutionLevel; displayName: string } => {
+  if (!mrn.trim()) return { resolution: 'unresolved', displayName: '' };
+
+  const active = Object.values(residents).find(
+    (r) => r.mrn === mrn && !r.isHistorical && r.status !== 'Discharged' && r.status !== 'Deceased'
+  );
+  if (active) return { resolution: 'active', displayName: active.displayName };
+
+  const historical = Object.values(residents).find(
+    (r) => r.mrn === mrn && r.isHistorical === true
+  );
+  if (historical) return { resolution: 'historical', displayName: historical.displayName };
+
+  return { resolution: 'unresolved', displayName: '' };
+};
+
+const resolutionBadge = (resolution: ResolutionLevel, displayName: string) => {
+  if (resolution === 'active')
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 whitespace-nowrap">✅ {displayName || 'Active'}</span>;
+  if (resolution === 'historical')
+    return <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">🟡 {displayName || 'Historical'}</span>;
+  return <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 whitespace-nowrap">🔴 Unresolved</span>;
+};
 
 export const CsvMigrationWizard: React.FC = () => {
   const { updateDB } = useDatabase();
@@ -115,7 +148,7 @@ export const CsvMigrationWizard: React.FC = () => {
     const existingAbts = Object.values(store.abts || {}) as ABTCourse[];
     return rowsToCheck.map((row) => {
       const duplicate = existingAbts.find((abt) => {
-        const med = (abt.medication || "").trim().toLowerCase();
+        const med   = (abt.medication || "").trim().toLowerCase();
         const route = (abt.route || "").trim().toLowerCase();
         const start = (abt.startDate || "").slice(0, 10);
         return (
@@ -171,10 +204,7 @@ export const CsvMigrationWizard: React.FC = () => {
     if (datasetType === "ABT") {
       try {
         const parsedRows = parseAbtCsvToStaging(rawCsv, existingAbts);
-        if (!parsedRows.length) {
-          alert("CSV is missing headers or data rows.");
-          return;
-        }
+        if (!parsedRows.length) { alert("CSV is missing headers or data rows."); return; }
         setAbtCsvRows(parsedRows);
         setImportErrors([]);
       } catch (error) {
@@ -184,14 +214,10 @@ export const CsvMigrationWizard: React.FC = () => {
       return;
     }
     const parsed = parseCsv(rawCsv);
-    if (!parsed.headers.length || !parsed.rows.length) {
-      alert("CSV is missing headers or data rows.");
-      return;
-    }
-    const nextMapping = buildAutoMapping(parsed.headers, datasetType);
+    if (!parsed.headers.length || !parsed.rows.length) { alert("CSV is missing headers or data rows."); return; }
     setHeaders(parsed.headers);
     setRows(parsed.rows);
-    setMapping(nextMapping);
+    setMapping(buildAutoMapping(parsed.headers, datasetType));
     setImportErrors([]);
   };
 
@@ -208,25 +234,39 @@ export const CsvMigrationWizard: React.FC = () => {
 
   const handleImport = () => {
     if (datasetType === "ABT") {
-      if (!abtCsvRows.length) {
-        alert("Upload ABT CSV and parse it first.");
-        return;
-      }
-      if (hasAbtCsvErrors) {
-        alert("Cannot commit while unskipped error rows exist.");
-        return;
-      }
+      if (!abtCsvRows.length) { alert("Upload ABT CSV and parse it first."); return; }
+      if (hasAbtCsvErrors) { alert("Cannot commit while unskipped error rows exist."); return; }
       let imported = 0;
       let skipped = 0;
+      let quarantineCreated = 0;
       updateDB((draft) => {
         const facility = draft.data.facilityData[activeFacilityId];
         facility.abts = facility.abts || {};
+        facility.quarantine = facility.quarantine || {};
         abtCsvRows.forEach((row) => {
           if (row.skip || row.status === "ERROR") { skipped += 1; return; }
+          const res = resolveResident(row.data.mrn, store.residents);
+          let residentRef: ResidentRef;
+          if (res.resolution === 'unresolved') {
+            const tempId = `Q:${uuidv4()}`;
+            const qr: QuarantineResident = {
+              tempId,
+              displayName: row.data.residentName || row.data.mrn,
+              source: 'census_missing_mrn',
+              rawHint: row.data.mrn,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            facility.quarantine[tempId] = qr;
+            residentRef = { kind: 'quarantine', id: tempId };
+            quarantineCreated += 1;
+          } else {
+            residentRef = { kind: 'mrn', id: row.data.mrn };
+          }
           const id = uuidv4();
           facility.abts[id] = {
             id,
-            residentRef: { kind: "mrn", id: row.data.mrn },
+            residentRef,
             status: row.data.status as ABTCourse["status"],
             medication: row.data.medicationName,
             medicationClass: row.data.medicationClass || undefined,
@@ -242,14 +282,11 @@ export const CsvMigrationWizard: React.FC = () => {
           imported += 1;
         });
       });
-      alert(`ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}`);
+      alert(`ABT import complete.\nImported: ${imported}\nSkipped: ${skipped}${quarantineCreated ? `\nQuarantine created: ${quarantineCreated}` : ''}`);
       setAbtCsvRows([]);
       return;
     }
-    if (!rows.length || !mapping.length) {
-      alert("Upload or paste CSV and parse it first.");
-      return;
-    }
+    if (!rows.length || !mapping.length) { alert("Upload or paste CSV and parse it first."); return; }
     let summary = { importedCount: 0, updatedCount: 0, errors: [] as { rowNumber: number; message: string }[] };
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
@@ -263,10 +300,7 @@ export const CsvMigrationWizard: React.FC = () => {
         createId: () => uuidv4(),
       });
     });
-    const errorText = summary.errors
-      .slice(0, 10)
-      .map((error) => `Row ${error.rowNumber}: ${error.message}`)
-      .join("\n");
+    const errorText = summary.errors.slice(0, 10).map((e) => `Row ${e.rowNumber}: ${e.message}`).join("\n");
     alert(
       `${datasetType} import complete.\nCreated: ${summary.importedCount}\nUpdated: ${summary.updatedCount}\nSkipped: ${summary.errors.length}${
         errorText ? `\n\nErrors:\n${errorText}` : ""
@@ -275,45 +309,75 @@ export const CsvMigrationWizard: React.FC = () => {
     setImportErrors(summary.errors);
   };
 
+  // ─── RAW Parse — runs resolution pass immediately after duplicate marking ────
   const parseRawImport = () => {
     if (datasetType === "ABT") {
-      const parsed = parseRawAbtOrderListing(rawAbtText);
-      setRawAbtRows(applyAbtDuplicateMarking(parsed));
+      const withDupes = applyAbtDuplicateMarking(parseRawAbtOrderListing(rawAbtText));
+      setRawAbtRows(
+        withDupes.map((row) => {
+          const res = resolveResident(row.mrn, store.residents);
+          return { ...row, residentResolution: res.resolution, residentDisplayName: res.displayName };
+        })
+      );
       return;
     }
     if (datasetType === "VAX") {
-      const parsed = parseRawVaxList(rawVaxText, vaxTypeSelection, vaxStatusSelection);
-      setRawVaxRows(applyVaxDuplicateMarking(parsed));
+      const withDupes = applyVaxDuplicateMarking(parseRawVaxList(rawVaxText, vaxTypeSelection, vaxStatusSelection));
+      setRawVaxRows(
+        withDupes.map((row) => {
+          const res = resolveResident(row.mrn, store.residents);
+          return { ...row, residentResolution: res.resolution, residentDisplayName: res.displayName };
+        })
+      );
     }
   };
 
+  // ─── RAW Commit ────────────────────────────────────────────────────────────
   const commitRawImport = () => {
-    if (hasRawErrors) {
-      alert("Cannot commit while unskipped error rows exist.");
-      return;
-    }
+    if (hasRawErrors) { alert("Cannot commit while unskipped error rows exist."); return; }
     let imported = 0;
     let skipped = 0;
     let duplicatesSkipped = 0;
     let errorsSkipped = 0;
+    let quarantineCreated = 0;
+    const now = new Date().toISOString();
+
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
-      facility.abts = facility.abts || {};
-      facility.vaxEvents = facility.vaxEvents || {};
+      facility.abts       = facility.abts       || {};
+      facility.vaxEvents  = facility.vaxEvents  || {};
+      facility.quarantine = facility.quarantine || {};
+
+      const buildRef = (row: RawAbtStagingRow | RawVaxStagingRow): ResidentRef => {
+        if (row.residentResolution !== 'unresolved') {
+          return { kind: 'mrn', id: row.mrn };
+        }
+        const tempId = `Q:${uuidv4()}`;
+        const qr: QuarantineResident = {
+          tempId,
+          displayName: row.residentNameRaw || row.mrn,
+          source: 'census_missing_mrn',
+          rawHint: row.mrn || row.residentNameRaw,
+          createdAt: now,
+          updatedAt: now,
+        };
+        facility.quarantine[tempId] = qr;
+        quarantineCreated += 1;
+        return { kind: 'quarantine', id: tempId };
+      };
 
       if (datasetType === "ABT") {
         rawAbtRows.forEach((row) => {
           if (row.skip || row.status === "ERROR") {
             skipped += 1;
             if (row.status === "ERROR") errorsSkipped += 1;
-            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate")))
-              duplicatesSkipped += 1;
+            if (row.warnings.some((w) => w.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
             return;
           }
           const id = uuidv4();
           facility.abts[id] = {
             id,
-            residentRef:      { kind: "mrn", id: row.mrn },
+            residentRef:      buildRef(row),
             status:           row.orderStatusRaw.toLowerCase().includes("complete") ? "completed" : "active",
             medication:       row.medicationName || row.orderSummaryRaw,
             dose:             row.dose             || undefined,
@@ -324,11 +388,9 @@ export const CsvMigrationWizard: React.FC = () => {
             syndromeCategory: row.syndrome          || undefined,
             startDate:        row.startDate         || undefined,
             endDate:          row.endDate           || undefined,
-            notes:            row.endDateWasComputed
-                                ? "End date computed from extracted duration."
-                                : undefined,
-            createdAt:        new Date().toISOString(),
-            updatedAt:        new Date().toISOString(),
+            notes:            row.endDateWasComputed ? "End date computed from extracted duration." : undefined,
+            createdAt:        now,
+            updatedAt:        now,
           };
           imported += 1;
         });
@@ -339,27 +401,31 @@ export const CsvMigrationWizard: React.FC = () => {
           if (row.skip || row.status === "ERROR") {
             skipped += 1;
             if (row.status === "ERROR") errorsSkipped += 1;
-            if (row.warnings.some((warning) => warning.toLowerCase().includes("duplicate")))
-              duplicatesSkipped += 1;
+            if (row.warnings.some((w) => w.toLowerCase().includes("duplicate"))) duplicatesSkipped += 1;
             return;
           }
           const id = uuidv4();
           facility.vaxEvents[id] = {
             id,
-            residentRef:      { kind: "mrn", id: row.mrn },
+            residentRef:      buildRef(row),
             vaccine:          row.vaccineType,
             status:           row.eventStatus as VaxEvent["status"],
             administeredDate: row.eventDate,
             dateGiven:        row.eventDate,
             source:           "csv-import",
-            createdAt:        new Date().toISOString(),
-            updatedAt:        new Date().toISOString(),
+            createdAt:        now,
+            updatedAt:        now,
           };
           imported += 1;
         });
       }
     });
-    alert(`RAW import complete.\nImported: ${imported}\nSkipped: ${skipped}\nDuplicates skipped: ${duplicatesSkipped}\nErrors skipped: ${errorsSkipped}`);
+
+    alert(
+      `RAW import complete.\nImported: ${imported}\nSkipped: ${skipped}` +
+      `\nDuplicates skipped: ${duplicatesSkipped}\nErrors skipped: ${errorsSkipped}` +
+      (quarantineCreated ? `\n\n⚠️ ${quarantineCreated} resident(s) not found in census or historical list — added to Quarantine for manual linking.` : '')
+    );
   };
 
   const statusBadge = (status: string) => {
@@ -379,7 +445,6 @@ export const CsvMigrationWizard: React.FC = () => {
     );
   };
 
-  // ─── VAX staging helper — updates a single field on a row by id ───────────
   const updateVaxRow = <K extends keyof RawVaxStagingRow>(
     id: string,
     field: K,
@@ -392,26 +457,14 @@ export const CsvMigrationWizard: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => downloadTemplate("IP")}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
-        >
-          <Download className="w-4 h-4" />
-          Download IP Template
+        <button onClick={() => downloadTemplate("IP")} className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50">
+          <Download className="w-4 h-4" /> Download IP Template
         </button>
-        <button
-          onClick={() => downloadTemplate("ABT")}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
-        >
-          <Download className="w-4 h-4" />
-          Download ABT Template
+        <button onClick={() => downloadTemplate("ABT")} className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50">
+          <Download className="w-4 h-4" /> Download ABT Template
         </button>
-        <button
-          onClick={() => downloadTemplate("VAX")}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
-        >
-          <Download className="w-4 h-4" />
-          Download VAX Template
+        <button onClick={() => downloadTemplate("VAX")} className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50">
+          <Download className="w-4 h-4" /> Download VAX Template
         </button>
       </div>
 
@@ -423,150 +476,112 @@ export const CsvMigrationWizard: React.FC = () => {
       )}
 
       {importMode === "CSV" && (
-      <div className="border border-neutral-200 rounded-md p-4 space-y-3">
-        {datasetType === "ABT" && (
-          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-            Upload CSV → Parse → Review/Edit in Preview → Commit Import. Nothing is saved until Commit Import.
-          </div>
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-          <select
-            value={datasetType}
-            onChange={(event) => {
-              setDatasetType(event.target.value as MigrationDatasetType);
-              setHeaders([]);
-              setRows([]);
-              setMapping([]);
-            }}
-            className="sm:col-span-1 border border-neutral-300 rounded-md p-2 text-sm"
-          >
-            <option value="IP">IP</option>
-            <option value="ABT">ABT</option>
-            <option value="VAX">VAX</option>
-          </select>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="sm:col-span-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50"
-          >
-            <Upload className="w-4 h-4" />
-            {fileName ? "Replace CSV" : "Upload CSV"}
-          </button>
-          <button
-            onClick={() => parseCurrentCsv(csvText)}
-            className="sm:col-span-1 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700"
-          >
-            Parse {DATASET_LABELS[datasetType]} CSV
-          </button>
-          <button
-            onClick={handleImport}
-            className="sm:col-span-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:bg-neutral-300"
-            disabled={datasetType === "ABT" && hasAbtCsvErrors}
-          >
-            {datasetType === "ABT" ? "Commit Import" : "Import CSV"}
-          </button>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) handleFileUpload(file);
-          }}
-        />
-        <textarea
-          value={csvText}
-          onChange={(event) => setCsvText(event.target.value)}
-          placeholder="Paste CSV content here (optional)"
-          rows={6}
-          className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
-        />
-
-        {datasetType === "ABT" && abtCsvRows.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-sm font-semibold text-neutral-900">Parsed Items Preview</h4>
-            <div className="overflow-x-auto border border-neutral-200 rounded-md">
-              <table className="min-w-full text-xs">
-                <thead className="bg-neutral-50">
-                  <tr>
-                    <th className="px-2 py-1">Status</th>
-                    <th className="px-2 py-1">Skip</th>
-                    <th className="px-2 py-1">MRN</th>
-                    <th className="px-2 py-1">Resident</th>
-                    <th className="px-2 py-1">Medication</th>
-                    <th className="px-2 py-1">Medication Class</th>
-                    <th className="px-2 py-1">Dose</th>
-                    <th className="px-2 py-1">Route</th>
-                    <th className="px-2 py-1">Frequency</th>
-                    <th className="px-2 py-1">Start</th>
-                    <th className="px-2 py-1">End</th>
-                    <th className="px-2 py-1">Indication</th>
-                    <th className="px-2 py-1">Course Status</th>
-                    <th className="px-2 py-1">Flags</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {abtCsvRows.map((row) => (
-                    <tr key={row.rowId} className={row.skip ? "opacity-60 bg-neutral-50" : ""}>
-                      <td className="px-2 py-1">{statusBadge(row.status)}</td>
-                      <td className="px-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={row.skip}
-                          onChange={(event) => setAbtCsvRows((prev) => prev.map((item) => item.rowId === row.rowId ? { ...item, skip: event.target.checked } : item))}
-                        />
-                      </td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.mrn} onChange={(event) => updateAbtCsvRow(row.rowId, "mrn", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.residentName} onChange={(event) => updateAbtCsvRow(row.rowId, "residentName", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationName} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationName", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationClass} onChange={(event) => updateAbtCsvRow(row.rowId, "medicationClass", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.dose} onChange={(event) => updateAbtCsvRow(row.rowId, "dose", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.route} onChange={(event) => updateAbtCsvRow(row.rowId, "route", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.frequency} onChange={(event) => updateAbtCsvRow(row.rowId, "frequency", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.startDate} onChange={(event) => updateAbtCsvRow(row.rowId, "startDate", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.endDate} onChange={(event) => updateAbtCsvRow(row.rowId, "endDate", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.indication} onChange={(event) => updateAbtCsvRow(row.rowId, "indication", event.target.value)} /></td>
-                      <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.status} onChange={(event) => updateAbtCsvRow(row.rowId, "status", event.target.value)} /></td>
-                      <td className="px-2 py-1 max-w-xs">
-                        {row.errors.concat(row.warnings).join("; ")}
-                        {row.duplicateMatch && (
-                          <div className="text-[10px] text-purple-700 mt-1">
-                            Match: {row.duplicateMatch.medication} ({row.duplicateMatch.startDate}) [{row.duplicateMatch.status}]
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="border border-neutral-200 rounded-md p-4 space-y-3">
+          {datasetType === "ABT" && (
+            <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+              Upload CSV → Parse → Review/Edit in Preview → Commit Import. Nothing is saved until Commit Import.
             </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <select
+              value={datasetType}
+              onChange={(e) => { setDatasetType(e.target.value as MigrationDatasetType); setHeaders([]); setRows([]); setMapping([]); }}
+              className="sm:col-span-1 border border-neutral-300 rounded-md p-2 text-sm"
+            >
+              <option value="IP">IP</option>
+              <option value="ABT">ABT</option>
+              <option value="VAX">VAX</option>
+            </select>
+            <button onClick={() => fileInputRef.current?.click()} className="sm:col-span-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700 hover:bg-neutral-50">
+              <Upload className="w-4 h-4" />
+              {fileName ? "Replace CSV" : "Upload CSV"}
+            </button>
+            <button onClick={() => parseCurrentCsv(csvText)} className="sm:col-span-1 px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700">
+              Parse {DATASET_LABELS[datasetType]} CSV
+            </button>
+            <button onClick={handleImport} className="sm:col-span-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:bg-neutral-300" disabled={datasetType === "ABT" && hasAbtCsvErrors}>
+              {datasetType === "ABT" ? "Commit Import" : "Import CSV"}
+            </button>
           </div>
-        )}
-      </div>
+          <input ref={fileInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }} />
+          <textarea value={csvText} onChange={(e) => setCsvText(e.target.value)} placeholder="Paste CSV content here (optional)" rows={6} className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono" />
+
+          {datasetType === "ABT" && abtCsvRows.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-neutral-900">Parsed Items Preview</h4>
+              <div className="overflow-x-auto border border-neutral-200 rounded-md">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-neutral-50">
+                    <tr>
+                      <th className="px-2 py-1">Status</th>
+                      <th className="px-2 py-1">Skip</th>
+                      <th className="px-2 py-1">MRN</th>
+                      <th className="px-2 py-1">Resident</th>
+                      <th className="px-2 py-1">Medication</th>
+                      <th className="px-2 py-1">Medication Class</th>
+                      <th className="px-2 py-1">Dose</th>
+                      <th className="px-2 py-1">Route</th>
+                      <th className="px-2 py-1">Frequency</th>
+                      <th className="px-2 py-1">Start</th>
+                      <th className="px-2 py-1">End</th>
+                      <th className="px-2 py-1">Indication</th>
+                      <th className="px-2 py-1">Course Status</th>
+                      <th className="px-2 py-1">Flags</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {abtCsvRows.map((row) => (
+                      <tr key={row.rowId} className={row.skip ? "opacity-60 bg-neutral-50" : ""}>
+                        <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                        <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => setAbtCsvRows((prev) => prev.map((item) => item.rowId === row.rowId ? { ...item, skip: e.target.checked } : item))} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.mrn} onChange={(e) => updateAbtCsvRow(row.rowId, "mrn", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.residentName} onChange={(e) => updateAbtCsvRow(row.rowId, "residentName", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationName} onChange={(e) => updateAbtCsvRow(row.rowId, "medicationName", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.medicationClass} onChange={(e) => updateAbtCsvRow(row.rowId, "medicationClass", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.dose} onChange={(e) => updateAbtCsvRow(row.rowId, "dose", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.route} onChange={(e) => updateAbtCsvRow(row.rowId, "route", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.frequency} onChange={(e) => updateAbtCsvRow(row.rowId, "frequency", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.startDate} onChange={(e) => updateAbtCsvRow(row.rowId, "startDate", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.endDate} onChange={(e) => updateAbtCsvRow(row.rowId, "endDate", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.indication} onChange={(e) => updateAbtCsvRow(row.rowId, "indication", e.target.value)} /></td>
+                        <td className="px-2 py-1"><input className="border rounded p-1" value={row.data.status} onChange={(e) => updateAbtCsvRow(row.rowId, "status", e.target.value)} /></td>
+                        <td className="px-2 py-1 max-w-xs">
+                          {row.errors.concat(row.warnings).join("; ")}
+                          {row.duplicateMatch && (
+                            <div className="text-[10px] text-purple-700 mt-1">Match: {row.duplicateMatch.medication} ({row.duplicateMatch.startDate}) [{row.duplicateMatch.status}]</div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {importMode === "RAW" && (datasetType === "ABT" || datasetType === "VAX") && (
         <div className="border border-neutral-200 rounded-md p-4 space-y-3">
+
+          {/* Resolution legend */}
+          <div className="flex flex-wrap gap-2 text-[10px]">
+            <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">✅ Active census</span>
+            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🟡 Historical resident</span>
+            <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 Unresolved — will create Quarantine record at commit</span>
+          </div>
+
           {datasetType === "VAX" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-medium text-neutral-600">Default Vaccine Type</label>
-                <select
-                  value={vaxTypeSelection}
-                  onChange={(event) => setVaxTypeSelection(event.target.value)}
-                  className="w-full border border-neutral-300 rounded-md p-2 text-sm"
-                >
+                <select value={vaxTypeSelection} onChange={(e) => setVaxTypeSelection(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm">
                   {VAX_TYPE_OPTIONS.map((opt) => <option key={opt}>{opt}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-medium text-neutral-600">Default Event Status</label>
-                <select
-                  value={vaxStatusSelection}
-                  onChange={(event) => setVaxStatusSelection(event.target.value as "Vaccinated" | "Historical" | "Refused")}
-                  className="w-full border border-neutral-300 rounded-md p-2 text-sm"
-                >
+                <select value={vaxStatusSelection} onChange={(e) => setVaxStatusSelection(e.target.value as "Vaccinated" | "Historical" | "Refused")} className="w-full border border-neutral-300 rounded-md p-2 text-sm">
                   {VAX_STATUS_OPTIONS.map((opt) => <option key={opt}>{opt}</option>)}
                 </select>
               </div>
@@ -575,7 +590,7 @@ export const CsvMigrationWizard: React.FC = () => {
 
           <textarea
             value={datasetType === "ABT" ? rawAbtText : rawVaxText}
-            onChange={(event) => (datasetType === "ABT" ? setRawAbtText(event.target.value) : setRawVaxText(event.target.value))}
+            onChange={(e) => (datasetType === "ABT" ? setRawAbtText(e.target.value) : setRawVaxText(e.target.value))}
             placeholder={datasetType === "ABT" ? "Paste Order Listing Report raw text" : "Paste VAX raw list lines"}
             rows={8}
             className="w-full border border-neutral-300 rounded-md p-2 text-sm font-mono"
@@ -584,21 +599,10 @@ export const CsvMigrationWizard: React.FC = () => {
           <div className="flex gap-2">
             <button onClick={parseRawImport} className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700">Parse</button>
             <button
-              onClick={() => {
-                if (datasetType === "ABT") { setRawAbtText(""); setRawAbtRows([]); }
-                else                       { setRawVaxText(""); setRawVaxRows([]); }
-              }}
+              onClick={() => { if (datasetType === "ABT") { setRawAbtText(""); setRawAbtRows([]); } else { setRawVaxText(""); setRawVaxRows([]); } }}
               className="px-3 py-2 rounded-md border border-neutral-300 bg-white text-sm text-neutral-700"
-            >
-              Clear
-            </button>
-            <button
-              onClick={commitRawImport}
-              disabled={hasRawErrors}
-              className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm"
-            >
-              Commit Import
-            </button>
+            >Clear</button>
+            <button onClick={commitRawImport} disabled={hasRawErrors} className="px-3 py-2 rounded-md bg-emerald-600 disabled:bg-neutral-300 text-white text-sm">Commit Import</button>
           </div>
 
           {/* ABT RAW staging table */}
@@ -610,6 +614,7 @@ export const CsvMigrationWizard: React.FC = () => {
                     <th className="px-2 py-1">Status</th>
                     <th className="px-2 py-1">Skip</th>
                     <th className="px-2 py-1">MRN</th>
+                    <th className="px-2 py-1">Resident</th>
                     <th className="px-2 py-1">Name</th>
                     <th className="px-2 py-1">Medication</th>
                     <th className="px-2 py-1">Dose</th>
@@ -626,22 +631,33 @@ export const CsvMigrationWizard: React.FC = () => {
                 </thead>
                 <tbody>
                   {rawAbtRows.map((row) => {
-                    const updateField = (
-                      field: keyof RawAbtStagingRow,
-                      value: string | boolean
-                    ) =>
-                      setRawAbtRows((prev) =>
-                        prev.map((item) =>
-                          item.id === row.id ? { ...item, [field]: value } : item
-                        )
-                      );
+                    const updateField = (field: keyof RawAbtStagingRow, value: string | boolean) =>
+                      setRawAbtRows((prev) => prev.map((item) => item.id === row.id ? { ...item, [field]: value } : item));
                     return (
                       <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                         <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                        <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => updateField("skip", e.target.checked)} /></td>
+
+                        {/* MRN — re-resolves resident on every keystroke */}
                         <td className="px-2 py-1">
-                          <input type="checkbox" checked={row.skip} onChange={(e) => updateField("skip", e.target.checked)} />
+                          <input
+                            className="border rounded p-1 w-20 text-xs"
+                            value={row.mrn}
+                            onChange={(e) => {
+                              const newMrn = e.target.value;
+                              const res = resolveResident(newMrn, store.residents);
+                              setRawAbtRows((prev) => prev.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, mrn: newMrn, residentResolution: res.resolution, residentDisplayName: res.displayName }
+                                  : item
+                              ));
+                            }}
+                          />
                         </td>
-                        <td className="px-2 py-1"><input className="border rounded p-1 w-20 text-xs" value={row.mrn} onChange={(e) => updateField("mrn", e.target.value)} /></td>
+
+                        {/* Resident resolution badge */}
+                        <td className="px-2 py-1 whitespace-nowrap">{resolutionBadge(row.residentResolution, row.residentDisplayName)}</td>
+
                         <td className="px-2 py-1"><input className="border rounded p-1 w-28 text-xs" value={row.residentNameRaw} onChange={(e) => updateField("residentNameRaw", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1 w-32 text-xs" value={row.medicationName} onChange={(e) => updateField("medicationName", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1 w-16 text-xs" value={row.dose} onChange={(e) => updateField("dose", e.target.value)} /></td>
@@ -651,24 +667,15 @@ export const CsvMigrationWizard: React.FC = () => {
                         <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.endDate} onChange={(e) => updateField("endDate", e.target.value)} /></td>
                         <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.indicationRaw} onChange={(e) => updateField("indicationRaw", e.target.value)} /></td>
                         <td className="px-2 py-1">
-                          <select
-                            className="border rounded p-1 text-xs w-28"
-                            value={row.sourceOfInfection}
+                          <select className="border rounded p-1 text-xs w-28" value={row.sourceOfInfection}
                             onChange={(e) => {
                               const src = e.target.value;
                               const cascade = INDICATION_CASCADE[src];
-                              setRawAbtRows((prev) =>
-                                prev.map((item) =>
-                                  item.id === row.id
-                                    ? {
-                                        ...item,
-                                        sourceOfInfection:  src,
-                                        indicationCategory: cascade?.category ?? item.indicationCategory,
-                                        syndrome:           cascade?.syndrome  ?? item.syndrome,
-                                      }
-                                    : item
-                                )
-                              );
+                              setRawAbtRows((prev) => prev.map((item) =>
+                                item.id === row.id
+                                  ? { ...item, sourceOfInfection: src, indicationCategory: cascade?.category ?? item.indicationCategory, syndrome: cascade?.syndrome ?? item.syndrome }
+                                  : item
+                              ));
                             }}
                           >
                             {SOURCE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt || "— select —"}</option>)}
@@ -684,9 +691,7 @@ export const CsvMigrationWizard: React.FC = () => {
                             {SYNDROME_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt || "— select —"}</option>)}
                           </select>
                         </td>
-                        <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">
-                          {row.errors.concat(row.warnings).join("; ")}
-                        </td>
+                        <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">{row.errors.concat(row.warnings).join("; ")}</td>
                       </tr>
                     );
                   })}
@@ -704,6 +709,7 @@ export const CsvMigrationWizard: React.FC = () => {
                     <th className="px-2 py-1">Status</th>
                     <th className="px-2 py-1">Skip</th>
                     <th className="px-2 py-1">MRN</th>
+                    <th className="px-2 py-1">Resident</th>
                     <th className="px-2 py-1">Name</th>
                     <th className="px-2 py-1">Vaccine Type</th>
                     <th className="px-2 py-1">Event Status</th>
@@ -715,69 +721,41 @@ export const CsvMigrationWizard: React.FC = () => {
                   {rawVaxRows.map((row) => (
                     <tr key={row.id} className={row.skip ? "opacity-50 bg-neutral-50" : ""}>
                       <td className="px-2 py-1">{statusBadge(row.status)}</td>
+                      <td className="px-2 py-1"><input type="checkbox" checked={row.skip} onChange={(e) => updateVaxRow(row.id, "skip", e.target.checked)} /></td>
 
-                      {/* Skip */}
-                      <td className="px-2 py-1">
-                        <input
-                          type="checkbox"
-                          checked={row.skip}
-                          onChange={(e) => updateVaxRow(row.id, "skip", e.target.checked)}
-                        />
-                      </td>
-
-                      {/* MRN */}
+                      {/* MRN — re-resolves resident on every keystroke */}
                       <td className="px-2 py-1">
                         <input
                           className="border rounded p-1 w-20 text-xs"
                           value={row.mrn}
-                          onChange={(e) => updateVaxRow(row.id, "mrn", e.target.value)}
+                          onChange={(e) => {
+                            const newMrn = e.target.value;
+                            const res = resolveResident(newMrn, store.residents);
+                            setRawVaxRows((prev) => prev.map((item) =>
+                              item.id === row.id
+                                ? { ...item, mrn: newMrn, residentResolution: res.resolution, residentDisplayName: res.displayName }
+                                : item
+                            ));
+                          }}
                         />
                       </td>
 
-                      {/* Name */}
-                      <td className="px-2 py-1">
-                        <input
-                          className="border rounded p-1 w-28 text-xs"
-                          value={row.residentNameRaw}
-                          onChange={(e) => updateVaxRow(row.id, "residentNameRaw", e.target.value)}
-                        />
-                      </td>
+                      {/* Resident resolution badge */}
+                      <td className="px-2 py-1 whitespace-nowrap">{resolutionBadge(row.residentResolution, row.residentDisplayName)}</td>
 
-                      {/* Vaccine Type — dropdown */}
+                      <td className="px-2 py-1"><input className="border rounded p-1 w-28 text-xs" value={row.residentNameRaw} onChange={(e) => updateVaxRow(row.id, "residentNameRaw", e.target.value)} /></td>
                       <td className="px-2 py-1">
-                        <select
-                          className="border rounded p-1 text-xs w-28"
-                          value={row.vaccineType}
-                          onChange={(e) => updateVaxRow(row.id, "vaccineType", e.target.value)}
-                        >
+                        <select className="border rounded p-1 text-xs w-28" value={row.vaccineType} onChange={(e) => updateVaxRow(row.id, "vaccineType", e.target.value)}>
                           {VAX_TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                       </td>
-
-                      {/* Event Status — dropdown */}
                       <td className="px-2 py-1">
-                        <select
-                          className="border rounded p-1 text-xs w-24"
-                          value={row.eventStatus}
-                          onChange={(e) => updateVaxRow(row.id, "eventStatus", e.target.value as RawVaxStagingRow["eventStatus"])}
-                        >
+                        <select className="border rounded p-1 text-xs w-24" value={row.eventStatus} onChange={(e) => updateVaxRow(row.id, "eventStatus", e.target.value as RawVaxStagingRow["eventStatus"])}>
                           {VAX_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                       </td>
-
-                      {/* Date */}
-                      <td className="px-2 py-1">
-                        <input
-                          className="border rounded p-1 w-24 text-xs"
-                          value={row.eventDate}
-                          onChange={(e) => updateVaxRow(row.id, "eventDate", e.target.value)}
-                        />
-                      </td>
-
-                      {/* Flags */}
-                      <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">
-                        {row.errors.concat(row.warnings).join("; ")}
-                      </td>
+                      <td className="px-2 py-1"><input className="border rounded p-1 w-24 text-xs" value={row.eventDate} onChange={(e) => updateVaxRow(row.id, "eventDate", e.target.value)} /></td>
+                      <td className="px-2 py-1 max-w-xs text-amber-700 text-[10px]">{row.errors.concat(row.warnings).join("; ")}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -806,20 +784,14 @@ export const CsvMigrationWizard: React.FC = () => {
                       <td className="px-2 py-1 border-b border-neutral-100">
                         <select
                           value={entry.mappedField || ""}
-                          onChange={(event) => {
-                            const value = event.target.value || null;
-                            setMapping((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index ? { ...item, mappedField: value } : item
-                              )
-                            );
+                          onChange={(e) => {
+                            const value = e.target.value || null;
+                            setMapping((prev) => prev.map((item, i) => i === index ? { ...item, mappedField: value } : item));
                           }}
                           className="border border-neutral-300 rounded p-1 text-xs"
                         >
                           <option value="">(Unmapped)</option>
-                          {fields.map((field) => (
-                            <option key={field} value={field}>{field}</option>
-                          ))}
+                          {fields.map((field) => <option key={field} value={field}>{field}</option>)}
                         </select>
                       </td>
                     </tr>
@@ -828,20 +800,14 @@ export const CsvMigrationWizard: React.FC = () => {
               </table>
             </div>
             {unmappedColumns.length > 0 && (
-              <p className="text-xs text-amber-700 mt-2">
-                Unmapped columns: {unmappedColumns.join(", ")}
-              </p>
+              <p className="text-xs text-amber-700 mt-2">Unmapped columns: {unmappedColumns.join(", ")}</p>
             )}
           </div>
           {importErrors.length > 0 && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3">
               <h4 className="text-xs font-semibold text-red-800 mb-1">Row-level errors</h4>
               <ul className="text-xs text-red-700 list-disc pl-4 space-y-1 max-h-28 overflow-auto">
-                {importErrors.map((error, index) => (
-                  <li key={`${error.rowNumber}-${index}`}>
-                    Row {error.rowNumber}: {error.message}
-                  </li>
-                ))}
+                {importErrors.map((error, index) => <li key={`${error.rowNumber}-${index}`}>Row {error.rowNumber}: {error.message}</li>)}
               </ul>
             </div>
           )}
@@ -850,20 +816,12 @@ export const CsvMigrationWizard: React.FC = () => {
             <div className="overflow-x-auto max-h-64 border border-neutral-200">
               <table className="min-w-full text-xs">
                 <thead className="bg-neutral-50 sticky top-0">
-                  <tr>
-                    {headers.map((header) => (
-                      <th key={header} className="text-left px-2 py-1 border-b border-neutral-200">{header}</th>
-                    ))}
-                  </tr>
+                  <tr>{headers.map((header) => <th key={header} className="text-left px-2 py-1 border-b border-neutral-200">{header}</th>)}</tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, 20).map((row, rowIndex) => (
                     <tr key={rowIndex}>
-                      {headers.map((_, cellIndex) => (
-                        <td key={`${rowIndex}-${cellIndex}`} className="px-2 py-1 border-b border-neutral-100">
-                          {row[cellIndex] || ""}
-                        </td>
-                      ))}
+                      {headers.map((_, cellIndex) => <td key={`${rowIndex}-${cellIndex}`} className="px-2 py-1 border-b border-neutral-100">{row[cellIndex] || ""}</td>)}
                     </tr>
                   ))}
                 </tbody>

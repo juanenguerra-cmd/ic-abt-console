@@ -1,4 +1,5 @@
 export type RawRowStatus = 'PARSED' | 'NEEDS_REVIEW' | 'ERROR';
+export type ResolutionLevel = 'active' | 'historical' | 'unresolved';
 
 export interface RawAbtStagingRow {
   id: string;
@@ -31,9 +32,12 @@ export interface RawAbtStagingRow {
   sourceOfInfection: string;
   indicationCategory: string;
   syndrome: string;
+  /** Populated by the wizard after parsing — never set by the parser itself. */
+  residentResolution: ResolutionLevel;
+  residentDisplayName: string;
 }
 
-// ─── Lookup Maps ──────────────────────────────────────────────────────────────
+// ─── Lookup Maps ────────────────────────────────────────────────────────────────
 
 const ROUTE_MAP: Record<string, string> = {
   'by mouth': 'PO',
@@ -108,7 +112,7 @@ const INDICATION_DEFAULTS: Array<{
   { pattern: /\bendocard/i,                              source: 'Cardiovascular', category: 'Endocarditis',    syndrome: 'Cardiovascular'     },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
 const normalizeDate = (value: string): string => {
   const trimmed = value.trim();
@@ -155,24 +159,18 @@ const normalizeFrequency = (summary: string): { raw: string; normalized: string 
  * Parses "CASANO, MARYANN A (200999)"
  * → mrn: "200999", lastName: "CASANO", firstName: "MARYANN"
  * Strips trailing single-letter middle initial ("MARYANN A" → "MARYANN").
- * MRN is the true linking key to the resident census — name is display only.
  */
 const parseResident = (residentNameRaw: string) => {
   const mrnMatch = residentNameRaw.match(/\(([^)]+)\)/);
   const mrn = (mrnMatch?.[1] ?? '').trim();
   const withoutMrn = residentNameRaw.replace(/\([^)]*\)/g, '').trim();
   const [lastName = '', firstChunk = ''] = withoutMrn.split(',').map((p) => p.trim());
-  // Strip trailing single-letter middle initial e.g. "MARYANN A" → "MARYANN"
   const residentFirstName = firstChunk.replace(/\s+[A-Z]\.?\s*$/, '').trim();
   return { mrn, residentLastName: lastName, residentFirstName };
 };
 
 /**
  * Extracts brand medication name and dose from the order summary column.
- * Input:  "Macrobid Oral Capsule 100 MG (Nitrofurantoin Monohyd Macro) Give 1 capsule..."
- * Output: { medicationName: "Macrobid Oral Capsule", dose: "100 MG" }
- * Everything before the first dose unit match = medication name.
- * Everything after = discarded (generic name, directions, indication).
  */
 const parseMedicationAndDose = (summary: string): { medicationName: string; dose: string } => {
   const doseMatch = summary.match(/\b(\d+(?:\.\d+)?)\s*(MG|MCG|G|GRAM|ML|UNITS?)\b/i);
@@ -203,11 +201,10 @@ const deriveIndicationDefaults = (indicationRaw: string, orderSummaryRaw: string
 const splitLine = (line: string): string[] =>
   (line.includes('\t') ? line.split('\t') : line.split(/\s{2,}/)).map((p) => p.trim());
 
-/** A line is a data row if it contains a parenthesized MRN-like value and at least one date. */
 const isLikelyDataLine = (line: string) =>
   /\([^)]{2,}\)/.test(line) && /(\d{1,2}\/\d{1,2}\/\d{4})/.test(line);
 
-// ─── Main Export ──────────────────────────────────────────────────────────────
+// ─── Main Export ────────────────────────────────────────────────────────────────────
 
 export const parseRawAbtOrderListing = (rawText: string): RawAbtStagingRow[] => {
   const lines = rawText
@@ -221,14 +218,6 @@ export const parseRawAbtOrderListing = (rawText: string): RawAbtStagingRow[] => 
   return bodyLines.map((line, index) => {
     const cols = splitLine(line);
 
-    // Expected column order from source report:
-    // 0: Resident Name (includes MRN in parens)
-    // 1: Order Summary (medication, dose, directions, indication)
-    // 2: Order Status
-    // 3: Start Date
-    // 4: End Date
-    // 5: Route
-    // 6: Indication (raw)
     const residentNameRaw = cols[0] ?? '';
     const orderSummaryRaw = cols[1] ?? '';
     const orderStatusRaw  = cols[2] ?? '';
@@ -308,6 +297,9 @@ export const parseRawAbtOrderListing = (rawText: string): RawAbtStagingRow[] => 
       sourceOfInfection:   defaults.sourceOfInfection,
       indicationCategory:  defaults.indicationCategory,
       syndrome:            defaults.syndrome,
+      // Resolution fields — wizard populates these after parsing
+      residentResolution:  'unresolved',
+      residentDisplayName: '',
     };
   });
 };

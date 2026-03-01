@@ -1,4 +1,5 @@
 export type RawVaxStatus = 'PARSED' | 'NEEDS_REVIEW' | 'ERROR';
+export type ResolutionLevel = 'active' | 'historical' | 'unresolved';
 
 export interface RawVaxStagingRow {
   id: string;
@@ -16,6 +17,9 @@ export interface RawVaxStagingRow {
   eventDate: string;
   vaccineType: string;
   eventStatus: string;
+  /** Populated by the wizard after parsing — never set by the parser itself. */
+  residentResolution: ResolutionLevel;
+  residentDisplayName: string;
 }
 
 const normalizeDate = (value: string): string => {
@@ -98,6 +102,9 @@ export const parseRawVaxList = (
         eventDate,
         vaccineType,
         eventStatus,
+        // Resolution fields — wizard populates these after parsing
+        residentResolution: 'unresolved',
+        residentDisplayName: '',
       };
     });
 };
