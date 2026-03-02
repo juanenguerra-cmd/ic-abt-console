@@ -26,6 +26,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
+import { HomePage } from '../pages/HomePage';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -48,11 +49,7 @@ import {
   Activity,
   BookOpen,
   ShieldCheck,
-  Clock,
-  AlertTriangle,
-  BarChart3,
-  Users2,
-  ChevronDown
+  Home
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -355,52 +352,27 @@ const AppShell = () => {
             ${isMobileMenuOpen ? "translate-x-0 mt-16" : "-translate-x-full lg:mt-0"}
           `}
         >
-          <nav className="p-4 space-y-1 overflow-y-auto h-full" aria-label="App sections">
-            {/* Overview */}
-            <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
-              <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
-              <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
-              <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
-            </SidebarAccordion>
-
-            {/* Daily Ops */}
-            <SidebarAccordion icon={Clock} title="Daily Ops">
-              {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
-              {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
-            </SidebarAccordion>
-
-            {/* Need Review */}
-            <SidebarAccordion
-              icon={Bell}
-              title="Need Review"
-              badge={(notifications?.length || 0) + quarantineCount}
-              defaultOpen={true}
-            >
-              <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
-              {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
-            </SidebarAccordion>
-
-            {/* Surveillance */}
-            <SidebarAccordion icon={AlertTriangle} title="Surveillance">
-              {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
-              {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
-            </SidebarAccordion>
-
-            {/* Reports */}
-            <SidebarAccordion icon={BarChart3} title="Reports">
-              {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
-              {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-              {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
-              {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
-            </SidebarAccordion>
-
-            {/* Staff — standalone */}
-            <SidebarLink to="/staff" icon={Users2} label="Staff" />
-
-            {/* Admin */}
-            <SidebarAccordion icon={Settings} title="Admin">
-              <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
-              {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
+          <nav className="p-4 space-y-1" aria-label="App sections">
+            <SidebarLink to="/" icon={Home} label="Home" />
+            <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+            <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
+            <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
+            <SidebarLink to="/staff" icon={Users} label="Staff" />
+            
+            {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
+            {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
+            <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
+            {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
+            {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
+            {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
+            {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
+            {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
+            {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+            {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
+            <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
+            {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
+            
+            <div className="pt-4 mt-4 border-t border-neutral-100">
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
             </SidebarAccordion>
           </nav>
@@ -411,7 +383,8 @@ const AppShell = () => {
           <div className="flex-1">
             <AnimatePresence mode="wait">
               <Routes>
-                <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
+                <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
