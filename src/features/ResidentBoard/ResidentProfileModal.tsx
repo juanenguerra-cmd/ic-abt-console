@@ -371,10 +371,13 @@ export const ResidentProfileModal: React.FC<Props> = ({
                       {onStartContactTrace && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onStartContactTrace(ip.id); }}
-                          className="shrink-0 p-1 text-teal-600 hover:bg-teal-50 rounded transition-colors"
+                          className="shrink-0 px-2 py-1 text-[11px] font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded transition-colors"
                           title="Start Contact Trace"
                         >
-                          <GitBranch className="w-4 h-4" />
+                          <span className="inline-flex items-center gap-1">
+                            <GitBranch className="w-3.5 h-3.5" />
+                            Start Contact Trace
+                          </span>
                         </button>
                       )}
                       <button

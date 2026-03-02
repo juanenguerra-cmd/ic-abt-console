@@ -46,6 +46,7 @@ export const PersonTypeahead: React.FC<Props> = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasStaffDirectory = Object.keys(store.staff || {}).length > 0;
 
   const suggestions: Suggestion[] = React.useMemo(() => {
     if (!query.trim()) return [];
@@ -95,7 +96,7 @@ export const PersonTypeahead: React.FC<Props> = ({
 
   useEffect(() => {
     setActiveIndex(0);
-    setOpen(suggestions.length > 0);
+    setOpen(Boolean(query.trim()));
   }, [suggestions]);
 
   const handleSelect = useCallback((s: Suggestion) => {
@@ -141,7 +142,7 @@ export const PersonTypeahead: React.FC<Props> = ({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
+          onChange={(e) => { onQueryChange(e.target.value); setOpen(true); }}
           onKeyDown={handleKeyDown}
           onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
           placeholder={placeholder}
@@ -149,9 +150,9 @@ export const PersonTypeahead: React.FC<Props> = ({
           autoComplete="off"
         />
       </div>
-      {open && suggestions.length > 0 && (
+      {open && (
         <ul className="absolute z-50 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-64 overflow-y-auto">
-          {suggestions.map((s, idx) => {
+          {suggestions.length > 0 ? suggestions.map((s, idx) => {
             const id = s.personRef.kind === 'resident' ? s.personRef.mrn : s.personRef.staffId;
             const isDisabled = disabledIds.has(id);
             return (
@@ -176,7 +177,11 @@ export const PersonTypeahead: React.FC<Props> = ({
                 <span className="shrink-0 text-xs text-neutral-400 font-mono">{s.identifier}</span>
               </li>
             );
-          })}
+          }) : (
+            <li className="px-3 py-2 text-xs text-neutral-500">
+              No matches found. {!hasStaffDirectory && 'Staff suggestions appear once staff records exist in the staff directory.'}
+            </li>
+          )}
         </ul>
       )}
     </div>
