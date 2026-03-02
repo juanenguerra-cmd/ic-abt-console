@@ -16,6 +16,8 @@ import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
+import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -66,6 +68,9 @@ export const ResidentBoard: React.FC = () => {
   
   const [showVaxModal, setShowVaxModal] = useState(false);
   const [editingVaxId, setEditingVaxId] = useState<string | null>(null);
+
+  const [showContactTraceModal, setShowContactTraceModal] = useState(false);
+  const [contactTraceCaseId, setContactTraceCaseId] = useState<string | null>(null);
 
   // Sync filter state to URL search params
   const updateFilters = (updates: Record<string, string | null>) => {
@@ -630,6 +635,33 @@ export const ResidentBoard: React.FC = () => {
             updateDB(draft => { delete draft.data.facilityData[activeFacilityId].vaxEvents[id]; }, { action: 'delete', entityType: 'VaxEvent', entityId: id });
             showUndo({ message: "Vaccination record deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].vaxEvents[id] = snapshot; }) });
           }}
+          onStartContactTrace={(ipEventId) => {
+            if (!selectedResidentId) return;
+            const now = new Date().toISOString();
+            const newCaseId = uuidv4();
+            updateDB((draft) => {
+              const fd = draft.data.facilityData[activeFacilityId];
+              if (!fd.contactTraceCases) fd.contactTraceCases = {};
+              fd.contactTraceCases[newCaseId] = {
+                id: newCaseId,
+                status: 'open',
+                indexResidentMrn: selectedResidentId,
+                indexRef: { kind: 'ipEvent', id: ipEventId },
+                createdAt: now,
+                updatedAt: now,
+              };
+            }, { action: 'create', entityType: 'ContactTraceCase', entityId: newCaseId });
+            setContactTraceCaseId(newCaseId);
+            setShowContactTraceModal(true);
+          }}
+        />
+      )}
+
+      {/* Contact Trace Case Modal */}
+      {showContactTraceModal && contactTraceCaseId && (
+        <ContactTraceCaseModal
+          caseId={contactTraceCaseId}
+          onClose={() => { setShowContactTraceModal(false); setContactTraceCaseId(null); }}
         />
       )}
 

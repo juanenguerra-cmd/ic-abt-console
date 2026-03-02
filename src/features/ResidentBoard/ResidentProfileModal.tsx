@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2 } from "lucide-react";
+import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2, GitBranch } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 
@@ -15,6 +15,7 @@ interface Props {
   onDeleteAbt: (id: string) => void;
   onDeleteIp: (id: string) => void;
   onDeleteVax: (id: string) => void;
+  onStartContactTrace?: (ipEventId: string) => void;
 }
 
 export const ResidentProfileModal: React.FC<Props> = ({ 
@@ -28,7 +29,8 @@ export const ResidentProfileModal: React.FC<Props> = ({
   onEditVax,
   onDeleteAbt,
   onDeleteIp,
-  onDeleteVax
+  onDeleteVax,
+  onStartContactTrace,
 }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -366,6 +368,15 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         </p>
                         <p className={`text-xs ${subtitleClass}`}>{ip.organism || 'Unknown Organism'} • Precaution: {getPrecautionLabel(ip)}</p>
                       </div>
+                      {onStartContactTrace && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onStartContactTrace(ip.id); }}
+                          className="shrink-0 p-1 text-teal-600 hover:bg-teal-50 rounded transition-colors"
+                          title="Start Contact Trace"
+                        >
+                          <GitBranch className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => { e.stopPropagation(); onDeleteIp(ip.id); }}
                         className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
