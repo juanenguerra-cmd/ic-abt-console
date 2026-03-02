@@ -47,7 +47,12 @@ import {
   Map,
   Activity,
   BookOpen,
-  ShieldCheck
+  ShieldCheck,
+  Clock,
+  AlertTriangle,
+  BarChart3,
+  Users2,
+  ChevronDown
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -83,6 +88,52 @@ const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string,
         </span>
       )}
     </NavLink>
+  );
+};
+
+const SidebarAccordion = ({
+  icon: Icon,
+  title,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  badge?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) => {
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  return (
+    <div>
+      <button
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="w-5 h-5" aria-hidden="true" />
+          {title}
+        </div>
+        <div className="flex items-center gap-2">
+          {badge !== undefined && badge > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+              {badge}
+            </span>
+          )}
+          <ChevronDown
+            className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+      {isOpen && (
+        <div className="mt-0.5 ml-4 space-y-0.5 border-l border-neutral-100 pl-3">
+          {children}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -304,28 +355,54 @@ const AppShell = () => {
             ${isMobileMenuOpen ? "translate-x-0 mt-16" : "-translate-x-full lg:mt-0"}
           `}
         >
-          <nav className="p-4 space-y-1" aria-label="App sections">
-            <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
-            <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
-            <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
-            <SidebarLink to="/staff" icon={Users} label="Staff" />
-            
-            {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
-            {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
-            <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
-            {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
-            {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
-            {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-            {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
-            {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
-            {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
-            {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
-            <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
-            {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
-            
-            <div className="pt-4 mt-4 border-t border-neutral-100">
+          <nav className="p-4 space-y-1 overflow-y-auto h-full" aria-label="App sections">
+            {/* Overview */}
+            <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
+              <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
+              <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
+              <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
+            </SidebarAccordion>
+
+            {/* Daily Ops */}
+            <SidebarAccordion icon={Clock} title="Daily Ops">
+              {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
+              {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
+            </SidebarAccordion>
+
+            {/* Need Review */}
+            <SidebarAccordion
+              icon={Bell}
+              title="Need Review"
+              badge={(notifications?.length || 0) + quarantineCount}
+              defaultOpen={true}
+            >
+              <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
+              {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
+            </SidebarAccordion>
+
+            {/* Surveillance */}
+            <SidebarAccordion icon={AlertTriangle} title="Surveillance">
+              {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
+              {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
+            </SidebarAccordion>
+
+            {/* Reports */}
+            <SidebarAccordion icon={BarChart3} title="Reports">
+              {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
+              {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
+              {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
+              {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+            </SidebarAccordion>
+
+            {/* Staff — standalone */}
+            <SidebarLink to="/staff" icon={Users2} label="Staff" />
+
+            {/* Admin */}
+            <SidebarAccordion icon={Settings} title="Admin">
+              <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
+              {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
-            </div>
+            </SidebarAccordion>
           </nav>
         </aside>
 
