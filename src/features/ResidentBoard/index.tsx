@@ -459,7 +459,7 @@ export const ResidentBoard: React.FC = () => {
               return unitNameA.localeCompare(unitNameB);
             })
             .map(([unitName, unitResidents]) => (
-            <div key={unitName} className="flex flex-col w-80 shrink-0 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
+            <div key={unitName} className="flex flex-col min-w-[18rem] flex-1 bg-neutral-50 rounded-xl border border-neutral-200 overflow-hidden">
               <div className="bg-white px-4 py-3 border-b border-neutral-200 flex justify-between items-center shrink-0">
                 <h2 className="font-bold text-neutral-800">{unitName}</h2>
                 <span className="bg-neutral-200 text-neutral-700 text-xs font-bold px-2 py-0.5 rounded-full">
