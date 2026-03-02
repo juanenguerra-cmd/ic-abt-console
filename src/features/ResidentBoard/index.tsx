@@ -17,7 +17,12 @@ import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 
-/** Colour lookup for Kanban tile strips and tinted backgrounds by signal strip type. */
+/**
+ * Colour lookup for Kanban tile strips and tinted backgrounds.
+ * yellow = Isolation (formal precaution type assigned)
+ * blue   = EBP only (Enhanced Barrier Precautions / MDRO)
+ * green  = Active ABT course
+ */
 const TILE_COLORS: Record<string, { strip: string; bg: string }> = {
   yellow: { strip: '#eab308', bg: 'rgba(234,179,8,0.05)' },
   blue:   { strip: '#3b82f6', bg: 'rgba(59,130,246,0.05)' },
@@ -192,7 +197,6 @@ export const ResidentBoard: React.FC = () => {
   }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap]);
 
   // Group by Unit
-  // The prompt asks for Unit 2, Unit 3, Unit 4. We'll group dynamically based on currentUnit.
   const units = useMemo(() => {
     const groups: Record<string, Resident[]> = {};
     filteredResidents.forEach(r => {
@@ -398,7 +402,7 @@ export const ResidentBoard: React.FC = () => {
         </div>
       </div>
 
-      {/* Link-out banners for B4 */}
+      {/* Link-out banners */}
       {filterOnPrecautions && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center gap-3 shrink-0 text-sm text-amber-800">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -412,9 +416,8 @@ export const ResidentBoard: React.FC = () => {
         </div>
       )}
 
-      {/* Main Layout: 4 Columns */}
+      {/* Main Layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Unit Columns */}
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
           {Object.keys(units).length === 0 && (
             <div className="flex-1 flex items-center justify-center">
@@ -445,7 +448,6 @@ export const ResidentBoard: React.FC = () => {
               const order = ['Unit 2', 'Unit 3', 'Unit 4'];
               const indexA = order.indexOf(unitNameA);
               const indexB = order.indexOf(unitNameB);
-              
               if (indexA !== -1 && indexB !== -1) return indexA - indexB;
               if (indexA !== -1) return -1;
               if (indexB !== -1) return 1;
@@ -465,7 +467,6 @@ export const ResidentBoard: React.FC = () => {
                   const isActive = resident.status === "Active";
                   const sigs = signalMap[resident.mrn] || { hasActivePrecaution: false, hasEbp: false, hasActiveAbt: false, hasDueVax: false, hasRecentSymptoms96h: false, strip: 'none' as const };
                   const tileColor = TILE_COLORS[sigs.strip] ?? TILE_COLORS.none;
-                  
                   const isSelected = selectedResidentId === resident.mrn;
 
                   return (
@@ -480,112 +481,113 @@ export const ResidentBoard: React.FC = () => {
                         isSelected ? "border-indigo-500 ring-1 ring-indigo-500" : "border-neutral-200"
                       }`}
                     >
-                      {/* Left colour strip */}
+                      {/* Left colour strip — yellow=Isolation, blue=EBP, green=ABT */}
                       <div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg" style={{ backgroundColor: tileColor.strip }} />
-                      {/* Tile content with left offset for strip */}
                       <div className="pl-4 pr-3 py-3">
-                      {/* Header Row */}
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
-                          {resident.displayName}
-                        </h4>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedResidentId(resident.mrn);
-                              setEditingAbtId(null);
-                              setShowAbtModal(true);
-                            }}
-                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                            title="Add ABT"
-                          >
-                            <Activity className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedResidentId(resident.mrn);
-                              setEditingIpId(null);
-                              setShowIpModal(true);
-                            }}
-                            className="p-1 text-amber-600 hover:bg-amber-50 rounded"
-                            title="Add IP Event"
-                          >
-                            <Shield className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedResidentId(resident.mrn);
-                              setEditingVaxId(null);
-                              setShowVaxModal(true);
-                            }}
-                            className="p-1 text-purple-600 hover:bg-purple-50 rounded"
-                            title="Add Vaccination"
-                          >
-                            <Syringe className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPrintingResidentId(resident.mrn);
-                            }}
-                            className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
-                            title="Print New Admission IP Screening Form"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
-                            {resident.currentRoom || "N/A"}
-                          </span>
+                        {/* Header Row */}
+                        <div className="flex justify-between items-start mb-1">
+                          <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
+                            {resident.displayName}
+                          </h4>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedResidentId(resident.mrn);
+                                setEditingAbtId(null);
+                                setShowAbtModal(true);
+                              }}
+                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                              title="Add ABT"
+                            >
+                              <Activity className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedResidentId(resident.mrn);
+                                setEditingIpId(null);
+                                setShowIpModal(true);
+                              }}
+                              className="p-1 text-amber-600 hover:bg-amber-50 rounded"
+                              title="Add IP Event"
+                            >
+                              <Shield className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedResidentId(resident.mrn);
+                                setEditingVaxId(null);
+                                setShowVaxModal(true);
+                              }}
+                              className="p-1 text-purple-600 hover:bg-purple-50 rounded"
+                              title="Add Vaccination"
+                            >
+                              <Syringe className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPrintingResidentId(resident.mrn);
+                              }}
+                              className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
+                              title="Print New Admission IP Screening Form"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
+                              {resident.currentRoom || "N/A"}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      
-                      {/* Sub-row */}
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
-                        <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
-                      </div>
+                        
+                        {/* Sub-row */}
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
+                          <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
+                        </div>
 
-                      {/* Chip Row */}
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {hasAllergies && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500 text-white shadow-sm uppercase tracking-wider">
-                            Allergies
-                          </span>
-                        )}
-                        {isActive && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500 text-white shadow-sm uppercase tracking-wider">
-                            Active
-                          </span>
-                        )}
-                        {sigs.hasActivePrecaution && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
-                            Isolation
-                          </span>
-                        )}
-                        {sigs.hasEbp && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
-                            EBP
-                          </span>
-                        )}
-                        {sigs.hasActiveAbt && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white shadow-sm uppercase tracking-wider">
-                            ABT Active
-                          </span>
-                        )}
-                        {sigs.hasDueVax && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500 text-white shadow-sm uppercase tracking-wider">
-                            VAX Due
-                          </span>
-                        )}
-                        {sigs.hasRecentSymptoms96h && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500 text-white shadow-sm uppercase tracking-wider">
-                            Sx ≤96h
-                          </span>
-                        )}
-                      </div>
+                        {/* Chip Row */}
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {hasAllergies && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500 text-white shadow-sm uppercase tracking-wider">
+                              Allergies
+                            </span>
+                          )}
+                          {isActive && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500 text-white shadow-sm uppercase tracking-wider">
+                              Active
+                            </span>
+                          )}
+                          {/* Isolation chip — only fires when isolationType is set (NOT for EBP-only residents) */}
+                          {sigs.hasActivePrecaution && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
+                              Isolation
+                            </span>
+                          )}
+                          {/* EBP chip — blue, distinct from Isolation */}
+                          {sigs.hasEbp && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500 text-white shadow-sm uppercase tracking-wider">
+                              EBP
+                            </span>
+                          )}
+                          {sigs.hasActiveAbt && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500 text-white shadow-sm uppercase tracking-wider">
+                              ABT Active
+                            </span>
+                          )}
+                          {sigs.hasDueVax && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500 text-white shadow-sm uppercase tracking-wider">
+                              VAX Due
+                            </span>
+                          )}
+                          {sigs.hasRecentSymptoms96h && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500 text-white shadow-sm uppercase tracking-wider">
+                              Sx ≤96h
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -642,7 +644,8 @@ export const ResidentBoard: React.FC = () => {
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
 
-      {/* Census Parser Modal */}      {showCensusModal && (
+      {/* Census Parser Modal */}
+      {showCensusModal && (
         <CensusParserModal onClose={() => setShowCensusModal(false)} />
       )}
 

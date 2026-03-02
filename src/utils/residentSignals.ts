@@ -5,14 +5,15 @@
  * Used for Kanban tile strip colours and the default "highlighted" dashboard filter.
  *
  * Strip priority:
- *  1) yellow – Active Isolation (isolationType set) OR EBP flag (Enhanced Barrier Precautions)
- *  2) green  – Active ABT course
+ *  1) yellow – Active Isolation (isolationType set)
+ *  2) blue   – EBP / Enhanced Barrier Precautions flag only (no formal isolation type)
+ *  3) green  – Active ABT course
  *  else none
  *
  * NOTE: hasActivePrecaution and hasEbp are intentionally separate signals.
- * hasActivePrecaution = formal isolation type is assigned (contact/droplet/airborne).
- * hasEbp             = MDRO / Enhanced Barrier Precautions flag is set.
- * Both yield a yellow strip, but only the relevant chip is shown on the tile.
+ * hasActivePrecaution = formal isolation type is assigned (contact/droplet/airborne) → yellow.
+ * hasEbp             = MDRO / Enhanced Barrier Precautions flag is set → blue.
+ * If a resident has BOTH, isolation (yellow) takes priority as it is more restrictive.
  */
 
 import { FacilityStore } from '../domain/models';
@@ -35,7 +36,7 @@ export function computeResidentSignals(
   symptomMap?: Record<string, { respiratory: boolean; gi: boolean }>
 ): ResidentSignals {
   // Formal isolation only — isolationType must be explicitly assigned.
-  // EBP (ebp flag) is a separate signal and must NOT trigger this flag.
+  // EBP (ebp flag) is a separate, distinct signal and must NOT trigger this flag.
   const hasActivePrecaution = Object.values(store.infections || {}).some(
     i =>
       i.residentRef.kind === 'mrn' &&
@@ -70,9 +71,13 @@ export function computeResidentSignals(
   const ind = resolvedSymptomMap[residentId];
   const hasRecentSymptoms96h = Boolean(ind && (ind.respiratory || ind.gi));
 
-  // Both formal isolation and EBP flag independently warrant a yellow strip.
+  // Strip colour logic:
+  // - Formal isolation → yellow (most restrictive, highest priority)
+  // - EBP only → blue
+  // - Active ABT only → green
   let strip: ResidentSignals['strip'] = 'none';
-  if (hasActivePrecaution || hasEbp) strip = 'yellow';
+  if (hasActivePrecaution) strip = 'yellow';
+  else if (hasEbp) strip = 'blue';
   else if (hasActiveAbt) strip = 'green';
 
   return { hasActivePrecaution, hasEbp, hasActiveAbt, hasDueVax, hasRecentSymptoms96h, strip };
