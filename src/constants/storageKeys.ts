@@ -9,3 +9,8 @@ export const IDB_ROLE_KEY = "ltc_current_role";
 export const LS_LAST_ACTIVE_TS = "ltc_last_active_timestamp";
 /** Idle threshold in milliseconds before the PIN lock screen re-engages (30 min). */
 export const IDLE_THRESHOLD_MS = 30 * 60 * 1000;
+
+/** localStorage key for user-pinned nav shortcuts on the Home page. */
+export const PINNED_NAVS = "icn_pinned_navs";
+/** localStorage key for recently used @-tagged resident names on the Home page. */
+export const RECENT_TAGS = "icn_recent_tags";
