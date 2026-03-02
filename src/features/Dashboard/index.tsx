@@ -10,7 +10,7 @@ import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
 import { FloorLayout, Resident } from '../../domain/models';
 import { computeSymptomIndicators, SymptomIndicator } from '../../utils/symptomIndicators';
-import { getActiveABT, normalizeStatus } from '../../utils/countCardDataHelpers';
+import { getActiveABT, isActiveCensusResident, normalizeStatus } from '../../utils/countCardDataHelpers';
 
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 52;
@@ -200,7 +200,9 @@ export const Dashboard: React.FC = () => {
   }, [store.residents, filteredLayout.rooms]);
 
   // Calculate stats
-  const activeResidents = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.currentUnit && r.currentUnit.trim() !== "" && r.currentUnit.toLowerCase() !== "unassigned");
+  const activeResidents = (Object.values(store.residents || {}) as Resident[])
+    .filter(isActiveCensusResident)
+    .filter(r => normalizeStatus(r.status) === 'active');
   // Refined census: exclude residents with unit === 'unknown'
   const residentCount = activeResidents.filter(r => r.currentUnit?.toLowerCase() !== 'unknown').length;
   const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
@@ -276,7 +278,8 @@ export const Dashboard: React.FC = () => {
 
   const activeResidentMrns = new Set(
     (Object.values(store.residents || {}) as Resident[])
-      .filter(r => !r.isHistorical && !r.backOfficeOnly && r.status === 'Active')
+      .filter(isActiveCensusResident)
+      .filter(r => normalizeStatus(r.status) === 'active')
       .map(r => r.mrn)
   );
   const totalActiveResidents = activeResidentMrns.size;
