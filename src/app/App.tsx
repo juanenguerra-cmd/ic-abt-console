@@ -49,8 +49,11 @@ import {
   Activity,
   BookOpen,
   ShieldCheck,
-  Home,
-  ChevronDown
+  ChevronDown,
+  Clock,
+  AlertTriangle,
+  BarChart3,
+  Users2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -220,7 +223,7 @@ const AppShell = () => {
 
   const facilities = Object.values(db.data.facilities.byId) as any[];
   const activeFacility = db.data.facilities.byId[activeFacilityId];
-  const quarantineCount = Object.keys(store.quarantine).length;
+  const quarantineCount = (Object.values(store.quarantine) as any[]).filter((q: any) => !q.resolvedToMrn).length;
 
   if (isPrintRoute) {
     return <AuditReportPrint />;
@@ -354,43 +357,47 @@ const AppShell = () => {
           `}
         >
           <nav className="p-4 space-y-1" aria-label="App sections">
-            <SidebarLink to="/home" icon={Home} label="Home" />
-
             <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
               <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
               <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
               <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
-              <SidebarLink to="/staff" icon={Users} label="Staff" />
             </SidebarAccordion>
 
             {can('write:shiftlog') && (
-              <SidebarAccordion icon={MessageSquare} title="Clinical Notes">
+              <SidebarAccordion icon={Clock} title="Daily Ops">
                 <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
                 <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
               </SidebarAccordion>
             )}
 
-            <SidebarAccordion icon={Bell} title="Infection Control" badge={(notifications?.length || 0) + (quarantineCount || 0)} defaultOpen={true}>
+            <SidebarAccordion icon={Bell} title="Need Review" badge={(notifications?.length || 0) + (quarantineCount || 0)} defaultOpen={true}>
               <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
-              {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
               {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
             </SidebarAccordion>
 
+            {can('write:outbreaks') && (
+              <SidebarAccordion icon={AlertTriangle} title="Surveillance">
+                <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
+                <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />
+              </SidebarAccordion>
+            )}
+
             {(can('write:outbreaks') || can('write:audits')) && (
-              <SidebarAccordion icon={FileText} title="Reports & Audits">
+              <SidebarAccordion icon={BarChart3} title="Reports">
                 {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
                 {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-                {can('write:outbreaks') && <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />}
                 {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
                 {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
               </SidebarAccordion>
             )}
 
-            <div className="pt-4 mt-4 border-t border-neutral-100 space-y-1">
+            <SidebarLink to="/staff" icon={Users2} label="Staff" />
+
+            <SidebarAccordion icon={Settings} title="Admin">
               <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
               {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
-            </div>
+            </SidebarAccordion>
           </nav>
         </aside>
 
