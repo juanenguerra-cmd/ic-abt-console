@@ -39,7 +39,13 @@ export const NoteGenerator: React.FC = () => {
     if (incomingType && incomingType in NOTE_TEMPLATES) setNoteType(incomingType as NoteType);
   }, [searchParams, store.residents]);
 
-  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
+  const residents = useMemo(
+    () =>
+      (Object.values(store.residents) as Resident[])
+        .filter(r => !r.isHistorical && !r.backOfficeOnly)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })),
+    [store.residents],
+  );
 
   const generateNote = () => {
     if (!selectedMrn) {
