@@ -26,6 +26,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
+import { HomePage } from '../features/Home/HomePage';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -47,7 +48,8 @@ import {
   Map,
   Activity,
   BookOpen,
-  ShieldCheck
+  ShieldCheck,
+  Home
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -305,6 +307,7 @@ const AppShell = () => {
           `}
         >
           <nav className="p-4 space-y-1" aria-label="App sections">
+            <SidebarLink to="/home" icon={Home} label="Home" />
             <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
             <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
             <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
@@ -334,6 +337,7 @@ const AppShell = () => {
           <div className="flex-1">
             <AnimatePresence mode="wait">
               <Routes>
+                <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
