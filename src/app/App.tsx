@@ -357,7 +357,7 @@ const AppShell = () => {
             <SidebarLink to="/home" icon={Home} label="Home" />
 
             <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
-              <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
+              <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
               <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
               <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
               <SidebarLink to="/staff" icon={Users} label="Staff" />
@@ -400,7 +400,8 @@ const AppShell = () => {
             <AnimatePresence mode="wait">
               <Routes>
                 <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
-                <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
@@ -423,7 +424,7 @@ const AppShell = () => {
                 <Route path="/back-office" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><BackOfficePage /></RoleGuard></PageTransition>} />
                 <Route path="/user-guide" element={<PageTransition><UserGuidePage /></PageTransition>} />
                 <Route path="/not-authorised" element={<PageTransition><div className="p-6"><NotAuthorisedPage /></div></PageTransition>} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
               </Routes>
             </AnimatePresence>
           </div>
