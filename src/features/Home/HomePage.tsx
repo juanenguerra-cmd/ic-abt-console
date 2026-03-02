@@ -1,10 +1,12 @@
 import React, { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ShiftLogEntry } from "../../domain/models";
-import { Send, MessageSquare, User, Hash } from "lucide-react";
+import { Send, MessageSquare, User, Hash, ArrowLeft } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 export const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   const { store, activeFacilityId } = useFacilityData();
   const { db, updateDB } = useDatabase();
 
@@ -239,17 +241,28 @@ export const HomePage: React.FC = () => {
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
       {/* Header */}
       <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50">
-        <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
-          <MessageSquare className="w-5 h-5 text-indigo-600" />
-          Quick Note
-        </h2>
-        <p className="text-sm text-neutral-500">
-          Use{" "}
-          <span className="font-mono font-bold text-indigo-600">@</span> to tag
-          residents ·{" "}
-          <span className="font-mono font-bold text-emerald-600">#</span> for
-          hashtags
-        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-indigo-600" />
+              Quick Note
+            </h2>
+            <p className="text-sm text-neutral-500">
+              Use{" "}
+              <span className="font-mono font-bold text-indigo-600">@</span> to tag
+              residents ·{" "}
+              <span className="font-mono font-bold text-emerald-600">#</span> for
+              hashtags
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Feed */}
