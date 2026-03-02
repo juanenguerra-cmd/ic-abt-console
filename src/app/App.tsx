@@ -10,8 +10,8 @@ import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
 import { SettingsConsole } from "../features/Settings";
 import { QuarantineInbox } from "../features/Quarantine";
-import { Floorplan } from "../features/Floorplan";
 import { ShiftLogPage } from "../features/Notes/ShiftLogPage";
+import { FloorMapPage } from "../features/FloorMapPage";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
@@ -25,7 +25,6 @@ import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
-import { FloorMap } from '../features/Heatmap/FloorMap';
 import { LineListReportPage } from '../features/LineListReport';
 
 import { LockScreen } from './LockScreen';
@@ -51,28 +50,6 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-
-// --- Layout Shell ---
-
-const FloorplanPage = () => {
-  const navigate = useNavigate();
-  return <Floorplan onBack={() => navigate(-1)} />;
-};
-
-const HeatmapPage = () => {
-  const { activeFacilityId } = useFacilityData();
-  const { db } = useDatabase();
-  const facility = db.data.facilities.byId[activeFacilityId];
-  const layout = facility?.floorLayouts?.[0] ?? {
-    id: 'heatmap-default',
-    facilityId: activeFacilityId,
-    name: 'Heatmap',
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    rooms: [],
-  };
-  return <FloorMap layout={layout} facilityId={activeFacilityId} />;
-};
 
 const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: React.ElementType, label: string, badge?: number, alertBadge?: boolean }) => {
   return (
@@ -330,8 +307,7 @@ const AppShell = () => {
           <nav className="p-4 space-y-1" aria-label="App sections">
             <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
             <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
-            <SidebarLink to="/floorplan" icon={Map} label="Floor Plan" />
-            <SidebarLink to="/heatmap" icon={Activity} label="Heatmap" />
+            <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
             <SidebarLink to="/staff" icon={Users} label="Staff" />
             
             {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
@@ -360,8 +336,9 @@ const AppShell = () => {
               <Routes>
                 <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
-                <Route path="/floorplan" element={<PageTransition><FloorplanPage /></PageTransition>} />
-                <Route path="/heatmap" element={<PageTransition><HeatmapPage /></PageTransition>} />
+                <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
+                <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
+                <Route path="/heatmap" element={<Navigate to="/floor-map" replace />} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ShiftLogPage /></RoleGuard></PageTransition>} />
