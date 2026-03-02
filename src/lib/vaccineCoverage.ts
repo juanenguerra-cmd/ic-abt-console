@@ -49,6 +49,14 @@ export interface VaccineCoverageResult {
   covid19: number;
   /** Residents covered for RSV (lifetime). */
   rsv: number;
+  /** Residents who declined Influenza in the current season. */
+  declinedInfluenza: number;
+  /** Residents who declined Pneumococcal (lifetime). */
+  declinedPneumococcal: number;
+  /** Residents who declined COVID-19 in the lookback window. */
+  declinedCovid19: number;
+  /** Residents who declined RSV (lifetime). */
+  declinedRsv: number;
   /** VaxEvents that could not be linked to an active census resident. */
   unlinkedEventCount: number;
   /** Human-readable accuracy risk warnings. */
@@ -75,7 +83,7 @@ export const isCovid19 = (vaccine: string): boolean =>
 
 /** Returns true if the vaccine string is an RSV vaccine. */
 export const isRsv = (vaccine: string): boolean =>
-  /\brsv\b|respiratory syncytial/i.test(vaccine);
+  /\brsv\b|respiratory syncytial/i.test(vaccine) || /other:\s*(rsv|respiratory syncytial)/i.test(vaccine);
 
 // ─── Event qualification ──────────────────────────────────────────────────────
 
@@ -102,6 +110,21 @@ export const getCanonicalDate = (event: VaxEvent): string | undefined =>
   event.dateGiven ?? event.administeredDate ?? event.createdAt;
 
 /**
+ * Normalize vaccination status values from mixed source vocabularies.
+ *
+ * Refused = Refuse = decline = declined
+ * Vaccinated = given = administered = historical
+ */
+export const normalizeVaxStatus = (status: string | undefined): 'vaccinated' | 'declined' | 'other' => {
+  const key = (status ?? '').toLowerCase().replace(/[_\s-]/g, '');
+
+  if (['refused', 'refuse', 'decline', 'declined'].includes(key)) return 'declined';
+  if (['vaccinated', 'given', 'administered', 'historical', 'documentedhistorical'].includes(key)) return 'vaccinated';
+
+  return 'other';
+};
+
+/**
  * Returns true if the VaxEvent represents a vaccine that was actually
  * administered (in-house OR historically documented).
  *
@@ -113,8 +136,8 @@ export const getCanonicalDate = (event: VaxEvent): string | undefined =>
  *   - resident linked to an MRN ref (not a quarantine/temp record)
  */
 export const isQualifyingEvent = (event: VaxEvent): boolean => {
-  // Must be a status indicating the vaccine was given
-  if (event.status !== 'given' && event.status !== 'documented-historical') return false;
+  // Must be a status indicating the vaccine was given/administered (including historical aliases)
+  if (normalizeVaxStatus(event.status) !== 'vaccinated') return false;
 
   // Must be linked to an MRN resident (not a quarantine entry)
   if (event.residentRef.kind !== 'mrn') return false;
@@ -136,10 +159,16 @@ export const isQualifyingEvent = (event: VaxEvent): boolean => {
 
   // If none of the above source indicators are set but status is 'given',
   // treat as in-house (default path when no extended data was recorded).
-  if (event.status === 'given') return true;
+  if (normalizeVaxStatus(event.status) === 'vaccinated') return true;
 
   return false;
 };
+
+/**
+ * Returns true if the VaxEvent is a documented declination for a resident.
+ */
+export const isDeclinedEvent = (event: VaxEvent): boolean =>
+  normalizeVaxStatus(event.status) === 'declined' && event.residentRef.kind === 'mrn';
 
 // ─── Flu Season Window ────────────────────────────────────────────────────────
 
@@ -226,6 +255,10 @@ export const computeVaccineCoverage = (
   const coveredPneumo = new Set<string>();
   const coveredCovid = new Set<string>();
   const coveredRsv = new Set<string>();
+  const declinedFlu = new Set<string>();
+  const declinedPneumo = new Set<string>();
+  const declinedCovid = new Set<string>();
+  const declinedRsv = new Set<string>();
 
   let unlinkedEventCount = 0;
   const accuracyRisks: string[] = [];
@@ -236,7 +269,9 @@ export const computeVaccineCoverage = (
   const allVaxEvents = Object.values(store.vaxEvents ?? {}) as VaxEvent[];
 
   for (const event of allVaxEvents) {
-    if (!isQualifyingEvent(event)) continue;
+    const qualifiesAsGiven = isQualifyingEvent(event);
+    const qualifiesAsDeclined = isDeclinedEvent(event);
+    if (!qualifiesAsGiven && !qualifiesAsDeclined) continue;
 
     const mrn = event.residentRef.id;
 
@@ -246,7 +281,7 @@ export const computeVaccineCoverage = (
       continue;
     }
 
-    const canonicalDate = getCanonicalDate(event);
+    const canonicalDate = qualifiesAsGiven ? getCanonicalDate(event) : (event.offerDate ?? event.createdAt);
     if (!canonicalDate) {
       missingDateCount++;
       continue;
@@ -258,22 +293,26 @@ export const computeVaccineCoverage = (
     if (isInfluenza(event.vaccine)) {
       // Only count if event date falls within the current/most-recent flu season
       if (eventDateMs >= fluWindow.start.getTime() && eventDateMs <= fluWindow.end.getTime()) {
-        coveredFlu.add(mrn);
+        if (qualifiesAsGiven) coveredFlu.add(mrn);
+        if (qualifiesAsDeclined) declinedFlu.add(mrn);
       }
     }
 
     if (isPneumococcal(event.vaccine)) {
-      coveredPneumo.add(mrn);
+      if (qualifiesAsGiven) coveredPneumo.add(mrn);
+      if (qualifiesAsDeclined) declinedPneumo.add(mrn);
     }
 
     if (isCovid19(event.vaccine)) {
       if (eventDateMs >= covidSince.getTime()) {
-        coveredCovid.add(mrn);
+        if (qualifiesAsGiven) coveredCovid.add(mrn);
+        if (qualifiesAsDeclined) declinedCovid.add(mrn);
       }
     }
 
     if (isRsv(event.vaccine)) {
-      coveredRsv.add(mrn);
+      if (qualifiesAsGiven) coveredRsv.add(mrn);
+      if (qualifiesAsDeclined) declinedRsv.add(mrn);
     }
   }
 
@@ -326,6 +365,10 @@ export const computeVaccineCoverage = (
     pneumococcal: coveredPneumo.size,
     covid19: coveredCovid.size,
     rsv: coveredRsv.size,
+    declinedInfluenza: declinedFlu.size,
+    declinedPneumococcal: declinedPneumo.size,
+    declinedCovid19: declinedCovid.size,
+    declinedRsv: declinedRsv.size,
     unlinkedEventCount,
     accuracyRisks,
     fluSeasonWindow: {

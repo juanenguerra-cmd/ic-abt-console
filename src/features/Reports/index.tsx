@@ -1380,6 +1380,7 @@ const VaccineCoverageReport: React.FC = () => {
     {
       label: 'Influenza (current season)',
       count: result.influenza,
+      declined: result.declinedInfluenza,
       detail: result.fluSeasonWindow
         ? `Season ${result.fluSeasonWindow.start} → ${result.fluSeasonWindow.end}`
         : '—',
@@ -1387,19 +1388,25 @@ const VaccineCoverageReport: React.FC = () => {
     {
       label: 'Pneumococcal (lifetime)',
       count: result.pneumococcal,
+      declined: result.declinedPneumococcal,
       detail: 'Any qualifying event',
     },
     {
       label: `COVID-19 (${covidLookbackLabel})`,
       count: result.covid19,
+      declined: result.declinedCovid19,
       detail: `Since ${result.covidSinceDate}`,
     },
     {
       label: 'RSV (lifetime)',
       count: result.rsv,
+      declined: result.declinedRsv,
       detail: 'Any qualifying event',
     },
   ];
+
+  const declinedVsCoveredPct = (declined: number, covered: number) =>
+    covered > 0 ? ((declined / covered) * 100).toFixed(1) : '0.0';
 
   return (
     <div className="space-y-6">
@@ -1424,8 +1431,10 @@ const VaccineCoverageReport: React.FC = () => {
             <tr>
               <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Covered</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Declined</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Active Census</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Coverage %</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Declined vs Covered %</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Window</th>
             </tr>
           </thead>
@@ -1434,6 +1443,7 @@ const VaccineCoverageReport: React.FC = () => {
               <tr key={row.label}>
                 <td className="px-4 py-2 font-medium text-neutral-800">{row.label}</td>
                 <td className="px-4 py-2 text-right font-semibold text-neutral-900">{row.count}</td>
+                <td className="px-4 py-2 text-right font-semibold text-red-700">{row.declined}</td>
                 <td className="px-4 py-2 text-right text-neutral-500">{result.totalActiveCensus}</td>
                 <td className="px-4 py-2 text-right">
                   <span
@@ -1448,6 +1458,7 @@ const VaccineCoverageReport: React.FC = () => {
                     {pct(row.count)}%
                   </span>
                 </td>
+                <td className="px-4 py-2 text-right text-red-700 font-semibold">{declinedVsCoveredPct(row.declined, row.count)}%</td>
                 <td className="px-4 py-2 text-xs text-neutral-500">{row.detail}</td>
               </tr>
             ))}
