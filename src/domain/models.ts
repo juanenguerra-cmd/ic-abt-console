@@ -409,6 +409,7 @@ export interface ShiftLogEntry {
   body: string;
   residentRefs?: Array<{ mrn: string; name: string }>;
   outbreakRef?: { id: string; name: string };
+  type?: 'note' | 'sbar_handoff';
 }
 
 // ─── Line List enums & types ──────────────────────────────────────────────────
