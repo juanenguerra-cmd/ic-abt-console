@@ -410,6 +410,8 @@ export interface ShiftLogEntry {
   residentRefs?: Array<{ mrn: string; name: string }>;
   outbreakRef?: { id: string; name: string };
   type?: 'note' | 'sbar_handoff';
+  /** Hashtags extracted from the note body (e.g. ["#Symptom", "#Fall"]). */
+  hashtags?: string[];
 }
 
 // ─── Line List enums & types ──────────────────────────────────────────────────

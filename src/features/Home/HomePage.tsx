@@ -1,295 +1,380 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ShiftLogEntry } from "../../domain/models";
+import { Send, MessageSquare, User, Hash } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigate } from "react-router-dom";
-import { Send, User, Hash, ChevronDown } from "lucide-react";
-
-interface ResidentTag {
-  residentId: string;
-  name: string;
-  mrn: string;
-  unit: string;
-  room: string;
-}
-
-type RouteTarget = 'Shift Log' | 'IP Review' | 'ABT Note';
-
-const ROUTE_OPTIONS: RouteTarget[] = ['Shift Log', 'IP Review', 'ABT Note'];
-
-const SHIFT_LOG_TAGS: Array<ShiftLogEntry['tags'][number]> = [
-  'Outbreak', 'Isolation', 'Lab', 'ABT', 'Supply', 'Education',
-];
-
-const MAX_MENTION_QUERY_LENGTH = 30;
 
 export const HomePage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB, db } = useDatabase();
-  const navigate = useNavigate();
+  const { db, updateDB } = useDatabase();
 
-  const [noteInput, setNoteInput] = useState("");
-  const [routeTo, setRouteTo] = useState<RouteTarget>('Shift Log');
-  const [showRouteMenu, setShowRouteMenu] = useState(false);
+  const [input, setInput] = useState("");
+  const [cursorPos, setCursorPos] = useState(0);
 
   // @mention state
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
-  const [cursorPos, setCursorPos] = useState(0);
-  const [tags, setTags] = useState<ResidentTag[]>([]);
+  const [mentionHighlight, setMentionHighlight] = useState(0);
+
+  // #hashtag state
+  const [showHashtags, setShowHashtags] = useState(false);
+  const [hashtagQuery, setHashtagQuery] = useState("");
+  const [hashtagHighlight, setHashtagHighlight] = useState(0);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const residents = useMemo(
-    () => (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly),
-    [store.residents]
+  // Residents for @mention autocomplete
+  const residents = (Object.values(store.residents) as Resident[]).filter(
+    (r) => !r.isHistorical && !r.backOfficeOnly
   );
+  const filteredResidents = residents
+    .filter(
+      (r) =>
+        r.displayName.toLowerCase().includes(mentionQuery.toLowerCase()) ||
+        r.mrn.includes(mentionQuery)
+    )
+    .slice(0, 6);
 
-  // Filter residents for @mention autocomplete:
-  // matches first name, last name, or last-name initials (e.g. "@SD" → "Smith, Donna")
-  const filteredMentions = useMemo(() => {
-    if (!mentionQuery) return residents.slice(0, 6);
-    const q = mentionQuery.toLowerCase();
-    return residents.filter(r => {
-      const firstName = (r.firstName || "").toLowerCase();
-      const lastName = (r.lastName || "").toLowerCase();
-      const initials = `${lastName[0] || ""}${firstName[0] || ""}`.toLowerCase();
-      return (
-        firstName.startsWith(q) ||
-        lastName.startsWith(q) ||
-        initials === q
-      );
-    }).slice(0, 6);
-  }, [residents, mentionQuery]);
+  // Hashtag library from Settings (facility.hashtagCategories — same source as ResidentBoard)
+  const hashtagLibrary: string[] =
+    db.data.facilities.byId[activeFacilityId]?.hashtagCategories ?? [];
+  const filteredHashtags = hashtagLibrary
+    .filter((h) => h.toLowerCase().includes(hashtagQuery.toLowerCase()))
+    .slice(0, 6);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     const pos = e.target.selectionStart ?? val.length;
-    setNoteInput(val);
+
+    setInput(val);
     setCursorPos(pos);
 
     const textBeforeCursor = val.slice(0, pos);
+
+    // Check for @ trigger (whitespace or start of input before @)
     const lastAt = textBeforeCursor.lastIndexOf("@");
     if (lastAt !== -1) {
       const charBeforeAt = lastAt > 0 ? textBeforeCursor[lastAt - 1] : " ";
       if (/\s/.test(charBeforeAt) || lastAt === 0) {
         const query = textBeforeCursor.slice(lastAt + 1);
-        if (query.length < MAX_MENTION_QUERY_LENGTH && !query.includes("\n") && !query.includes(" ")) {
+        if (query.length < 30 && !query.includes("\n") && !/\s/.test(query)) {
           setMentionQuery(query);
+          setMentionHighlight(0);
           setShowMentions(true);
+          setShowHashtags(false);
           return;
         }
       }
     }
+
+    // Check for # trigger (whitespace or start of input before #)
+    const lastHash = textBeforeCursor.lastIndexOf("#");
+    if (lastHash !== -1) {
+      const charBeforeHash = lastHash > 0 ? textBeforeCursor[lastHash - 1] : " ";
+      if (/\s/.test(charBeforeHash) || lastHash === 0) {
+        const query = textBeforeCursor.slice(lastHash + 1);
+        if (query.length < 30 && !query.includes("\n") && !/\s/.test(query)) {
+          setHashtagQuery(query);
+          setHashtagHighlight(0);
+          setShowHashtags(true);
+          setShowMentions(false);
+          return;
+        }
+      }
+    }
+
     setShowMentions(false);
+    setShowHashtags(false);
   };
 
-  const insertMention = (r: Resident) => {
-    const tag: ResidentTag = {
-      residentId: r.mrn,
-      name: `${r.lastName}, ${r.firstName || ""}`.trim().replace(/,$/, ""),
-      mrn: r.mrn,
-      unit: r.currentUnit || "",
-      room: r.currentRoom || "",
-    };
-
-    const textBeforeCursor = noteInput.slice(0, cursorPos);
+  const insertMention = (resident: Resident) => {
+    const textBeforeCursor = input.slice(0, cursorPos);
     const lastAt = textBeforeCursor.lastIndexOf("@");
-    const textAfterCursor = noteInput.slice(cursorPos);
-    const tagText = `@${tag.name} `;
-    const newText = noteInput.slice(0, lastAt) + tagText + textAfterCursor;
+    const textAfterCursor = input.slice(cursorPos);
+    const mentionText = `@${resident.displayName} `;
+    const newText = input.slice(0, lastAt) + mentionText + textAfterCursor;
 
-    setNoteInput(newText);
-    setTags(prev => {
-      if (prev.some(t => t.residentId === tag.residentId)) return prev;
-      return [...prev, tag];
-    });
+    setInput(newText);
     setShowMentions(false);
 
     setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
-        const newPos = lastAt + tagText.length;
+        const newPos = lastAt + mentionText.length;
         inputRef.current.setSelectionRange(newPos, newPos);
       }
     }, 10);
   };
 
-  const extractHashtags = (text: string): string[] => {
-    const matches = text.match(/#\w+/g) ?? [];
-    return [...new Set(matches)];
+  const insertHashtag = (hashtag: string) => {
+    const textBeforeCursor = input.slice(0, cursorPos);
+    const lastHash = textBeforeCursor.lastIndexOf("#");
+    const textAfterCursor = input.slice(cursorPos);
+    // Ensure the stored tag starts with # (library entries already start with #)
+    const normalized = hashtag.startsWith("#") ? hashtag : `#${hashtag}`;
+    const insertText = `${normalized} `;
+    const newText = input.slice(0, lastHash) + insertText + textAfterCursor;
+
+    setInput(newText);
+    setShowHashtags(false);
+
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const newPos = lastHash + insertText.length;
+        inputRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 10);
   };
 
-  const handleSubmit = () => {
-    const body = noteInput.trim();
-    if (!body) return;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Keyboard navigation for @mention dropdown
+    if (showMentions && filteredResidents.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionHighlight((h) => Math.min(h + 1, filteredResidents.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionHighlight((h) => Math.max(h - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        insertMention(filteredResidents[mentionHighlight]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowMentions(false);
+        return;
+      }
+    }
 
-    const hashtags = extractHashtags(body);
-    const primaryTag = tags[0];
+    // Keyboard navigation for #hashtag dropdown
+    if (showHashtags && filteredHashtags.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHashtagHighlight((h) => Math.min(h + 1, filteredHashtags.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHashtagHighlight((h) => Math.max(h - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        insertHashtag(filteredHashtags[hashtagHighlight]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowHashtags(false);
+        return;
+      }
+    }
 
-    if (routeTo === 'Shift Log') {
-      updateDB(draft => {
-        const facilityId = draft.data.facilities.activeFacilityId;
-        const id = uuidv4();
-        const entry: ShiftLogEntry = {
-          id,
-          facilityId,
-          createdAtISO: new Date().toISOString(),
-          shift: 'Day',
-          tags: hashtags
-            .map(h => h.replace('#', '') as ShiftLogEntry['tags'][number])
-            .filter(h => (SHIFT_LOG_TAGS as string[]).includes(h)),
-          priority: 'FYI',
-          body,
-          residentRefs: tags.map(t => ({ mrn: t.mrn, name: t.name })),
-        };
-        if (!draft.data.facilityData[facilityId].shiftLog) {
-          (draft.data.facilityData[facilityId] as any).shiftLog = {};
-        }
-        (draft.data.facilityData[facilityId] as any).shiftLog[id] = entry;
-      });
-      setNoteInput("");
-      setTags([]);
-    } else if (routeTo === 'IP Review') {
-      navigate('/outbreaks', {
-        state: {
-          prefillMrn: primaryTag?.mrn,
-          prefillName: primaryTag?.name,
-          prefillUnit: primaryTag?.unit,
-          prefillRoom: primaryTag?.room,
-          note: body,
-        },
-      });
-    } else if (routeTo === 'ABT Note') {
-      navigate('/resident-board', {
-        state: {
-          selectedResidentId: primaryTag?.mrn,
-          openModal: 'abt',
-          note: body,
-        },
-      });
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
-  const facilityName = db.data.facilities.byId[activeFacilityId]?.name ?? 'Facility';
+  const handleSubmit = () => {
+    if (!input.trim()) return;
+
+    // Extract mentioned residents
+    const mentionedResidents: Resident[] = [];
+    residents.forEach((r) => {
+      if (input.includes(`@${r.displayName}`)) {
+        mentionedResidents.push(r);
+      }
+    });
+
+    // Extract hashtags from body text for pass-through storage
+    const hashtagMatches = input.match(/#[\w-]+/g) ?? [];
+    const hashtags = Array.from(new Set(hashtagMatches));
+
+    updateDB((draft) => {
+      const facilityId = draft.data.facilities.activeFacilityId;
+      const now = new Date().toISOString();
+      const entryId = uuidv4();
+
+      if (!draft.data.facilityData[facilityId].shiftLog) {
+        draft.data.facilityData[facilityId].shiftLog = {};
+      }
+
+      const entry: ShiftLogEntry = {
+        id: entryId,
+        facilityId,
+        createdAtISO: now,
+        shift: new Date().getHours() >= 7 && new Date().getHours() < 19 ? "Day" : "Night",
+        tags: [],
+        priority: "FYI",
+        body: input,
+        residentRefs:
+          mentionedResidents.length > 0
+            ? mentionedResidents.map((r) => ({ mrn: r.mrn, name: r.displayName }))
+            : undefined,
+        hashtags: hashtags.length > 0 ? hashtags : undefined,
+      };
+
+      draft.data.facilityData[facilityId].shiftLog![entryId] = entry;
+    });
+
+    setInput("");
+  };
+
+  // Recent entries feed
+  const recentEntries = (Object.values(store.shiftLog || {}) as ShiftLogEntry[])
+    .sort(
+      (a, b) =>
+        new Date(b.createdAtISO).getTime() - new Date(a.createdAtISO).getTime()
+    )
+    .slice(0, 20);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)] bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-neutral-200 px-6 py-4 shrink-0">
-        <h1 className="text-xl font-bold text-neutral-900">{facilityName}</h1>
-        <p className="text-sm text-neutral-500 mt-0.5">
-          Quick note. Use <span className="font-mono font-bold text-indigo-600">@</span> to tag a resident,{" "}
-          <span className="font-mono font-bold text-indigo-600">#</span> to classify the note.
+      <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50">
+        <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-indigo-600" />
+          Quick Note
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Use{" "}
+          <span className="font-mono font-bold text-indigo-600">@</span> to tag
+          residents ·{" "}
+          <span className="font-mono font-bold text-emerald-600">#</span> for
+          hashtags
         </p>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 flex items-end justify-center p-6">
-        <div className="w-full max-w-2xl bg-white rounded-xl shadow-sm border border-neutral-200 overflow-visible">
-          {/* Tagged residents chips */}
-          {tags.length > 0 && (
-            <div className="px-4 pt-3 flex flex-wrap gap-2">
-              {tags.map(t => (
-                <span
-                  key={t.residentId}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
-                >
-                  <User className="w-3 h-3" />
-                  {t.name}
-                  {t.room && <span className="text-indigo-500">· {t.room}</span>}
-                  <button
-                    onClick={() => setTags(prev => prev.filter(x => x.residentId !== t.residentId))}
-                    className="ml-1 text-indigo-400 hover:text-indigo-700"
-                    aria-label={`Remove tag ${t.name}`}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Input area */}
-          <div className="p-4 relative">
-            {/* @mention dropdown */}
-            {showMentions && filteredMentions.length > 0 && (
-              <div className="absolute bottom-full left-4 mb-2 w-72 bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-20">
-                <ul className="divide-y divide-neutral-100 max-h-52 overflow-y-auto">
-                  {filteredMentions.map(r => (
-                    <li
-                      key={r.mrn}
-                      onClick={() => insertMention(r)}
-                      className="px-3 py-2.5 hover:bg-indigo-50 cursor-pointer flex items-center gap-2"
-                    >
-                      <User className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900">
-                          {r.lastName}, {r.firstName}
-                        </p>
-                        <p className="text-xs text-neutral-400">
-                          MRN {r.mrn} · {r.currentUnit} · {r.currentRoom}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <textarea
-              ref={inputRef}
-              value={noteInput}
-              onChange={handleInput}
-              placeholder="Type a note… @resident #hashtag"
-              rows={4}
-              className="w-full p-3 text-sm border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-            />
-
-            {/* Footer: Route-to selector + Send */}
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-1 text-xs text-neutral-400">
-                <Hash className="w-3.5 h-3.5" />
-                <span>Hashtags: free-text only</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Route-to dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowRouteMenu(v => !v)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md transition-colors"
-                  >
-                    Route to: {routeTo}
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
-                  {showRouteMenu && (
-                    <ul className="absolute bottom-full right-0 mb-1 w-40 bg-white rounded-lg shadow-lg border border-neutral-200 overflow-hidden z-20">
-                      {ROUTE_OPTIONS.map(opt => (
-                        <li
-                          key={opt}
-                          onClick={() => { setRouteTo(opt); setShowRouteMenu(false); }}
-                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50 ${routeTo === opt ? 'font-semibold text-indigo-700' : 'text-neutral-700'}`}
-                        >
-                          {opt}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleSubmit}
-                  disabled={!noteInput.trim()}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Send className="w-4 h-4" />
-                  Send
-                </button>
-              </div>
-            </div>
+      {/* Feed */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-neutral-50/50">
+        {recentEntries.length === 0 ? (
+          <div className="text-center text-neutral-400 py-12">
+            <p>No notes yet. Start typing below!</p>
           </div>
+        ) : (
+          recentEntries.map((entry) => (
+            <div
+              key={entry.id}
+              className="bg-white p-4 rounded-lg shadow-sm border border-neutral-200"
+            >
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {entry.residentRefs?.map((ref) => (
+                    <span
+                      key={ref.mrn}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800"
+                    >
+                      {ref.name}
+                    </span>
+                  ))}
+                  {entry.hashtags?.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                  <span className="text-xs text-neutral-400">
+                    {new Date(entry.createdAtISO).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-neutral-800 whitespace-pre-wrap">
+                {entry.body}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4 bg-white border-t border-neutral-200 relative">
+        {/* @mention dropdown */}
+        {showMentions && filteredResidents.length > 0 && (
+          <div className="absolute bottom-full left-4 mb-2 w-64 bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-10 max-h-60 overflow-y-auto">
+            <ul className="divide-y divide-neutral-100">
+              {filteredResidents.map((r, idx) => (
+                <li
+                  key={r.mrn}
+                  onClick={() => insertMention(r)}
+                  className={`px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors ${
+                    idx === mentionHighlight
+                      ? "bg-indigo-50"
+                      : "hover:bg-indigo-50"
+                  }`}
+                >
+                  <div className="bg-indigo-100 p-1.5 rounded-full shrink-0">
+                    <User className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">
+                      {r.displayName}
+                    </p>
+                    <p className="text-xs text-neutral-500">
+                      {r.currentUnit} · {r.currentRoom}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* #hashtag dropdown — shown only when library has entries (graceful degradation) */}
+        {showHashtags && filteredHashtags.length > 0 && (
+          <div className="absolute bottom-full left-4 mb-2 w-72 bg-white rounded-lg shadow-xl border border-neutral-200 overflow-hidden z-10 max-h-60 overflow-y-auto">
+            <ul className="divide-y divide-neutral-100">
+              {filteredHashtags.map((tag, idx) => (
+                <li
+                  key={tag}
+                  onClick={() => insertHashtag(tag)}
+                  className={`px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors ${
+                    idx === hashtagHighlight
+                      ? "bg-emerald-50"
+                      : "hover:bg-emerald-50"
+                  }`}
+                >
+                  <div className="bg-emerald-100 p-1.5 rounded-full shrink-0">
+                    <Hash className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <p className="text-sm font-medium text-neutral-900">{tag}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a note… Use @ for residents, # for hashtags"
+            className="flex-1 min-h-[80px] p-3 border border-neutral-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={!input.trim()}
+            className="self-end p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </div>
+        <p className="text-xs text-neutral-400 mt-2 text-right">
+          Press Enter to send · Shift+Enter for new line
+        </p>
       </div>
     </div>
   );
