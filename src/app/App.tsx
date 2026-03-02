@@ -53,7 +53,8 @@ import {
   Clock,
   AlertTriangle,
   BarChart3,
-  Users2
+  Users2,
+  Home
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -357,6 +358,7 @@ const AppShell = () => {
           `}
         >
           <nav className="p-4 space-y-1" aria-label="App sections">
+            <SidebarLink to="/home" icon={Home} label="Home" />
             <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
               <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
