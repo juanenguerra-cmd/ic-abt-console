@@ -47,7 +47,8 @@ import {
   Database,
   Map,
   Activity,
-  BookOpen
+  BookOpen,
+  ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -115,7 +116,7 @@ const AppShell = () => {
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
-  const { can, role } = useRole();
+  const { can, role, setRole } = useRole();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isFacilitySwitcherOpen, setIsFacilitySwitcherOpen] = React.useState(false);
   const facilitySwitcherRef = React.useRef<HTMLDivElement>(null);
@@ -200,7 +201,19 @@ const AppShell = () => {
   }
 
   if (isLocked) {
-    return <LockScreen onUnlock={() => setIsLocked(false)} />;
+    return (
+      <LockScreen
+        onUnlock={() => setIsLocked(false)}
+        onAdminLogin={(password) => {
+          if (password === "120316") {
+            setRole('Admin');
+            setIsLocked(false);
+            return true;
+          }
+          return false;
+        }}
+      />
+    );
   }
 
   return (
@@ -289,10 +302,17 @@ const AppShell = () => {
             </button>
           )}
 
-          <div className="h-8 w-8 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-500 font-medium text-sm" aria-label={`Current user: ${activeFacility?.auditorName || "Unknown"}`}>
-            {activeFacility?.auditorName
+          <div
+            className="h-8 px-2 rounded-full bg-neutral-200 flex items-center justify-center text-neutral-700 font-medium text-xs gap-1.5"
+            aria-label={`Current user: ${role}`}
+            title={`Logged in as ${role}`}
+          >
+            {role === 'Admin' && <ShieldCheck className="w-3 h-3 text-indigo-600" aria-hidden="true" />}
+            <span>{activeFacility?.auditorName
               ? activeFacility.auditorName.trim().split(/\s+/).filter(w => w.length > 0).slice(0, 2).map(w => w[0].toUpperCase()).join("")
-              : "?"}
+              : "?"}</span>
+            <span className="text-neutral-500">·</span>
+            <span className="text-indigo-700 font-semibold">{role}</span>
           </div>
         </div>
       </header>
