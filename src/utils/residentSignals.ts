@@ -19,6 +19,7 @@
 
 import { FacilityStore } from '../domain/models';
 import { computeSymptomIndicators } from './symptomIndicators';
+import { getActiveABT, getVaxDue } from './countCardDataHelpers';
 
 export interface ResidentSignals {
   hasActivePrecaution: boolean;
@@ -58,19 +59,9 @@ export function computeResidentSignals(
   // Keep chip behavior mutually exclusive: if Isolation is active, do not also render EBP chip.
   const hasEbp = !hasActivePrecaution && hasAnyActiveEbp;
 
-  const hasActiveAbt = Object.values(store.abts || {}).some(
-    a =>
-      a.residentRef.kind === 'mrn' &&
-      a.residentRef.id === residentId &&
-      a.status === 'active'
-  );
+  const hasActiveAbt = getActiveABT(Object.values(store.abts || {}), residentId).length > 0;
 
-  const hasDueVax = Object.values(store.vaxEvents || {}).some(
-    v =>
-      v.residentRef.kind === 'mrn' &&
-      v.residentRef.id === residentId &&
-      (v.status === 'due' || v.status === 'overdue')
-  );
+  const hasDueVax = getVaxDue(Object.values(store.vaxEvents || {}), residentId).length > 0;
 
   const resolvedSymptomMap = symptomMap ?? computeSymptomIndicators(store, nowMs);
   const ind = resolvedSymptomMap[residentId];

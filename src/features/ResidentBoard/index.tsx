@@ -16,6 +16,7 @@ import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
+import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
 
@@ -47,6 +48,7 @@ export const ResidentBoard: React.FC = () => {
   const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
   const [filterLast24h, setFilterLast24h] = useState(() => searchParams.get('last24h') === 'true');
   const [filterNeedsReview, setFilterNeedsReview] = useState(() => searchParams.get('needsReview') === 'true');
+  const [filterVaxDueOnly, setFilterVaxDueOnly] = useState(() => searchParams.get('vaxDue') === 'true');
   const [showAllActiveResidents, setShowAllActiveResidents] = useState(false);
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
@@ -96,6 +98,7 @@ export const ResidentBoard: React.FC = () => {
       selectedResidentId?: string;
       openProfile?: boolean;
       openModal?: 'abt' | 'ip' | 'vax';
+      vaxFilter?: boolean;
       editId?: string;
     } | null;
     
@@ -104,6 +107,7 @@ export const ResidentBoard: React.FC = () => {
       if (state.filterUnit) { setFilterUnit(state.filterUnit); paramUpdates.unit = state.filterUnit; }
       if (state.onPrecautions) { setFilterOnPrecautions(true); paramUpdates.onPrecautions = 'true'; }
       if (state.abtActive) { setFilterAbtOnly(true); paramUpdates.abtActive = 'true'; }
+      if (state.vaxFilter) { setFilterVaxDueOnly(true); paramUpdates.vaxDue = 'true'; }
       if (Object.keys(paramUpdates).length > 0) updateFilters(paramUpdates);
       if (state.selectedResidentId) {
         setSelectedResidentId(state.selectedResidentId);
@@ -118,7 +122,7 @@ export const ResidentBoard: React.FC = () => {
 
   const residents = Object.values(store.residents || {}) as Resident[];
   const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i.status === 'active');
-  const activeABTs = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active');
+  const activeABTs = getActiveABT(Object.values(store.abts || {})) as any[];
   const vaxEvents = Object.values(store.vaxEvents || {}) as any[];
   const today = new Date().toISOString().split('T')[0];
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -151,7 +155,7 @@ export const ResidentBoard: React.FC = () => {
   const filteredResidents = useMemo(() => {
     return residents.filter(r => {
       // Exclude unassigned residents since they are not true active census
-      if (!r.currentUnit || r.currentUnit.trim() === "" || r.currentUnit.toLowerCase() === "unassigned") {
+      if (!isActiveCensusResident(r)) {
         return false;
       }
 
@@ -164,7 +168,7 @@ export const ResidentBoard: React.FC = () => {
       if (!matchesSearch) return false;
 
       // Toggles
-      if (filterActiveOnly && r.status !== "Active") return false;
+      if (filterActiveOnly && normalizeStatus(r.status) !== "active") return false;
       
       if (filterAbtOnly) {
         const hasAbt = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn);
@@ -186,11 +190,16 @@ export const ResidentBoard: React.FC = () => {
         if (!dueAbt) return false;
       }
 
+      if (filterVaxDueOnly) {
+        const hasDueVax = getVaxDue(vaxEvents, r.mrn).length > 0;
+        if (!hasDueVax) return false;
+      }
+
       if (filterUnit && r.currentUnit?.trim() !== filterUnit) return false;
 
       // Default signal filter: when no explicit toggle is active and showAllActiveResidents is OFF,
       // only show residents who have at least one IC-relevant signal.
-      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterLast24h && !filterNeedsReview && !filterUnit) {
+      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterLast24h && !filterNeedsReview && !filterVaxDueOnly && !filterUnit) {
         const sigs = signalMap[r.mrn];
         if (sigs && !sigs.hasActivePrecaution && !sigs.hasEbp && !sigs.hasActiveAbt && !sigs.hasDueVax && !sigs.hasRecentSymptoms96h) {
           return false;
@@ -199,7 +208,7 @@ export const ResidentBoard: React.FC = () => {
 
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap]);
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
 
   // Group by Unit
   const units = useMemo(() => {
@@ -331,6 +340,13 @@ export const ResidentBoard: React.FC = () => {
             Needs Review
           </button>
           <button
+            onClick={() => { const v = !filterVaxDueOnly; setFilterVaxDueOnly(v); updateFilters({ vaxDue: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterVaxDueOnly ? 'bg-fuchsia-100 border-fuchsia-400 text-fuchsia-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterVaxDueOnly}
+          >
+            VAX Due
+          </button>
+          <button
             onClick={() => { const v = !filterActiveOnly; setFilterActiveOnly(v); }}
             className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterActiveOnly ? 'bg-sky-100 border-sky-400 text-sky-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
             aria-pressed={filterActiveOnly}
@@ -354,7 +370,7 @@ export const ResidentBoard: React.FC = () => {
               </button>
             </div>
           )}
-          {(filterOnPrecautions || filterLast24h || filterAbtOnly || filterNeedsReview || filterActiveOnly || filterUnit) && (
+          {(filterOnPrecautions || filterLast24h || filterAbtOnly || filterNeedsReview || filterVaxDueOnly || filterActiveOnly || filterUnit) && (
             <button
               onClick={() => {
                 setFilterOnPrecautions(false);
@@ -362,6 +378,7 @@ export const ResidentBoard: React.FC = () => {
                 setFilterAbtOnly(false);
                 setFilterNeedsReview(false);
                 setFilterActiveOnly(false);
+                setFilterVaxDueOnly(false);
                 setFilterUnit("");
                 setSearchParams({}, { replace: true });
               }}

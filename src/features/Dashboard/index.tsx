@@ -10,6 +10,7 @@ import { ActiveAbtModal } from './ActiveAbtModal';
 import { OutbreakDrilldownModal } from './OutbreakDrilldownModal';
 import { FloorLayout, Resident } from '../../domain/models';
 import { computeSymptomIndicators, SymptomIndicator } from '../../utils/symptomIndicators';
+import { getActiveABT, normalizeStatus } from '../../utils/countCardDataHelpers';
 
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 52;
@@ -204,13 +205,14 @@ export const Dashboard: React.FC = () => {
   const residentCount = activeResidents.filter(r => r.currentUnit?.toLowerCase() !== 'unknown').length;
   const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
   const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o.status !== 'closed').length;
-  const abtCount = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active').length;
+  const activeAbtCourses = getActiveABT(Object.values(store.abts || {})) as any[];
+  const abtCount = activeAbtCourses.length;
   const qCount = Object.keys(store.quarantine).length;
 
   // Today's work queue counts
   const today = new Date().toISOString().split('T')[0];
   const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n.status === 'unread').length;
-  const abtNeedsReviewCount = (Object.values(store.abts || {}) as any[]).filter(a => a.status === 'active' && a.reviewDate && a.reviewDate <= today).length;
+  const abtNeedsReviewCount = activeAbtCourses.filter(a => a.reviewDate && a.reviewDate <= today).length;
 
   // Audit Center metrics
   const thirtyDaysAgo = new Date();
@@ -240,7 +242,7 @@ export const Dashboard: React.FC = () => {
   // E1: Days-of-Therapy (DOT) calculator
   const nowForDot = new Date();
   const totalDotDays = (Object.values(store.abts || {}) as any[]).reduce((sum: number, abt: any) => {
-    if (abt.status !== 'active' || !abt.startDate) return sum;
+    if (normalizeStatus(abt.status) !== 'active' || !abt.startDate) return sum;
     const start = new Date(abt.startDate);
     const days = Math.max(0, Math.floor((nowForDot.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
     return sum + days;
