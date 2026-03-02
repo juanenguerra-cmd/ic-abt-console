@@ -336,6 +336,17 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
       const facility = draft.data.facilityData[activeFacilityId];
       const now = new Date().toISOString();
 
+      // In census mode, the imported report is authoritative for who is currently in census.
+      // Residents not present in this import should no longer count as active census residents.
+      const importedActiveMrns = parserMode === 'census'
+        ? new Set(
+            results
+              .filter(r => (r.mrn || '').trim())
+              .filter(r => ((r.status || '').trim().toLowerCase() || 'active') === 'active')
+              .map(r => r.mrn.trim())
+          )
+        : new Set<string>();
+
       rowsToUpsert.forEach(p => {
         let firstName = "";
         let lastName = p.name;
@@ -417,6 +428,17 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
           }
         }
       });
+
+      if (parserMode === 'census') {
+        Object.values(facility.residents).forEach(resident => {
+          if (resident.isHistorical || resident.backOfficeOnly) return;
+          if ((resident.status || '').trim().toLowerCase() !== 'active') return;
+          if (importedActiveMrns.has(resident.mrn)) return;
+
+          resident.status = 'Discharged';
+          resident.updatedAt = now;
+        });
+      }
     });
     onClose();
   };
