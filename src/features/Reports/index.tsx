@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useFacilityData } from '../../app/providers';
+import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Link as LinkIcon, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
 import { computeVaccineCoverage } from '../../lib/vaccineCoverage';
@@ -636,7 +636,8 @@ const WeeklyReport: React.FC = () => {
 };
 
 const OnDemandReport: React.FC = () => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
+  const { updateDB } = useDatabase();
   const [dataset, setDataset] = useState<'infections' | 'abts' | 'vax' | 'residents' | string>('infections');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -648,7 +649,16 @@ const OnDemandReport: React.FC = () => {
     | { type: 'abt'; recordId: string; residentId: string }
     | { type: 'vax'; recordId: string; residentId: string };
 
+  type LinkModal = {
+    type: 'infections' | 'abts' | 'vax';
+    recordId: string;
+    residentRef: { kind: 'mrn' | 'quarantine'; id: string };
+  };
+
   const [editModal, setEditModal] = useState<EditModal | null>(null);
+  const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [selectedLinkMrn, setSelectedLinkMrn] = useState<string | null>(null);
 
   const savedTemplates = useMemo(() => {
     try {
@@ -664,7 +674,11 @@ const OnDemandReport: React.FC = () => {
 
 
   /** Parallel meta array: one entry per display row with the IDs needed for edit modals. */
-  type RowMeta = { recordId: string; residentId: string } | null;
+  type RowMeta = {
+    recordId: string;
+    residentId: string;
+    residentRefKind: 'mrn' | 'quarantine';
+  } | null;
 
   const { rows, rowMeta } = useMemo(() => {
     const inRange = (dateStr: string | undefined) => {
@@ -703,7 +717,7 @@ const OnDemandReport: React.FC = () => {
             new Date(ip.onsetDate || ip.createdAt).toLocaleDateString(),
           ];
         }),
-        rowMeta: filtered.map(ip => ({ recordId: ip.id, residentId: ip.residentRef.id }) as RowMeta),
+        rowMeta: filtered.map(ip => ({ recordId: ip.id, residentId: ip.residentRef.id, residentRefKind: ip.residentRef.kind as 'mrn' | 'quarantine' }) as RowMeta),
       };
     }
     if (dataset === 'abts') {
@@ -731,7 +745,7 @@ const OnDemandReport: React.FC = () => {
             a.cultureCollected ? 'Yes' : 'No',
           ];
         }),
-        rowMeta: filtered.map(a => ({ recordId: a.id, residentId: a.residentRef.id }) as RowMeta),
+        rowMeta: filtered.map(a => ({ recordId: a.id, residentId: a.residentRef.id, residentRefKind: a.residentRef.kind as 'mrn' | 'quarantine' }) as RowMeta),
       };
     }
     if (dataset === 'vax') {
@@ -757,7 +771,7 @@ const OnDemandReport: React.FC = () => {
             v.dueDate || '—',
           ];
         }),
-        rowMeta: filtered.map(v => ({ recordId: v.id, residentId: v.residentRef.id }) as RowMeta),
+        rowMeta: filtered.map(v => ({ recordId: v.id, residentId: v.residentRef.id, residentRefKind: v.residentRef.kind as 'mrn' | 'quarantine' }) as RowMeta),
       };
     }
     // residents (no quick edit)
@@ -812,6 +826,61 @@ const OnDemandReport: React.FC = () => {
     a.download = `${dataset}_report_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const residentOptions = useMemo(() => {
+    return (Object.values(store.residents) as Resident[])
+      .filter(r => r.displayName?.trim() && r.mrn?.trim())
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [store.residents]);
+
+  useEffect(() => {
+    if (!linkModal) {
+      setLinkQuery('');
+      setSelectedLinkMrn(null);
+      return;
+    }
+    if (linkModal.residentRef.kind === 'mrn' && store.residents[linkModal.residentRef.id]) {
+      setSelectedLinkMrn(linkModal.residentRef.id);
+    }
+  }, [linkModal, store.residents]);
+
+  const filteredResidentOptions = residentOptions.filter(r => {
+    const q = linkQuery.trim().toLowerCase();
+    if (!q) return true;
+    return r.displayName.toLowerCase().includes(q) || r.mrn.toLowerCase().includes(q);
+  });
+
+  const handleSaveLink = () => {
+    if (!linkModal || !selectedLinkMrn) return;
+    updateDB(draft => {
+      const facility = draft.data.facilityData[activeFacilityId];
+      const now = new Date().toISOString();
+      if (linkModal.type === 'infections' && facility.infections[linkModal.recordId]) {
+        facility.infections[linkModal.recordId].residentRef = { kind: 'mrn', id: selectedLinkMrn };
+        facility.infections[linkModal.recordId].updatedAt = now;
+      }
+      if (linkModal.type === 'abts' && facility.abts[linkModal.recordId]) {
+        facility.abts[linkModal.recordId].residentRef = { kind: 'mrn', id: selectedLinkMrn };
+        facility.abts[linkModal.recordId].updatedAt = now;
+      }
+      if (linkModal.type === 'vax' && facility.vaxEvents[linkModal.recordId]) {
+        facility.vaxEvents[linkModal.recordId].residentRef = { kind: 'mrn', id: selectedLinkMrn };
+        facility.vaxEvents[linkModal.recordId].updatedAt = now;
+      }
+
+      if (linkModal.residentRef.kind === 'quarantine' && facility.quarantine[linkModal.residentRef.id]) {
+        const hasRemainingRefs = [
+          ...Object.values(facility.infections || {}),
+          ...Object.values(facility.abts || {}),
+          ...Object.values(facility.vaxEvents || {}),
+        ].some((event: any) => event?.residentRef?.kind === 'quarantine' && event?.residentRef?.id === linkModal.residentRef.id);
+        if (!hasRemainingRefs) {
+          delete facility.quarantine[linkModal.residentRef.id];
+        }
+      }
+    });
+    setLinkModal(null);
   };
 
   return (
@@ -884,21 +953,30 @@ const OnDemandReport: React.FC = () => {
                   <tr key={i}>
                     {meta && (['infections', 'abts', 'vax'].includes(dataset)) && (
                       <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={() => {
-                            if (dataset === 'infections') setEditModal({ type: 'ip', recordId: meta.recordId, residentId: meta.residentId });
-                            else if (dataset === 'abts') setEditModal({ type: 'abt', recordId: meta.recordId, residentId: meta.residentId });
-                            else if (dataset === 'vax') setEditModal({ type: 'vax', recordId: meta.recordId, residentId: meta.residentId });
-                          }}
-                          title="Quick edit"
-                          className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
-                        >
-                          {/* Pencil icon */}
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => {
+                              if (dataset === 'infections') setEditModal({ type: 'ip', recordId: meta.recordId, residentId: meta.residentId });
+                              else if (dataset === 'abts') setEditModal({ type: 'abt', recordId: meta.recordId, residentId: meta.residentId });
+                              else if (dataset === 'vax') setEditModal({ type: 'vax', recordId: meta.recordId, residentId: meta.residentId });
+                            }}
+                            title="Quick edit"
+                            className="inline-flex items-center justify-center p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded"
+                          >
+                            {/* Pencil icon */}
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setLinkModal({ type: dataset as 'infections' | 'abts' | 'vax', recordId: meta.recordId, residentRef: { kind: meta.residentRefKind, id: meta.residentId } })}
+                            title="Correct resident/MRN"
+                            className="inline-flex items-center justify-center p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded"
+                          >
+                            <LinkIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     )}
                     {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="px-3 py-2" />}
@@ -934,6 +1012,54 @@ const OnDemandReport: React.FC = () => {
           existingVax={store.vaxEvents[editModal.recordId]}
           onClose={() => setEditModal(null)}
         />
+      )}
+
+      {linkModal && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50">
+              <h3 className="text-lg font-bold text-neutral-900">Correct MRN / Resident Link</h3>
+              <button onClick={() => setLinkModal(null)} className="text-neutral-500 hover:text-neutral-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                Current link: <span className="font-medium">{linkModal.residentRef.kind === 'mrn' ? `MRN ${linkModal.residentRef.id}` : `Quarantine ${linkModal.residentRef.id}`}</span>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Find Resident</label>
+                <input
+                  type="text"
+                  value={linkQuery}
+                  onChange={e => setLinkQuery(e.target.value)}
+                  placeholder="Search by resident name or MRN"
+                  className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="border border-neutral-200 rounded-md max-h-72 overflow-y-auto">
+                {filteredResidentOptions.map(r => (
+                  <button
+                    key={r.mrn}
+                    type="button"
+                    onClick={() => setSelectedLinkMrn(r.mrn)}
+                    className={`w-full text-left px-3 py-2 border-b border-neutral-100 last:border-b-0 hover:bg-neutral-50 ${selectedLinkMrn === r.mrn ? 'bg-emerald-50' : ''}`}
+                  >
+                    <div className="font-medium text-neutral-900">{r.displayName}</div>
+                    <div className="text-xs text-neutral-500">MRN: {r.mrn}</div>
+                  </button>
+                ))}
+                {filteredResidentOptions.length === 0 && (
+                  <div className="px-3 py-6 text-sm text-neutral-400 text-center">No residents found.</div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-neutral-200 flex justify-end gap-2">
+              <button onClick={() => setLinkModal(null)} className="px-4 py-2 text-sm border border-neutral-300 rounded-md hover:bg-neutral-50">Cancel</button>
+              <button onClick={handleSaveLink} disabled={!selectedLinkMrn} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:bg-neutral-300">Save Link</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
