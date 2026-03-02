@@ -952,6 +952,27 @@ export const ResidentBoard: React.FC = () => {
           onEditAbt={(id) => { setEditingAbtId(id); setShowAbtModal(true); }}
           onEditIp={(id) => { setEditingIpId(id); setShowIpModal(true); }}
           onEditVax={(id) => { setEditingVaxId(id); setShowVaxModal(true); }}
+          onDeleteAbt={(id) => {
+            if (!confirm("Delete this antibiotic course? An undo option will appear briefly after deletion.")) return;
+            const snapshot = db.data.facilityData[activeFacilityId]?.abts?.[id];
+            if (!snapshot) return;
+            updateDB(draft => { delete draft.data.facilityData[activeFacilityId].abts[id]; }, { action: 'delete', entityType: 'ABTCourse', entityId: id });
+            showUndo({ message: "ABT course deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].abts[id] = snapshot; }) });
+          }}
+          onDeleteIp={(id) => {
+            if (!confirm("Delete this infection/precaution event? An undo option will appear briefly after deletion.")) return;
+            const snapshot = db.data.facilityData[activeFacilityId]?.infections?.[id];
+            if (!snapshot) return;
+            updateDB(draft => { delete draft.data.facilityData[activeFacilityId].infections[id]; }, { action: 'delete', entityType: 'IPEvent', entityId: id });
+            showUndo({ message: "IP event deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].infections[id] = snapshot; }) });
+          }}
+          onDeleteVax={(id) => {
+            if (!confirm("Delete this vaccination record? An undo option will appear briefly after deletion.")) return;
+            const snapshot = db.data.facilityData[activeFacilityId]?.vaxEvents?.[id];
+            if (!snapshot) return;
+            updateDB(draft => { delete draft.data.facilityData[activeFacilityId].vaxEvents[id]; }, { action: 'delete', entityType: 'VaxEvent', entityId: id });
+            showUndo({ message: "Vaccination record deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].vaxEvents[id] = snapshot; }) });
+          }}
         />
       )}
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Save, Edit2, Shield, Activity, Syringe, User } from "lucide-react";
+import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2 } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 
@@ -12,6 +12,9 @@ interface Props {
   onEditAbt: (id: string) => void;
   onEditIp: (id: string) => void;
   onEditVax: (id: string) => void;
+  onDeleteAbt: (id: string) => void;
+  onDeleteIp: (id: string) => void;
+  onDeleteVax: (id: string) => void;
 }
 
 export const ResidentProfileModal: React.FC<Props> = ({ 
@@ -22,7 +25,10 @@ export const ResidentProfileModal: React.FC<Props> = ({
   onAddVax,
   onEditAbt,
   onEditIp,
-  onEditVax
+  onEditVax,
+  onDeleteAbt,
+  onDeleteIp,
+  onDeleteVax
 }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -296,6 +302,13 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         </p>
                         <p className={`text-xs ${isActive ? 'text-emerald-700' : 'text-neutral-500'}`}>{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}{abt.endDate ? ` • Ended: ${new Date(abt.endDate).toLocaleDateString()}` : ''}</p>
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteAbt(abt.id); }}
+                        className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                        title="Delete ABT record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })}
@@ -304,20 +317,27 @@ export const ResidentProfileModal: React.FC<Props> = ({
                   return (
                     <div key={ip.id} onClick={() => onEditIp(ip.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${isActive ? 'bg-amber-50 border-amber-100' : 'bg-neutral-50 border-neutral-200'}`}>
                       <Shield className={`w-5 h-5 shrink-0 mt-0.5 ${isActive ? 'text-amber-600' : 'text-neutral-400'}`} />
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className={`text-sm font-bold ${isActive ? 'text-amber-900' : 'text-neutral-700'}`}>
                           Infection: {ip.infectionCategory || 'Unspecified'}
                           <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(ip.status)}`}>{ip.status}</span>
                         </p>
                         <p className={`text-xs ${isActive ? 'text-amber-700' : 'text-neutral-500'}`}>{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
                       </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDeleteIp(ip.id); }}
+                        className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                        title="Delete IP event"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   );
                 })}
                 {vaxEvents.map((vax: any) => (
                   <div key={vax.id} onClick={() => onEditVax(vax.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${vax.status === 'due' || vax.status === 'overdue' ? 'bg-purple-50 border-purple-100' : 'bg-neutral-50 border-neutral-200'}`}>
                     <Syringe className={`w-5 h-5 shrink-0 mt-0.5 ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-600' : 'text-neutral-500'}`} />
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className={`text-sm font-bold ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-900' : 'text-neutral-700'}`}>
                         Vaccine: {vax.vaccine} <span className="uppercase text-[10px] ml-1 px-1.5 py-0.5 bg-white rounded border">{vax.status}</span>
                       </p>
@@ -325,6 +345,13 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         {vax.status === 'given' ? `Given: ${vax.dateGiven ? new Date(vax.dateGiven).toLocaleDateString() : 'Unknown'}` : `Due: ${vax.dueDate ? new Date(vax.dueDate).toLocaleDateString() : 'Unknown'}`}
                       </p>
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeleteVax(vax.id); }}
+                      className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                      title="Delete vaccination record"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
                 {!residentAbts.length && !residentInfections.length && !vaxEvents.length && (
