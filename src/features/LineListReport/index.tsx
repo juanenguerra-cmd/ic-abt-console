@@ -1,35 +1,16 @@
 import React from 'react';
-import { Printer } from 'lucide-react';
+import { Printer, Plus } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ILILineListTable, ILIRowModel } from './ILILineListTable';
 import { GILineListTable, GIRowModel } from './GILineListTable';
+import { ManualAddLineListModal } from './ManualAddLineListModal';
+import { EditLineListEntryModal } from './EditLineListEntryModal';
+import { formatDate, computeAge } from './lineListUtils';
 import './linelist-print.css';
 
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(isoStr: string): string {
-  if (!isoStr) return '';
-  // Accept either full ISO timestamps or YYYY-MM-DD strings
-  const d = new Date(isoStr.includes('T') ? isoStr : `${isoStr}T00:00:00`);
-  if (isNaN(d.getTime())) return isoStr;
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
-}
-
-function computeAge(dob: string | undefined, asOfISO: string): string {
-  if (!dob) return '';
-  const birth = new Date(`${dob.slice(0, 10)}T00:00:00`);
-  const asOf = new Date(`${asOfISO.slice(0, 10)}T00:00:00`);
-  if (isNaN(birth.getTime()) || isNaN(asOf.getTime())) return '';
-  let age = asOf.getFullYear() - birth.getFullYear();
-  const m = asOf.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && asOf.getDate() < birth.getDate())) age--;
-  return String(Math.max(0, age));
-}
 
 function getDefaultDates(): { start: string; end: string } {
   const end = new Date();
@@ -58,6 +39,8 @@ export function LineListReportPage() {
   const [selectedUnit, setSelectedUnit] = React.useState('all');
   const [reportRows, setReportRows] = React.useState<ILIRowModel[] | GIRowModel[] | null>(null);
   const [reportTab, setReportTab] = React.useState<SymptomClass>('resp');
+  const [showManualAdd, setShowManualAdd] = React.useState(false);
+  const [editingEventId, setEditingEventId] = React.useState<string | null>(null);
 
   const handleGenerate = () => {
     const startISO = startDate;
@@ -117,6 +100,7 @@ export function LineListReportPage() {
         );
 
         return {
+          eventId: ev.id,
           room: resident?.currentRoom ?? '',
           unit: resident?.currentUnit ?? '',
           age,
@@ -155,6 +139,7 @@ export function LineListReportPage() {
           )[0];
 
         return {
+          eventId: ev.id,
           room: resident?.currentRoom ?? '',
           unit: resident?.currentUnit ?? '',
           age,
@@ -184,10 +169,12 @@ export function LineListReportPage() {
     <div className="p-6">
       {/* Filter bar — hidden on print */}
       <div className="no-print mb-6 space-y-4">
-        <h1 className="text-xl font-bold text-neutral-900">Line List Report</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-neutral-900">Line List Report</h1>
+        </div>
 
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-          Edits are for print only and are not saved.
+          ⚠️ All cells are editable on-screen for annotation purposes. Edits are <strong>saved</strong> to the facility record.
         </p>
 
         {/* Tab toggle */}
@@ -265,6 +252,13 @@ export function LineListReportPage() {
             Generate Report
           </button>
           <button
+            onClick={() => setShowManualAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-medium hover:bg-emerald-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Add Entry
+          </button>
+          <button
             onClick={handlePrint}
             className="flex items-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
@@ -282,6 +276,8 @@ export function LineListReportPage() {
             facilityName={facilityName}
             startDate={formatDate(startDate)}
             endDate={formatDate(endDate)}
+            facilityId={activeFacilityId}
+            onEditRow={(id) => setEditingEventId(id)}
           />
         )}
         {reportRows !== null && reportTab === 'gi' && (
@@ -290,6 +286,8 @@ export function LineListReportPage() {
             facilityName={facilityName}
             startDate={formatDate(startDate)}
             endDate={formatDate(endDate)}
+            facilityId={activeFacilityId}
+            onEditRow={(id) => setEditingEventId(id)}
           />
         )}
         {reportRows === null && (
@@ -298,6 +296,28 @@ export function LineListReportPage() {
           </div>
         )}
       </div>
+
+      {showManualAdd && (
+        <ManualAddLineListModal
+          symptomClass={tab}
+          onClose={() => setShowManualAdd(false)}
+          onSaved={(newId) => {
+            setShowManualAdd(false);
+            handleGenerate();
+          }}
+        />
+      )}
+
+      {editingEventId && (
+        <EditLineListEntryModal
+          eventId={editingEventId}
+          onClose={() => setEditingEventId(null)}
+          onSaved={() => {
+            setEditingEventId(null);
+            handleGenerate();
+          }}
+        />
+      )}
     </div>
   );
 }

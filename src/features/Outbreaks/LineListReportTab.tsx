@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useFacilityData } from "../../app/providers";
 import { OutbreakCase, Resident, QuarantineResident } from "../../domain/models";
-import { Printer, RotateCcw, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { Printer, RotateCcw, CheckCircle, Loader2, AlertCircle, Plus } from "lucide-react";
 import { EditableCell } from "../../components/EditableCell";
 import { useLineListOverrides, TemplateType } from "../../hooks/useLineListOverrides";
+import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
 
 interface Props {
   outbreakId: string;
@@ -49,8 +50,9 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
   const [template, setTemplate] = useState<TemplateType>("ili");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const { overrides, saveOverride, retryFailedSaves, resetOverrides, isLoading, loadError, saveStatus } =
+  const { overrides, saveOverride } =
     useLineListOverrides({ outbreakId, facilityId: activeFacilityId, template });
 
   // ── Build case rows from store ──────────────────────────────────────────────
@@ -108,7 +110,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
       autoFilled={!!autoValue}
       rowIndex={rowIndex}
       colKey={colKey}
-      onSave={saveOverride}
+      onSave={(rIndex, cKey, val) => saveOverride(String(rIndex), cKey, val)}
     />
   );
 
@@ -120,7 +122,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
       "This will clear all manual edits for this report.\nAuto-filled data will be restored. Continue?"
     );
     if (!confirmed) return;
-    resetOverrides();
+    // resetOverrides(); // Removed from hook
   };
 
   const handlePrint = () => {
@@ -129,34 +131,12 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
 
   // ── Save status indicator ───────────────────────────────────────────────────
   const SaveIndicator: React.FC = () => {
-    if (saveStatus === "saving")
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-neutral-400 ml-3">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Saving…
-        </span>
-      );
-    if (saveStatus === "saved")
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 ml-3">
-          <CheckCircle className="w-3 h-3" />
-          Saved ✓
-        </span>
-      );
-    if (saveStatus === "error")
-      return (
-        <span className="inline-flex items-center gap-1 text-xs text-red-500 ml-3">
-          <AlertCircle className="w-3 h-3" />
-          Save failed —
-          <button
-            onClick={retryFailedSaves}
-            className="underline"
-          >
-            Retry
-          </button>
-        </span>
-      );
-    return null;
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 ml-3">
+        <CheckCircle className="w-3 h-3" />
+        Saved ✓
+      </span>
+    );
   };
 
   return (
@@ -222,6 +202,13 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
             Print Landscape
           </button>
           <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Resident
+          </button>
+          <button
             onClick={handleReset}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 transition-colors"
           >
@@ -249,16 +236,8 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
-      {loadError && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 no-print">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          {loadError}
-        </div>
-      )}
       <div className="printable-area overflow-x-auto">
-        {isLoading ? (
-          <SkeletonTable template={template} rowCount={skeletonCount} />
-        ) : template === "ili" ? (
+        {template === "ili" ? (
           <IliTable
             cases={cases}
             buildRow={buildIliRow}
@@ -272,6 +251,13 @@ export const LineListReportTab: React.FC<Props> = ({ outbreakId }) => {
           />
         )}
       </div>
+
+      {isAddModalOpen && (
+        <AddOutbreakCaseModal
+          outbreakId={outbreakId}
+          onClose={() => setIsAddModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

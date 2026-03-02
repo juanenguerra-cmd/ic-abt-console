@@ -2,12 +2,15 @@ import React from 'react';
 import { EditableCell, RowModel } from './LineListReportTab';
 import { OnsetDateCell } from './OnsetDateCell';
 import { useCorrectOnsetDate } from '../hooks/useCorrectOnsetDate';
+import { useLineListOverrides } from '../../../hooks/useLineListOverrides';
 
 interface Props {
   rows: RowModel[];
   facilityName: string;
   startDate: string;
   endDate: string;
+  outbreakId: string;
+  facilityId: string;
 }
 
 const MIN_ROWS = 15;
@@ -20,8 +23,14 @@ function getInitials(name: string): string {
   return (first + last).toUpperCase();
 }
 
-export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate }) => {
+export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate, outbreakId, facilityId }) => {
   const { correctOnset } = useCorrectOnsetDate();
+  const { overrides, saveOverride } = useLineListOverrides({
+    outbreakId,
+    facilityId,
+    template: 'gi',
+  });
+
   const paddedRows: RowModel[] = [...rows];
   while (paddedRows.length < MIN_ROWS) {
     paddedRows.push({
@@ -32,6 +41,17 @@ export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate
       disposition: '', notes: '',
     });
   }
+
+  const getVal = (row: RowModel, index: number, colKey: string, defaultVal: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    const overrideKey = `${rowKey}::${colKey}`;
+    return overrides[overrideKey] !== undefined ? overrides[overrideKey] : defaultVal;
+  };
+
+  const handleSave = (row: RowModel, index: number, colKey: string, val: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    saveOverride(rowKey, colKey, val);
+  };
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -154,9 +174,9 @@ export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate
         <tbody>
           {paddedRows.map((row, i) => (
             <tr key={i}>
-              <EditableCell value={getInitials(row.name)} autoFilled={!!row.name} />
-              <EditableCell value={row.unit} autoFilled={!!row.unit} />
-              <EditableCell value={row.room} autoFilled={!!row.room} />
+              <EditableCell value={getVal(row, i, 'initials', getInitials(row.name))} autoFilled={!!row.name} onChange={(v) => handleSave(row, i, 'initials', v)} />
+              <EditableCell value={getVal(row, i, 'unit', row.unit)} autoFilled={!!row.unit} onChange={(v) => handleSave(row, i, 'unit', v)} />
+              <EditableCell value={getVal(row, i, 'room', row.room)} autoFilled={!!row.room} onChange={(v) => handleSave(row, i, 'room', v)} />
               {row.eventId ? (
                 <OnsetDateCell
                   eventId={row.eventId}
@@ -164,30 +184,30 @@ export const GILineListTable: React.FC<Props> = ({ rows, facilityName, startDate
                   onCorrected={correctOnset}
                 />
               ) : (
-                <EditableCell value="" />
+                <EditableCell value={getVal(row, i, 'onsetDate', '')} onChange={(v) => handleSave(row, i, 'onsetDate', v)} />
               )}
               {/* Severity */}
-              <EditableCell value={row.fever} autoFilled={row.fever !== '' && row.fever !== 'U'} />
-              <EditableCell value="" /> {/* T max */}
-              <EditableCell value={row.symptoms.includes('nausea') ? 'Y' : 'U'} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('vomiting') ? 'Y' : 'U'} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('diarrhea') ? 'Y' : 'U'} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('stomach_cramping') ? 'Y' : 'U'} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value="" /> {/* Duration */}
-              <EditableCell value={row.providerNotified} autoFilled={!!row.providerNotified && row.providerNotified !== 'U'} />
-              <EditableCell value="" /> {/* Hospitalized */}
-              <EditableCell value="" /> {/* Hospital Name */}
-              <EditableCell value="" /> {/* Died */}
-              <EditableCell value="" /> {/* Date of Death */}
+              <EditableCell value={getVal(row, i, 'fever', row.fever)} autoFilled={row.fever !== '' && row.fever !== 'U'} onChange={(v) => handleSave(row, i, 'fever', v)} />
+              <EditableCell value={getVal(row, i, 'tmax', '')} onChange={(v) => handleSave(row, i, 'tmax', v)} /> {/* T max */}
+              <EditableCell value={getVal(row, i, 'nausea', row.symptoms.includes('nausea') ? 'Y' : 'U')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'nausea', v)} />
+              <EditableCell value={getVal(row, i, 'vomiting', row.symptoms.includes('vomiting') ? 'Y' : 'U')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'vomiting', v)} />
+              <EditableCell value={getVal(row, i, 'diarrhea', row.symptoms.includes('diarrhea') ? 'Y' : 'U')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'diarrhea', v)} />
+              <EditableCell value={getVal(row, i, 'cramps', row.symptoms.includes('stomach_cramping') ? 'Y' : 'U')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'cramps', v)} />
+              <EditableCell value={getVal(row, i, 'duration', '')} onChange={(v) => handleSave(row, i, 'duration', v)} /> {/* Duration */}
+              <EditableCell value={getVal(row, i, 'physicianSeen', row.providerNotified)} autoFilled={!!row.providerNotified && row.providerNotified !== 'U'} onChange={(v) => handleSave(row, i, 'physicianSeen', v)} />
+              <EditableCell value={getVal(row, i, 'hospitalized', '')} onChange={(v) => handleSave(row, i, 'hospitalized', v)} /> {/* Hospitalized */}
+              <EditableCell value={getVal(row, i, 'hospitalName', '')} onChange={(v) => handleSave(row, i, 'hospitalName', v)} /> {/* Hospital Name */}
+              <EditableCell value={getVal(row, i, 'died', '')} onChange={(v) => handleSave(row, i, 'died', v)} /> {/* Died */}
+              <EditableCell value={getVal(row, i, 'dateOfDeath', '')} onChange={(v) => handleSave(row, i, 'dateOfDeath', v)} /> {/* Date of Death */}
               {/* Treatment */}
-              <EditableCell value={row.abt ? 'Y' : 'U'} autoFilled={!!row.abt} />
-              <EditableCell value="U" /> {/* Antidiarrheal */}
+              <EditableCell value={getVal(row, i, 'antibiotic', row.abt ? 'Y' : 'U')} autoFilled={!!row.abt} onChange={(v) => handleSave(row, i, 'antibiotic', v)} />
+              <EditableCell value={getVal(row, i, 'antidiarrheal', 'U')} onChange={(v) => handleSave(row, i, 'antidiarrheal', v)} /> {/* Antidiarrheal */}
               {/* Lab Testing */}
-              <EditableCell value={row.testOrdered === 'Y' ? 'Y' : 'U'} autoFilled={row.testOrdered === 'Y'} />
-              <EditableCell value="" /> {/* Specimen Type */}
-              <EditableCell value="" /> {/* Collect Date */}
-              <EditableCell value="" /> {/* Type of Test */}
-              <EditableCell value="" /> {/* Result */}
+              <EditableCell value={getVal(row, i, 'labTesting', row.testOrdered === 'Y' ? 'Y' : 'U')} autoFilled={row.testOrdered === 'Y'} onChange={(v) => handleSave(row, i, 'labTesting', v)} />
+              <EditableCell value={getVal(row, i, 'specimenType', '')} onChange={(v) => handleSave(row, i, 'specimenType', v)} /> {/* Specimen Type */}
+              <EditableCell value={getVal(row, i, 'collectDate', '')} onChange={(v) => handleSave(row, i, 'collectDate', v)} /> {/* Collect Date */}
+              <EditableCell value={getVal(row, i, 'typeOfTest', '')} onChange={(v) => handleSave(row, i, 'typeOfTest', v)} /> {/* Type of Test */}
+              <EditableCell value={getVal(row, i, 'result', '')} onChange={(v) => handleSave(row, i, 'result', v)} /> {/* Result */}
             </tr>
           ))}
         </tbody>

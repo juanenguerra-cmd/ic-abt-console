@@ -2,18 +2,27 @@ import React from 'react';
 import { EditableCell, RowModel } from './LineListReportTab';
 import { OnsetDateCell } from './OnsetDateCell';
 import { useCorrectOnsetDate } from '../hooks/useCorrectOnsetDate';
+import { useLineListOverrides } from '../../../hooks/useLineListOverrides';
 
 interface Props {
   rows: RowModel[];
   facilityName: string;
   startDate: string;
   endDate: string;
+  outbreakId: string;
+  facilityId: string;
 }
 
 const MIN_ROWS = 15;
 
-export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate }) => {
+export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDate, endDate, outbreakId, facilityId }) => {
   const { correctOnset } = useCorrectOnsetDate();
+  const { overrides, saveOverride } = useLineListOverrides({
+    outbreakId,
+    facilityId,
+    template: 'ili',
+  });
+
   const paddedRows: RowModel[] = [...rows];
   while (paddedRows.length < MIN_ROWS) {
     paddedRows.push({
@@ -24,6 +33,17 @@ export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDat
       disposition: '', notes: '',
     });
   }
+
+  const getVal = (row: RowModel, index: number, colKey: string, defaultVal: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    const overrideKey = `${rowKey}::${colKey}`;
+    return overrides[overrideKey] !== undefined ? overrides[overrideKey] : defaultVal;
+  };
+
+  const handleSave = (row: RowModel, index: number, colKey: string, val: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    saveOverride(rowKey, colKey, val);
+  };
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -146,26 +166,26 @@ export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDat
         <tbody>
           {paddedRows.map((row, i) => (
             <tr key={i}>
-              <EditableCell value={row.room} autoFilled={!!row.room} />
-              <EditableCell value={row.age} autoFilled={!!row.age} />
-              <EditableCell value={row.name} autoFilled={!!row.name} style={{ textAlign: 'left' }} />
+              <EditableCell value={getVal(row, i, 'room', row.room)} autoFilled={!!row.room} onChange={(v) => handleSave(row, i, 'room', v)} />
+              <EditableCell value={getVal(row, i, 'age', row.age)} autoFilled={!!row.age} onChange={(v) => handleSave(row, i, 'age', v)} />
+              <EditableCell value={getVal(row, i, 'name', row.name)} autoFilled={!!row.name} style={{ textAlign: 'left' }} onChange={(v) => handleSave(row, i, 'name', v)} />
               {/* Sex */}
-              <EditableCell value={row.sex === 'M' ? '●' : ''} autoFilled={!!row.sex} />
-              <EditableCell value={row.sex === 'F' ? '●' : ''} autoFilled={!!row.sex} />
+              <EditableCell value={getVal(row, i, 'sexM', row.sex === 'M' ? '●' : '')} autoFilled={!!row.sex} onChange={(v) => handleSave(row, i, 'sexM', v)} />
+              <EditableCell value={getVal(row, i, 'sexF', row.sex === 'F' ? '●' : '')} autoFilled={!!row.sex} onChange={(v) => handleSave(row, i, 'sexF', v)} />
               {/* Flu Vax */}
-              <EditableCell value={row.fluVax === 'Y' ? '●' : ''} autoFilled={row.fluVax !== ''} />
-              <EditableCell value={row.fluVax === 'N' ? '●' : ''} autoFilled={row.fluVax !== ''} />
+              <EditableCell value={getVal(row, i, 'fluVaxY', row.fluVax === 'Y' ? '●' : '')} autoFilled={row.fluVax !== ''} onChange={(v) => handleSave(row, i, 'fluVaxY', v)} />
+              <EditableCell value={getVal(row, i, 'fluVaxN', row.fluVax === 'N' ? '●' : '')} autoFilled={row.fluVax !== ''} onChange={(v) => handleSave(row, i, 'fluVaxN', v)} />
               {/* Pneumo Vax */}
-              <EditableCell value={row.pneuVax === 'Y' ? '●' : ''} autoFilled={row.pneuVax !== ''} />
-              <EditableCell value={row.pneuVax === 'N' ? '●' : ''} autoFilled={row.pneuVax !== ''} />
+              <EditableCell value={getVal(row, i, 'pneuVaxY', row.pneuVax === 'Y' ? '●' : '')} autoFilled={row.pneuVax !== ''} onChange={(v) => handleSave(row, i, 'pneuVaxY', v)} />
+              <EditableCell value={getVal(row, i, 'pneuVaxN', row.pneuVax === 'N' ? '●' : '')} autoFilled={row.pneuVax !== ''} onChange={(v) => handleSave(row, i, 'pneuVaxN', v)} />
               {/* Predisposing Factors — no data source, blank */}
-              <EditableCell value="" />
-              <EditableCell value="" />
-              <EditableCell value="" />
-              <EditableCell value="" />
-              <EditableCell value="" />
-              <EditableCell value="" />
-              <EditableCell value="" />
+              <EditableCell value={getVal(row, i, 'pfCvd', '')} onChange={(v) => handleSave(row, i, 'pfCvd', v)} />
+              <EditableCell value={getVal(row, i, 'pfCopd', '')} onChange={(v) => handleSave(row, i, 'pfCopd', v)} />
+              <EditableCell value={getVal(row, i, 'pfDm', '')} onChange={(v) => handleSave(row, i, 'pfDm', v)} />
+              <EditableCell value={getVal(row, i, 'pfAnemia', '')} onChange={(v) => handleSave(row, i, 'pfAnemia', v)} />
+              <EditableCell value={getVal(row, i, 'pfRenal', '')} onChange={(v) => handleSave(row, i, 'pfRenal', v)} />
+              <EditableCell value={getVal(row, i, 'pfCa', '')} onChange={(v) => handleSave(row, i, 'pfCa', v)} />
+              <EditableCell value={getVal(row, i, 'pfSteroids', '')} onChange={(v) => handleSave(row, i, 'pfSteroids', v)} />
               {/* Onset Date */}
               {row.eventId ? (
                 <OnsetDateCell
@@ -174,23 +194,23 @@ export const ILILineListTable: React.FC<Props> = ({ rows, facilityName, startDat
                   onCorrected={correctOnset}
                 />
               ) : (
-                <EditableCell value="" />
+                <EditableCell value={getVal(row, i, 'onsetDate', '')} onChange={(v) => handleSave(row, i, 'onsetDate', v)} />
               )}
               {/* Symptoms */}
-              <EditableCell value="" /> {/* Highest Temp — manual */}
-              <EditableCell value={row.symptoms.includes('cough') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('congestion') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('sore_throat') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={row.symptoms.includes('runny_nose') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
-              <EditableCell value={(row.symptoms as string[]).includes('headache') ? '●' : ''} autoFilled={row.symptoms.length > 0} />
+              <EditableCell value={getVal(row, i, 'highestTemp', '')} onChange={(v) => handleSave(row, i, 'highestTemp', v)} /> {/* Highest Temp — manual */}
+              <EditableCell value={getVal(row, i, 'symCough', row.symptoms.includes('cough') ? '●' : '')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'symCough', v)} />
+              <EditableCell value={getVal(row, i, 'symCongestion', row.symptoms.includes('congestion') ? '●' : '')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'symCongestion', v)} />
+              <EditableCell value={getVal(row, i, 'symSoreThroat', row.symptoms.includes('sore_throat') ? '●' : '')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'symSoreThroat', v)} />
+              <EditableCell value={getVal(row, i, 'symRunnyNose', row.symptoms.includes('runny_nose') ? '●' : '')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'symRunnyNose', v)} />
+              <EditableCell value={getVal(row, i, 'symHeadache', (row.symptoms as string[]).includes('headache') ? '●' : '')} autoFilled={row.symptoms.length > 0} onChange={(v) => handleSave(row, i, 'symHeadache', v)} />
               {/* Right side manual blanks except Antibiotic */}
-              <EditableCell value="" /> {/* Duration of Fever */}
-              <EditableCell value="" /> {/* Hosp. Date */}
-              <EditableCell value="" /> {/* Date Died */}
-              <EditableCell value="" /> {/* Lab Results */}
-              <EditableCell value={row.abt} autoFilled={!!row.abt} />
-              <EditableCell value="" /> {/* X-Ray */}
-              <EditableCell value="" /> {/* Pneumonia */}
+              <EditableCell value={getVal(row, i, 'durationFever', '')} onChange={(v) => handleSave(row, i, 'durationFever', v)} /> {/* Duration of Fever */}
+              <EditableCell value={getVal(row, i, 'hospDate', '')} onChange={(v) => handleSave(row, i, 'hospDate', v)} /> {/* Hosp. Date */}
+              <EditableCell value={getVal(row, i, 'dateDied', '')} onChange={(v) => handleSave(row, i, 'dateDied', v)} /> {/* Date Died */}
+              <EditableCell value={getVal(row, i, 'labResults', '')} onChange={(v) => handleSave(row, i, 'labResults', v)} /> {/* Lab Results */}
+              <EditableCell value={getVal(row, i, 'abt', row.abt)} autoFilled={!!row.abt} onChange={(v) => handleSave(row, i, 'abt', v)} />
+              <EditableCell value={getVal(row, i, 'xray', '')} onChange={(v) => handleSave(row, i, 'xray', v)} /> {/* X-Ray */}
+              <EditableCell value={getVal(row, i, 'pneumonia', '')} onChange={(v) => handleSave(row, i, 'pneumonia', v)} /> {/* Pneumonia */}
             </tr>
           ))}
         </tbody>

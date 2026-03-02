@@ -1,7 +1,10 @@
 import React from 'react';
+import { Pencil } from 'lucide-react';
 import { EditableCell } from './ILILineListTable';
+import { useLineListOverrides } from '../../hooks/useLineListOverrides';
 
 export interface GIRowModel {
+  eventId?: string;
   room: string;
   unit: string;
   age: string;
@@ -23,6 +26,8 @@ interface GILineListTableProps {
   facilityName: string;
   startDate: string;
   endDate: string;
+  facilityId: string;
+  onEditRow?: (eventId: string) => void;
 }
 
 const MIN_ROWS = 20;
@@ -34,7 +39,13 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-export function GILineListTable({ rows, facilityName, startDate, endDate }: GILineListTableProps) {
+export function GILineListTable({ rows, facilityName, startDate, endDate, facilityId, onEditRow }: GILineListTableProps) {
+  const { overrides, saveOverride } = useLineListOverrides({
+    outbreakId: 'global',
+    facilityId,
+    template: 'gi',
+  });
+
   const displayRows = [...rows];
   while (displayRows.length < MIN_ROWS) {
     displayRows.push({
@@ -44,6 +55,17 @@ export function GILineListTable({ rows, facilityName, startDate, endDate }: GILi
       disposition: '', notes: '',
     });
   }
+
+  const getVal = (row: GIRowModel, index: number, colKey: string, defaultVal: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    const overrideKey = `${rowKey}::${colKey}`;
+    return overrides[overrideKey] !== undefined ? overrides[overrideKey] : defaultVal;
+  };
+
+  const handleSave = (row: GIRowModel, index: number, colKey: string, val: string) => {
+    const rowKey = row.eventId || `row-${index}`;
+    saveOverride(rowKey, colKey, val);
+  };
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -110,6 +132,7 @@ export function GILineListTable({ rows, facilityName, startDate, endDate }: GILi
             <th style={{ border: '1px solid #000', padding: '2px', textAlign: 'center' }} colSpan={12}>Severity</th>
             <th style={{ border: '1px solid #000', padding: '2px', textAlign: 'center' }} colSpan={2}>Treatment</th>
             <th style={{ border: '1px solid #000', padding: '2px', textAlign: 'center' }} colSpan={5}>Lab Testing</th>
+            <th className="no-print" style={{ border: '1px solid #000', padding: '2px', textAlign: 'center' }} rowSpan={2}>Edit</th>
           </tr>
           {/* Header Row 2 — sub-labels */}
           <tr style={{ background: '#f0f0f0' }}>
@@ -139,32 +162,44 @@ export function GILineListTable({ rows, facilityName, startDate, endDate }: GILi
             const initials = getInitials(row.name);
             return (
               <tr key={i}>
-                <EditableCell value={initials} autoFilled={!!initials} />
-                <EditableCell value={row.unit} autoFilled={!!row.unit} />
-                <EditableCell value={row.room} autoFilled={!!row.room} />
-                <EditableCell value={row.onsetDate} autoFilled={!!row.onsetDate} />
+                <EditableCell value={getVal(row, i, 'initials', initials)} autoFilled={!!initials} onChange={(v) => handleSave(row, i, 'initials', v)} />
+                <EditableCell value={getVal(row, i, 'unit', row.unit)} autoFilled={!!row.unit} onChange={(v) => handleSave(row, i, 'unit', v)} />
+                <EditableCell value={getVal(row, i, 'room', row.room)} autoFilled={!!row.room} onChange={(v) => handleSave(row, i, 'room', v)} />
+                <EditableCell value={getVal(row, i, 'onsetDate', row.onsetDate)} autoFilled={!!row.onsetDate} onChange={(v) => handleSave(row, i, 'onsetDate', v)} />
                 {/* Severity */}
-                <EditableCell value={row.fever} autoFilled={row.fever !== '' && row.fever !== 'U'} />
-                <EditableCell value="" />
-                <EditableCell value={row.symptoms.includes('nausea') ? 'Y' : 'U'} autoFilled={row.symptoms.includes('nausea')} />
-                <EditableCell value={row.symptoms.includes('vomiting') ? 'Y' : 'U'} autoFilled={row.symptoms.includes('vomiting')} />
-                <EditableCell value={row.symptoms.includes('diarrhea') ? 'Y' : 'U'} autoFilled={row.symptoms.includes('diarrhea')} />
-                <EditableCell value={row.symptoms.includes('stomach_cramping') ? 'Y' : 'U'} autoFilled={row.symptoms.includes('stomach_cramping')} />
-                <EditableCell value="" />
-                <EditableCell value={row.providerNotified} autoFilled={!!row.providerNotified} />
-                <EditableCell value="" />
-                <EditableCell value="" />
-                <EditableCell value="" />
-                <EditableCell value="" />
+                <EditableCell value={getVal(row, i, 'fever', row.fever)} autoFilled={row.fever !== '' && row.fever !== 'U'} onChange={(v) => handleSave(row, i, 'fever', v)} />
+                <EditableCell value={getVal(row, i, 'tmax', '')} onChange={(v) => handleSave(row, i, 'tmax', v)} />
+                <EditableCell value={getVal(row, i, 'nausea', row.symptoms.includes('nausea') ? 'Y' : 'U')} autoFilled={row.symptoms.includes('nausea')} onChange={(v) => handleSave(row, i, 'nausea', v)} />
+                <EditableCell value={getVal(row, i, 'vomiting', row.symptoms.includes('vomiting') ? 'Y' : 'U')} autoFilled={row.symptoms.includes('vomiting')} onChange={(v) => handleSave(row, i, 'vomiting', v)} />
+                <EditableCell value={getVal(row, i, 'diarrhea', row.symptoms.includes('diarrhea') ? 'Y' : 'U')} autoFilled={row.symptoms.includes('diarrhea')} onChange={(v) => handleSave(row, i, 'diarrhea', v)} />
+                <EditableCell value={getVal(row, i, 'cramps', row.symptoms.includes('stomach_cramping') ? 'Y' : 'U')} autoFilled={row.symptoms.includes('stomach_cramping')} onChange={(v) => handleSave(row, i, 'cramps', v)} />
+                <EditableCell value={getVal(row, i, 'duration', '')} onChange={(v) => handleSave(row, i, 'duration', v)} />
+                <EditableCell value={getVal(row, i, 'physicianSeen', row.providerNotified)} autoFilled={!!row.providerNotified} onChange={(v) => handleSave(row, i, 'physicianSeen', v)} />
+                <EditableCell value={getVal(row, i, 'hospitalized', '')} onChange={(v) => handleSave(row, i, 'hospitalized', v)} />
+                <EditableCell value={getVal(row, i, 'hospitalName', '')} onChange={(v) => handleSave(row, i, 'hospitalName', v)} />
+                <EditableCell value={getVal(row, i, 'died', '')} onChange={(v) => handleSave(row, i, 'died', v)} />
+                <EditableCell value={getVal(row, i, 'dateOfDeath', '')} onChange={(v) => handleSave(row, i, 'dateOfDeath', v)} />
                 {/* Treatment */}
-                <EditableCell value={row.abt ? 'Y' : 'U'} autoFilled={!!row.abt} />
-                <EditableCell value="U" />
+                <EditableCell value={getVal(row, i, 'antibiotic', row.abt ? 'Y' : 'U')} autoFilled={!!row.abt} onChange={(v) => handleSave(row, i, 'antibiotic', v)} />
+                <EditableCell value={getVal(row, i, 'antidiarrheal', 'U')} onChange={(v) => handleSave(row, i, 'antidiarrheal', v)} />
                 {/* Lab */}
-                <EditableCell value={row.testOrdered === 'Y' ? 'Y' : 'U'} autoFilled={row.testOrdered === 'Y'} />
-                <EditableCell value="" />
-                <EditableCell value="" />
-                <EditableCell value="" />
-                <EditableCell value="" />
+                <EditableCell value={getVal(row, i, 'labTesting', row.testOrdered === 'Y' ? 'Y' : 'U')} autoFilled={row.testOrdered === 'Y'} onChange={(v) => handleSave(row, i, 'labTesting', v)} />
+                <EditableCell value={getVal(row, i, 'specimenType', '')} onChange={(v) => handleSave(row, i, 'specimenType', v)} />
+                <EditableCell value={getVal(row, i, 'collectDate', '')} onChange={(v) => handleSave(row, i, 'collectDate', v)} />
+                <EditableCell value={getVal(row, i, 'typeOfTest', '')} onChange={(v) => handleSave(row, i, 'typeOfTest', v)} />
+                <EditableCell value={getVal(row, i, 'result', '')} onChange={(v) => handleSave(row, i, 'result', v)} />
+                <td className="no-print" style={{ border: '1px solid #000', padding: '2px', textAlign: 'center' }}>
+                  {row.eventId && (
+                    <button
+                      onClick={() => onEditRow?.(row.eventId!)}
+                      className="p-1 text-neutral-400 hover:text-indigo-600 rounded"
+                      title="Edit entry"
+                      aria-label="Edit line list entry"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </td>
               </tr>
             );
           })}

@@ -462,7 +462,7 @@ export interface LineListEvent {
   isolationStatus?: string;
   testOrdered?: boolean;
   providerNotified?: boolean;
-  disposition?: LineListDisposition;
+  disposition?: string;
   notes?: string;
   /** References the notification that triggered this entry. */
   sourceNotificationId?: string;
@@ -540,6 +540,7 @@ export interface FacilityStore {
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
   notifications: Record<string, AppNotification>;
   lineListEvents?: Record<string, LineListEvent>;
+  lineListOverrides?: Record<string, Record<string, string>>;
   shiftLog?: Record<string, ShiftLogEntry>;
   dismissedRuleKeys?: string[];
   /** Append-only audit log of data mutations. Capped at 500 most-recent entries. */

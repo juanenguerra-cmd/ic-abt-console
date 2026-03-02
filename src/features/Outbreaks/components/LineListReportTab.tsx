@@ -37,6 +37,7 @@ interface EditableCellProps {
   className?: string;
   colSpan?: number;
   style?: React.CSSProperties;
+  onChange?: (value: string) => void;
 }
 
 export function EditableCell({
@@ -45,6 +46,7 @@ export function EditableCell({
   className,
   colSpan,
   style,
+  onChange,
 }: EditableCellProps) {
   const classes = [
     'editable-cell',
@@ -61,6 +63,11 @@ export function EditableCell({
       suppressContentEditableWarning
       className={classes}
       style={style}
+      onBlur={(e) => {
+        if (onChange) {
+          onChange(e.currentTarget.textContent || '');
+        }
+      }}
     >
       {value}
     </td>
@@ -272,8 +279,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
         </div>
 
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-          ⚠️ All cells are editable on-screen for annotation purposes. Edits are for print only and are
-          <strong> not saved</strong> to the database.
+          ⚠️ All cells are editable on-screen for annotation purposes. Edits are <strong>saved</strong> to the outbreak record.
         </p>
       </div>
 
@@ -285,6 +291,8 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
             facilityName={facilityName}
             startDate={formatDate(startDate)}
             endDate={formatDate(endDate)}
+            outbreakId={outbreak.id}
+            facilityId={outbreak.facilityId}
           />
         ) : (
           <GILineListTable
@@ -292,6 +300,8 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
             facilityName={facilityName}
             startDate={formatDate(startDate)}
             endDate={formatDate(endDate)}
+            outbreakId={outbreak.id}
+            facilityId={outbreak.facilityId}
           />
         )}
 
