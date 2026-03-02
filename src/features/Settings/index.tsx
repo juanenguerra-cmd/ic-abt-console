@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
 import { UserRole } from "../../types/roles";
-import { restoreFromPrevAsync } from "../../storage/engine";
+import { restoreFromPrevAsync, hardResetStorageAsync } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
@@ -151,6 +151,23 @@ export const SettingsConsole: React.FC = () => {
           }
         });
       }, 1000);
+    }
+  };
+
+  const handleFullReset = async () => {
+    const confirmed = confirm(
+      "Are you absolutely sure? This will erase all saved data, backups, and local storage remnants for this app. This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    try {
+      await hardResetStorageAsync();
+      alert("All local data has been erased. The app will now reload with a clean database.");
+      window.location.reload();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      alert(`Failed to fully reset local storage: ${errorMsg}`);
+      console.error("Full reset error:", error);
     }
   };
 
@@ -459,7 +476,7 @@ export const SettingsConsole: React.FC = () => {
           <h3 className="text-lg leading-6 font-medium text-red-900">Emergency Recovery Tools</h3>
         </div>
         <div className="px-4 py-5 sm:p-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <button
               data-testid="export-backup-button"
               onClick={handleExport}
@@ -477,6 +494,15 @@ export const SettingsConsole: React.FC = () => {
             >
               <RefreshCw className={`-ml-1 mr-2 h-5 w-5 ${isRestoring ? "animate-spin" : ""}`} aria-hidden="true" />
               <span>{isRestoring ? "Restoring..." : "Restore Previous Snapshot"}</span>
+            </button>
+
+            <button
+              data-testid="reset-local-database-button"
+              onClick={handleFullReset}
+              className="relative inline-flex items-center justify-center px-4 py-2 border border-red-300 shadow-sm text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 active:scale-95"
+            >
+              <AlertTriangle className="-ml-1 mr-2 h-5 w-5 text-red-500" aria-hidden="true" />
+              <span>Reset Local Database</span>
             </button>
           </div>
           <div className="mt-6 p-4 border border-yellow-300 bg-yellow-50 rounded-md">
