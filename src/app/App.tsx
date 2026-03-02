@@ -26,6 +26,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
+import { HomePage } from '../features/Home/HomePage';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -311,6 +312,7 @@ const AppShell = () => {
             <SidebarLink to="/staff" icon={Users} label="Staff" />
             
             {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
+            {can('write:shiftlog') && <SidebarLink to="/home" icon={MessageSquare} label="Quick Note" />}
             {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
             <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
             {can('write:outbreaks') && <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />}
@@ -342,6 +344,7 @@ const AppShell = () => {
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ShiftLogPage /></RoleGuard></PageTransition>} />
+                <Route path="/home" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><div className="p-6"><HomePage /></div></RoleGuard></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><NoteGenerator /></RoleGuard></PageTransition>} />
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />
