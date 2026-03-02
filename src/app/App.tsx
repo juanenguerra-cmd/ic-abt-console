@@ -88,6 +88,52 @@ const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string,
   );
 };
 
+const SidebarAccordion = ({
+  icon: Icon,
+  title,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  badge?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) => {
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  return (
+    <div>
+      <button
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium rounded-md text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-3">
+          <Icon className="w-5 h-5" aria-hidden="true" />
+          {title}
+        </div>
+        <div className="flex items-center gap-2">
+          {badge !== undefined && badge > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+              {badge}
+            </span>
+          )}
+          <ChevronDown
+            className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+      {isOpen && (
+        <div className="mt-0.5 ml-4 space-y-0.5 border-l border-neutral-100 pl-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -328,7 +374,7 @@ const AppShell = () => {
             
             <div className="pt-4 mt-4 border-t border-neutral-100">
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
-            </div>
+            </SidebarAccordion>
           </nav>
         </aside>
 
