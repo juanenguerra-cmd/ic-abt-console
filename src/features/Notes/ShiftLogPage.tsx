@@ -4,10 +4,12 @@ import { Resident, ShiftLogEntry } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import {
-  Plus, X, Search, Filter, Send, Clock, Tag, AlertTriangle, Info,
-  ChevronDown, ChevronUp, ExternalLink
+  Plus, X, Search, Send, Clock, AlertTriangle,
+  ExternalLink, Loader2, Zap, ClipboardList, RefreshCw
 } from "lucide-react";
-import { shouldSuggestLineList, getHashtagSymptomClass } from "../ResidentBoard/hashtagToShiftLog";
+import { useOutbreakRiskMonitor } from "../../hooks/useOutbreakRiskMonitor";
+import { OutbreakRiskAlert } from "../Notifications/OutbreakRiskAlert";
+import { SBARHandoffPanel } from "./SBARHandoffPanel";
 
 const SHIFT_OPTIONS: ShiftLogEntry['shift'][] = ['Day', 'Night'];
 const TAG_OPTIONS: Array<ShiftLogEntry['tags'][number]> = ['Outbreak', 'Isolation', 'Lab', 'ABT', 'Supply', 'Education'];
@@ -24,8 +26,10 @@ const TAG_COLORS: Record<string, string> = {
 
 export const ShiftLogPage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { updateDB, db } = useDatabase();
   const navigate = useNavigate();
+
+  const facilityName = db.data.facilities.byId[activeFacilityId]?.name ?? 'Facility';
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -49,6 +53,11 @@ export const ShiftLogPage: React.FC = () => {
   const [filterAutoOnly, setFilterAutoOnly] = useState(false);
   const [filterLineListNeeded, setFilterLineListNeeded] = useState(false);
 
+  // SBAR panel state
+  const [showSBAR, setShowSBAR] = useState(false);
+  // Used to re-show dismissed alert when user dismisses then reruns
+  const [alertDismissKey, setAlertDismissKey] = useState(0);
+
   const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const outbreaks = Object.values(store.outbreaks || {}) as any[];
   const units = useMemo(() => {
@@ -58,6 +67,13 @@ export const ShiftLogPage: React.FC = () => {
   }, [residents]);
 
   const entries = useMemo(() => Object.values(store.shiftLog || {}), [store.shiftLog]) as ShiftLogEntry[];
+
+  const { riskResult, status, rerunAnalysis, isAnalyzing } = useOutbreakRiskMonitor({
+    shiftLogEntries: entries,
+    enabled: true,
+  });
+
+  const currentShiftLabel = `${new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${formShift} Shift`;
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -145,13 +161,55 @@ export const ShiftLogPage: React.FC = () => {
           <h1 className="text-xl font-bold text-neutral-900">Shift Log</h1>
           <p className="text-sm text-neutral-500">Handoff notes with resident and outbreak references</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          New Entry
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Risk monitor status badge */}
+          {isAnalyzing && (
+            <span className="flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-full">
+              <Loader2 className="w-3 h-3 animate-spin" /> Analyzing…
+            </span>
+          )}
+          {!isAnalyzing && status === 'complete' && !riskResult?.riskDetected && (
+            <span className="flex items-center gap-1 text-xs text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-full">
+              <Zap className="w-3 h-3" /> Monitoring Active
+            </span>
+          )}
+          {!isAnalyzing && status === 'complete' && riskResult?.riskDetected && (
+            <span className="flex items-center gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-full">
+              <AlertTriangle className="w-3 h-3" /> Pattern Detected
+            </span>
+          )}
+          {!isAnalyzing && status === 'insufficient_data' && (
+            <span className="text-xs text-neutral-400 bg-neutral-50 border border-neutral-200 px-2.5 py-1 rounded-full">
+              Insufficient data (need ≥3 entries)
+            </span>
+          )}
+
+          {/* Toolbar buttons */}
+          {entries.length >= 3 && (
+            <button
+              onClick={() => { rerunAnalysis(); setAlertDismissKey(k => k + 1); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 border border-neutral-300 rounded-md hover:bg-neutral-50"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Run Analysis
+            </button>
+          )}
+          {entries.length > 0 && (
+            <button
+              onClick={() => setShowSBAR(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+            >
+              <ClipboardList className="w-3.5 h-3.5" /> Generate SBAR
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Entry
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -214,6 +272,15 @@ export const ShiftLogPage: React.FC = () => {
 
       {/* Entries list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Outbreak risk alert */}
+        {riskResult?.riskDetected && (
+          <OutbreakRiskAlert
+            key={`${riskResult.analyzedEntryCount}-${alertDismissKey}`}
+            result={riskResult}
+            analysisId={`${riskResult.analyzedEntryCount}-${riskResult.riskLevel}`}
+            onDismiss={() => setAlertDismissKey(k => k + 1)}
+          />
+        )}
         {filteredEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-neutral-400 space-y-2">
             <Clock className="w-12 h-12 opacity-30" />
@@ -245,16 +312,10 @@ export const ShiftLogPage: React.FC = () => {
                     {tag}
                   </span>
                 ))}
-                {/* Auto-generated chip */}
-                {entry.autoGenerated && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-yellow-50 text-yellow-700 border-yellow-300">
-                    ⚡ Auto
-                  </span>
-                )}
-                {/* Source hashtag chip */}
-                {entry.sourceResidentHashtag && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-neutral-100 text-neutral-600 border-neutral-300">
-                    #{entry.sourceResidentHashtag}
+                {/* SBAR badge */}
+                {entry.type === 'sbar_handoff' && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-purple-50 text-purple-700 border-purple-200">
+                    SBAR
                   </span>
                 )}
                 <span className="ml-auto text-[10px] text-neutral-400">
@@ -444,6 +505,17 @@ export const ShiftLogPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* SBAR Handoff Panel */}
+      {showSBAR && (
+        <SBARHandoffPanel
+          entries={entries}
+          facilityName={facilityName}
+          shiftLabel={currentShiftLabel}
+          facilityId={activeFacilityId}
+          onClose={() => setShowSBAR(false)}
+        />
       )}
     </div>
   );
