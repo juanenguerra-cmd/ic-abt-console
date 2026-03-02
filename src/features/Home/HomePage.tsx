@@ -1,8 +1,13 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident, ShiftLogEntry } from "../../domain/models";
-import { Send, MessageSquare, User, Hash, ArrowLeft } from "lucide-react";
+import {
+  Send, MessageSquare, User, Hash, ArrowLeft,
+  LayoutDashboard, Users, Map, Clock, FileText, Bell, AlertCircle, Activity,
+  ClipboardCheck, FileBarChart, Inbox, BookOpen, Database, Settings,
+  Star, Plus, X,
+} from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { PINNED_NAVS, RECENT_TAGS } from "../../constants/storageKeys";
 

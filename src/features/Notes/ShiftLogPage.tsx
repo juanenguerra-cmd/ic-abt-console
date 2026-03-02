@@ -10,6 +10,7 @@ import {
 import { useOutbreakRiskMonitor } from "../../hooks/useOutbreakRiskMonitor";
 import { OutbreakRiskAlert } from "../Notifications/OutbreakRiskAlert";
 import { SBARHandoffPanel } from "./SBARHandoffPanel";
+import { shouldSuggestLineList, getHashtagSymptomClass } from "../ResidentBoard/hashtagToShiftLog";
 
 const SHIFT_OPTIONS: ShiftLogEntry['shift'][] = ['Day', 'Night'];
 const TAG_OPTIONS: Array<ShiftLogEntry['tags'][number]> = ['Outbreak', 'Isolation', 'Lab', 'ABT', 'Supply', 'Education'];
