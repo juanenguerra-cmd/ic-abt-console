@@ -10,11 +10,11 @@
  *  3) green  – Active ABT course
  *  else none
  *
- * NOTE: hasActivePrecaution and hasEbp are intentionally separate signals.
+ * NOTE: Isolation and EBP chips should be mutually exclusive for the dashboard tile.
  * hasActivePrecaution = protocol is Isolation (not EBP) and an isolation type is assigned.
- * hasEbp             = EBP protocol is selected.
+ * hasEbp             = EBP protocol is selected only when no active Isolation signal exists.
  * EBP entries may still have text in isolationType (stored as EBP indication),
- * so isolation should key off ebp=false to avoid showing both chips.
+ * so isolation keys off ebp=false.
  */
 
 import { FacilityStore } from '../domain/models';
@@ -47,13 +47,16 @@ export function computeResidentSignals(
       Boolean(i.isolationType)
   );
 
-  const hasEbp = Object.values(store.infections || {}).some(
+  const hasAnyActiveEbp = Object.values(store.infections || {}).some(
     i =>
       i.residentRef.kind === 'mrn' &&
       i.residentRef.id === residentId &&
       i.status === 'active' &&
       i.ebp === true
   );
+
+  // Keep chip behavior mutually exclusive: if Isolation is active, do not also render EBP chip.
+  const hasEbp = !hasActivePrecaution && hasAnyActiveEbp;
 
   const hasActiveAbt = Object.values(store.abts || {}).some(
     a =>
