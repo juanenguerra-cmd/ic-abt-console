@@ -15,6 +15,7 @@ import { FloorMapPage } from "../features/FloorMapPage";
 import { ReportBuilder } from "../features/Reports/ReportBuilder";
 import { NoteGenerator } from "../features/Notes/NoteGenerator";
 import { Dashboard } from "../features/Dashboard";
+import { HomePage } from "../features/Home/HomePage";
 import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
@@ -355,6 +356,7 @@ const AppShell = () => {
           <nav className="p-4 space-y-1" aria-label="App sections">
             <SidebarLink to="/home" icon={Home} label="Home" />
             <SidebarLink to="/" icon={LayoutDashboard} label="Dashboard" />
+            <SidebarLink to="/home" icon={Home} label="Home" />
             <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
             <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
             <SidebarLink to="/staff" icon={Users} label="Staff" />
@@ -385,6 +387,7 @@ const AppShell = () => {
               <Routes>
                 <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
