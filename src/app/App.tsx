@@ -374,7 +374,7 @@ const AppShell = () => {
             
             <div className="pt-4 mt-4 border-t border-neutral-100">
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
-            </SidebarAccordion>
+            </div>
           </nav>
         </aside>
 
