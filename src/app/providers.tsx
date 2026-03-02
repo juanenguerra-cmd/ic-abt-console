@@ -250,6 +250,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},
     notifications: {},
+    contactTraceCases: {},
+    contactTraceExposures: {},
   };
 
   return (

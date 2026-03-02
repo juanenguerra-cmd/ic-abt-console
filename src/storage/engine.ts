@@ -56,6 +56,8 @@ function emptyFacilityStore(): FacilityStore {
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},
     notifications: {},
+    contactTraceCases: {},
+    contactTraceExposures: {},
     lineListEvents: {},
   };
 }

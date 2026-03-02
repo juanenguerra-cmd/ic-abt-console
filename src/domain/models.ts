@@ -588,8 +588,8 @@ export interface FacilityStore {
   infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
   notifications: Record<string, AppNotification>;
-  contactTraceCases?: Record<string, ContactTraceCase>;
-  contactTraceExposures?: Record<string, ContactTraceExposure>;
+  contactTraceCases: Record<string, ContactTraceCase>;
+  contactTraceExposures: Record<string, ContactTraceExposure>;
   lineListEvents?: Record<string, LineListEvent>;
   lineListOverrides?: Record<string, Record<string, string>>;
   shiftLog?: Record<string, ShiftLogEntry>;
