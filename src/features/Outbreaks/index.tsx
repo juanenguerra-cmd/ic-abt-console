@@ -3,7 +3,10 @@ import { useFacilityData, useDatabase } from "../../app/providers";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
 import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { LineListReportTab } from "./LineListReportTab";
+import { LineListReportTab } from "./components/LineListReportTab";
+import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
+import { AddOutbreakExposureModal } from "./AddOutbreakExposureModal";
+import { SitrepEditModal } from "./SitrepEditModal";
 
 export const OutbreakManager: React.FC = () => {
   const { store } = useFacilityData();
@@ -140,7 +143,7 @@ export const OutbreakManager: React.FC = () => {
               {activeTab === "linelist" ? (
                 <LineListView outbreakId={currentOutbreak.id} />
               ) : activeTab === "report" ? (
-                <LineListReportTab outbreakId={currentOutbreak.id} />
+                <LineListReportTab outbreak={currentOutbreak} />
               ) : (
                 <SitrepView outbreakId={currentOutbreak.id} />
               )}
@@ -159,6 +162,8 @@ export const OutbreakManager: React.FC = () => {
 
 const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
   const { store } = useFacilityData();
+  const [showAddCase, setShowAddCase] = useState(false);
+  const [showAddExposure, setShowAddExposure] = useState(false);
   
   const cases = (Object.values(store.outbreakCases) as OutbreakCase[]).filter(c => c.outbreakId === outbreakId);
   const exposures = (Object.values(store.outbreakExposures) as OutbreakExposure[]).filter(e => e.outbreakId === outbreakId);
@@ -182,7 +187,7 @@ const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
               {cases.length}
             </span>
           </h3>
-          <button className="text-sm text-emerald-600 font-medium hover:text-emerald-700">
+          <button onClick={() => setShowAddCase(true)} className="text-sm text-emerald-600 font-medium hover:text-emerald-700">
             + Add Case
           </button>
         </div>
@@ -234,6 +239,10 @@ const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
         </div>
       </section>
 
+      {showAddCase && (
+        <AddOutbreakCaseModal outbreakId={outbreakId} onClose={() => setShowAddCase(false)} />
+      )}
+
       {/* Exposures Table */}
       <section>
         <div className="flex items-center justify-between mb-4">
@@ -244,7 +253,7 @@ const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
               {exposures.length}
             </span>
           </h3>
-          <button className="text-sm text-emerald-600 font-medium hover:text-emerald-700">
+          <button onClick={() => setShowAddExposure(true)} className="text-sm text-emerald-600 font-medium hover:text-emerald-700">
             + Add Exposure
           </button>
         </div>
@@ -291,13 +300,18 @@ const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
           </table>
         </div>
       </section>
+
+      {showAddExposure && (
+        <AddOutbreakExposureModal outbreakId={outbreakId} onClose={() => setShowAddExposure(false)} />
+      )}
     </div>
   );
 };
 
 const SitrepView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
+  const [editingSitrep, setEditingSitrep] = useState<OutbreakDailyStatus | null>(null);
   
   const sitreps = (Object.values(store.outbreakDailyStatuses) as OutbreakDailyStatus[])
     .filter(s => s.outbreakId === outbreakId)
@@ -356,7 +370,7 @@ const SitrepView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
                   </h4>
                   <p className="text-xs text-neutral-500">Report ID: {sitrep.id.slice(0, 8)}</p>
                 </div>
-                <button className="text-xs text-blue-600 hover:underline">Edit Report</button>
+                <button onClick={() => setEditingSitrep(sitrep)} className="text-xs text-blue-600 hover:underline">Edit Report</button>
               </div>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
@@ -395,6 +409,14 @@ const SitrepView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
           ))
         )}
       </div>
+
+      {editingSitrep && (
+        <SitrepEditModal
+          sitrep={editingSitrep}
+          activeFacilityId={activeFacilityId}
+          onClose={() => setEditingSitrep(null)}
+        />
+      )}
     </div>
   );
 };
