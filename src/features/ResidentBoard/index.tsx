@@ -473,9 +473,6 @@ export const ResidentBoard: React.FC = () => {
                       key={resident.mrn}
                       onClick={() => {
                         setSelectedResidentId(resident.mrn);
-                        // If already selected, maybe open profile? Or just double click?
-                        // The prompt says "clicking a tile opens the resident profile".
-                        // So we set selected AND open modal.
                         setShowProfileModal(true);
                       }}
                       style={{ background: tileColor.bg }}
@@ -569,7 +566,7 @@ export const ResidentBoard: React.FC = () => {
                           </span>
                         )}
                         {sigs.hasEbp && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500 text-white shadow-sm uppercase tracking-wider">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-sm uppercase tracking-wider">
                             EBP
                           </span>
                         )}

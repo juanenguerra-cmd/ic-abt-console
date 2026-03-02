@@ -5,10 +5,14 @@
  * Used for Kanban tile strip colours and the default "highlighted" dashboard filter.
  *
  * Strip priority:
- *  1) yellow – Active Precaution / Isolation
+ *  1) yellow – Active Isolation (isolationType set) OR EBP flag (Enhanced Barrier Precautions)
  *  2) green  – Active ABT course
- *  3) blue   – EBP (MDRO) flag on active infection
  *  else none
+ *
+ * NOTE: hasActivePrecaution and hasEbp are intentionally separate signals.
+ * hasActivePrecaution = formal isolation type is assigned (contact/droplet/airborne).
+ * hasEbp             = MDRO / Enhanced Barrier Precautions flag is set.
+ * Both yield a yellow strip, but only the relevant chip is shown on the tile.
  */
 
 import { FacilityStore } from '../domain/models';
@@ -30,12 +34,14 @@ export function computeResidentSignals(
   /** Pass a pre-computed symptom map to avoid redundant iteration across many residents. */
   symptomMap?: Record<string, { respiratory: boolean; gi: boolean }>
 ): ResidentSignals {
+  // Formal isolation only — isolationType must be explicitly assigned.
+  // EBP (ebp flag) is a separate signal and must NOT trigger this flag.
   const hasActivePrecaution = Object.values(store.infections || {}).some(
     i =>
       i.residentRef.kind === 'mrn' &&
       i.residentRef.id === residentId &&
       i.status === 'active' &&
-      Boolean(i.isolationType || i.ebp)
+      Boolean(i.isolationType)
   );
 
   const hasEbp = Object.values(store.infections || {}).some(
@@ -64,10 +70,10 @@ export function computeResidentSignals(
   const ind = resolvedSymptomMap[residentId];
   const hasRecentSymptoms96h = Boolean(ind && (ind.respiratory || ind.gi));
 
+  // Both formal isolation and EBP flag independently warrant a yellow strip.
   let strip: ResidentSignals['strip'] = 'none';
-  if (hasActivePrecaution) strip = 'yellow';
+  if (hasActivePrecaution || hasEbp) strip = 'yellow';
   else if (hasActiveAbt) strip = 'green';
-  else if (hasEbp) strip = 'blue';
 
   return { hasActivePrecaution, hasEbp, hasActiveAbt, hasDueVax, hasRecentSymptoms96h, strip };
 }
