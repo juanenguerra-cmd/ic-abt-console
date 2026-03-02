@@ -60,3 +60,12 @@ export async function idbRemove(key: string): Promise<void> {
     tx.onabort = () => reject(tx.error ?? new Error("IDB transaction aborted"));
   });
 }
+
+export async function idbDeleteDatabase(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(IDB_DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("IDB delete blocked by another open tab"));
+  });
+}

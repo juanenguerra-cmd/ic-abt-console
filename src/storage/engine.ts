@@ -1,5 +1,5 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
-import { idbGet, idbSet, idbRemove } from "./idb";
+import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
 import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
 export { DB_KEY_MAIN };
 
@@ -400,6 +400,21 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
     }
   } catch {
     // localStorage backup failure is non-fatal — IDB is the source of truth.
+  }
+}
+
+
+export async function hardResetStorageAsync(): Promise<void> {
+  try {
+    await idbDeleteDatabase();
+  } catch (e) {
+    console.warn("Failed to delete IDB database:", e);
+  }
+
+  try {
+    localStorage.clear();
+  } catch (e) {
+    console.warn("Failed to clear localStorage:", e);
   }
 }
 
