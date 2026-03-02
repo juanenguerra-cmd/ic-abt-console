@@ -98,6 +98,20 @@ export const ResidentProfileModal: React.FC<Props> = ({
     return age;
   };
 
+  /**
+   * Build a human-readable precaution label from an infection record.
+   * - isolationType only  → e.g. "Contact"
+   * - ebp only           → "EBP"
+   * - both               → e.g. "Contact + EBP"
+   * - neither            → "None"
+   */
+  const getPrecautionLabel = (ip: any): string => {
+    if (ip.isolationType && ip.ebp) return `${ip.isolationType} + EBP`;
+    if (ip.isolationType) return ip.isolationType;
+    if (ip.ebp) return 'EBP';
+    return 'None';
+  };
+
   const handleSave = () => {
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
@@ -314,15 +328,43 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 })}
                 {residentInfections.map((ip: any) => {
                   const isActive = ip.status === 'active';
+                  // EBP-only = ebp flag set but no formal isolationType assigned → blue theme
+                  // Isolation (with or without EBP) = amber theme
+                  const isEbpOnly = isActive && ip.ebp === true && !ip.isolationType;
+
+                  const rowClass = !isActive
+                    ? 'bg-neutral-50 border-neutral-200'
+                    : isEbpOnly
+                      ? 'bg-blue-50 border-blue-100'
+                      : 'bg-amber-50 border-amber-100';
+
+                  const iconClass = !isActive
+                    ? 'text-neutral-400'
+                    : isEbpOnly
+                      ? 'text-blue-600'
+                      : 'text-amber-600';
+
+                  const titleClass = !isActive
+                    ? 'text-neutral-700'
+                    : isEbpOnly
+                      ? 'text-blue-900'
+                      : 'text-amber-900';
+
+                  const subtitleClass = !isActive
+                    ? 'text-neutral-500'
+                    : isEbpOnly
+                      ? 'text-blue-700'
+                      : 'text-amber-700';
+
                   return (
-                    <div key={ip.id} onClick={() => onEditIp(ip.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${isActive ? 'bg-amber-50 border-amber-100' : 'bg-neutral-50 border-neutral-200'}`}>
-                      <Shield className={`w-5 h-5 shrink-0 mt-0.5 ${isActive ? 'text-amber-600' : 'text-neutral-400'}`} />
+                    <div key={ip.id} onClick={() => onEditIp(ip.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${rowClass}`}>
+                      <Shield className={`w-5 h-5 shrink-0 mt-0.5 ${iconClass}`} />
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${isActive ? 'text-amber-900' : 'text-neutral-700'}`}>
+                        <p className={`text-sm font-bold ${titleClass}`}>
                           Infection: {ip.infectionCategory || 'Unspecified'}
                           <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(ip.status)}`}>{ip.status}</span>
                         </p>
-                        <p className={`text-xs ${isActive ? 'text-amber-700' : 'text-neutral-500'}`}>{ip.organism || 'Unknown Organism'} • Isolation: {ip.isolationType || 'None'}</p>
+                        <p className={`text-xs ${subtitleClass}`}>{ip.organism || 'Unknown Organism'} • Precaution: {getPrecautionLabel(ip)}</p>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); onDeleteIp(ip.id); }}
