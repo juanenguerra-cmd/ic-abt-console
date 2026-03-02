@@ -59,7 +59,10 @@ export const ShiftLogPage: React.FC = () => {
   // Used to re-show dismissed alert when user dismisses then reruns
   const [alertDismissKey, setAlertDismissKey] = useState(0);
 
-  const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
+  const residents = useMemo(
+    () => (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly),
+    [store.residents],
+  );
   const outbreaks = Object.values(store.outbreaks || {}) as any[];
   const units = useMemo(() => {
     const s = new Set<string>();
