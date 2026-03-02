@@ -1,4 +1,5 @@
 import { ShiftLogEntry } from '../../domain/models';
+import { getSymptomClassForHashtag } from '../../utils/symptomHashtagLibrary';
 
 interface ShiftLogEntryTemplate {
   tag: ShiftLogEntry['tags'][number];
@@ -99,12 +100,13 @@ export function buildHashtagShiftLogEntry(params: {
 }
 
 export function shouldSuggestLineList(hashtagValue: string): boolean {
-  return HASHTAG_SHIFT_LOG_MAP[hashtagValue]?.lineListSuggestion ?? false;
+  if (HASHTAG_SHIFT_LOG_MAP[hashtagValue]?.lineListSuggestion) return true;
+  return Boolean(getSymptomClassForHashtag(hashtagValue));
 }
 
 export function getHashtagSymptomClass(
   hashtagValue: string,
   override?: 'resp' | 'gi',
 ): 'resp' | 'gi' | undefined {
-  return override ?? HASHTAG_SHIFT_LOG_MAP[hashtagValue]?.symptomClass;
+  return override ?? HASHTAG_SHIFT_LOG_MAP[hashtagValue]?.symptomClass ?? getSymptomClassForHashtag(hashtagValue);
 }
