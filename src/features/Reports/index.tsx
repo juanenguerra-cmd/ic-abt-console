@@ -7,7 +7,18 @@ import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
 import { FileText, Download, Link as LinkIcon, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
-import { computeVaccineCoverage } from '../../lib/vaccineCoverage';
+import {
+  computeVaccineCoverage,
+  getActiveResidentMrns,
+  getCanonicalDate,
+  getFluSeasonWindow,
+  isCovid19,
+  isDeclinedEvent,
+  isInfluenza,
+  isPneumococcal,
+  isQualifyingEvent,
+  isRsv,
+} from '../../lib/vaccineCoverage';
 
 
 const residentLabel = (res: any) => {
@@ -1485,8 +1496,10 @@ const QapiRollup: React.FC = () => {
 
 const VaccineCoverageReport: React.FC = () => {
   const { store } = useFacilityData();
+  const [selectedVaccine, setSelectedVaccine] = useState<string | null>(null);
 
   const result = useMemo(() => computeVaccineCoverage(store), [store]);
+  const handlePrint = () => window.print();
 
   const pct = (n: number) =>
     result.totalActiveCensus > 0
@@ -1534,14 +1547,93 @@ const VaccineCoverageReport: React.FC = () => {
   const declinedVsCoveredPct = (declined: number, covered: number) =>
     covered > 0 ? ((declined / covered) * 100).toFixed(1) : '0.0';
 
+  const reOfferRows = useMemo(() => {
+    const activeMrns = getActiveResidentMrns(store);
+    const activeResidents = (Object.values(store.residents) as Resident[])
+      .filter(r => activeMrns.has(r.mrn))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+    const fluWindow = getFluSeasonWindow(new Date());
+    const covidSinceMs = new Date(result.covidSinceDate).getTime();
+
+    const coveredFlu = new Set<string>();
+    const coveredPneumo = new Set<string>();
+    const coveredCovid = new Set<string>();
+    const coveredRsv = new Set<string>();
+    const declinedFlu = new Set<string>();
+    const declinedPneumo = new Set<string>();
+    const declinedCovid = new Set<string>();
+    const declinedRsv = new Set<string>();
+
+    (Object.values(store.vaxEvents ?? {}) as VaxEvent[]).forEach(event => {
+      const mrn = event.residentRef.kind === 'mrn' ? event.residentRef.id : null;
+      if (!mrn || !activeMrns.has(mrn)) return;
+
+      const given = isQualifyingEvent(event);
+      const declined = isDeclinedEvent(event);
+      if (!given && !declined) return;
+
+      const eventDate = given ? getCanonicalDate(event) : (event.offerDate ?? event.createdAt);
+      if (!eventDate) return;
+      const eventMs = new Date(eventDate).getTime();
+
+      if (isInfluenza(event.vaccine) && eventMs >= fluWindow.start.getTime() && eventMs <= fluWindow.end.getTime()) {
+        if (given) coveredFlu.add(mrn);
+        if (declined) declinedFlu.add(mrn);
+      }
+      if (isPneumococcal(event.vaccine)) {
+        if (given) coveredPneumo.add(mrn);
+        if (declined) declinedPneumo.add(mrn);
+      }
+      if (isCovid19(event.vaccine) && eventMs >= covidSinceMs) {
+        if (given) coveredCovid.add(mrn);
+        if (declined) declinedCovid.add(mrn);
+      }
+      if (isRsv(event.vaccine)) {
+        if (given) coveredRsv.add(mrn);
+        if (declined) declinedRsv.add(mrn);
+      }
+    });
+
+    const buildRow = (label: string, covered: Set<string>, declined: Set<string>) => {
+      const residents = activeResidents
+        .filter(r => !covered.has(r.mrn))
+        .map(r => ({
+          mrn: r.mrn,
+          displayName: r.displayName,
+          unit: r.currentUnit || '—',
+          room: r.currentRoom || '—',
+          previouslyDeclined: declined.has(r.mrn),
+        }));
+      return { label, count: residents.length, residents };
+    };
+
+    return {
+      'Influenza (current season)': buildRow('Influenza (current season)', coveredFlu, declinedFlu),
+      'Pneumococcal (lifetime)': buildRow('Pneumococcal (lifetime)', coveredPneumo, declinedPneumo),
+      [`COVID-19 (${covidLookbackLabel})`]: buildRow(`COVID-19 (${covidLookbackLabel})`, coveredCovid, declinedCovid),
+      'RSV (lifetime)': buildRow('RSV (lifetime)', coveredRsv, declinedRsv),
+    };
+  }, [store, result.covidSinceDate, covidLookbackLabel]);
+
+  const selectedReOffer = selectedVaccine ? reOfferRows[selectedVaccine as keyof typeof reOfferRows] : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+        <div>
         <span className="font-bold text-indigo-900 text-sm">Vaccine Coverage — Active Census</span>
         <p className="text-xs text-indigo-700 mt-0.5">
           Counts active residents with at least one qualifying in-house or documented-historical vaccine event.
         </p>
+        </div>
+        <button
+          onClick={handlePrint}
+          className="shrink-0 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-100"
+        >
+          Print / PDF
+        </button>
       </div>
 
       {/* Summary counts */}
@@ -1558,6 +1650,7 @@ const VaccineCoverageReport: React.FC = () => {
               <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Covered</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Declined</th>
+              <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Not Vaccinated (Available)</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Active Census</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Coverage %</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Declined vs Covered %</th>
@@ -1570,6 +1663,14 @@ const VaccineCoverageReport: React.FC = () => {
                 <td className="px-4 py-2 font-medium text-neutral-800">{row.label}</td>
                 <td className="px-4 py-2 text-right font-semibold text-neutral-900">{row.count}</td>
                 <td className="px-4 py-2 text-right font-semibold text-red-700">{row.declined}</td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    onClick={() => setSelectedVaccine(row.label)}
+                    className="font-semibold text-indigo-700 hover:text-indigo-900 underline"
+                  >
+                    {reOfferRows[row.label as keyof typeof reOfferRows]?.count ?? 0}
+                  </button>
+                </td>
                 <td className="px-4 py-2 text-right text-neutral-500">{result.totalActiveCensus}</td>
                 <td className="px-4 py-2 text-right">
                   <span
@@ -1591,6 +1692,54 @@ const VaccineCoverageReport: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {selectedReOffer && (
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-indigo-50 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-indigo-900">Re-Offer Drill Down — {selectedReOffer.label}</h3>
+              <p className="text-xs text-indigo-700 mt-0.5">
+                Not vaccinated active residents available for outreach: <span className="font-semibold">{selectedReOffer.count}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedVaccine(null)}
+              className="px-2 py-1 text-xs font-medium rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+            >
+              Close
+            </button>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Prior Decline</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {selectedReOffer.residents.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-neutral-400">No residents need re-offer for this vaccine.</td></tr>
+              )}
+              {selectedReOffer.residents.map(r => (
+                <tr key={r.mrn}>
+                  <td className="px-4 py-2 font-medium text-neutral-900">{r.displayName}</td>
+                  <td className="px-4 py-2 text-neutral-500">{r.mrn}</td>
+                  <td className="px-4 py-2 text-neutral-500">{r.unit}</td>
+                  <td className="px-4 py-2 text-neutral-500">{r.room}</td>
+                  <td className="px-4 py-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${r.previouslyDeclined ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}`}>
+                      {r.previouslyDeclined ? 'Yes' : 'No'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Unlinked events */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
