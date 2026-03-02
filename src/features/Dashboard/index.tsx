@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X } from 'lucide-react';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X, ArrowUpRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
 import { CensusModal } from './CensusModal';
@@ -555,7 +555,15 @@ export const Dashboard: React.FC = () => {
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-neutral-900">Live Floor Map</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-neutral-900">Live Floor Map</h2>
+              <button
+                onClick={() => navigate('/floor-map')}
+                className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+              >
+                View Full Map <ArrowUpRight className="w-3 h-3" />
+              </button>
+            </div>
             <div className="flex items-center gap-4">
               {units.length > 0 && (
                 <div className="flex items-center gap-2">

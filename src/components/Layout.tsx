@@ -4,7 +4,7 @@ import { Activity, Users, Map, FileText, Settings, ShieldAlert } from "lucide-re
 
 const navItems = [
   { name: "Resident Board", path: "/", icon: Users },
-  { name: "Heatmap", path: "/heatmap", icon: Map },
+  { name: "Floor Map", path: "/floor-map", icon: Map },
   { name: "Census Parser", path: "/census", icon: FileText },
   { name: "Outbreaks", path: "/outbreaks", icon: ShieldAlert },
   { name: "Reports & Exports", path: "/reports", icon: Activity },

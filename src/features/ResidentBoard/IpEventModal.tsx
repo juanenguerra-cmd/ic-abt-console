@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { IPEvent, ABTCourse, Outbreak } from "../../domain/models";
+import { IPEvent, ABTCourse, Outbreak, ShiftLogEntry } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { checkCauti, checkCdiffLabId, NhsnResult } from "../../utils/nhsnCriteria";
 import { NhsnCriteriaPanel } from "../../components/NhsnCriteriaPanel";
+import { useHashtagShiftLogSync } from "../../hooks/useHashtagShiftLogSync";
+import { useNavigate } from "react-router-dom";
 
 interface Props {
   residentId: string;
@@ -57,9 +59,27 @@ const ISOLATION_CATEGORY_MAP: Record<string, string[]> = {
 export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
+  const navigate = useNavigate();
   
   const resident = residentId.startsWith("Q:") ? store.quarantine[residentId] : store.residents[residentId];
   const activeOutbreaks = (Object.values(store.outbreaks) as Outbreak[]).filter(o => o.status !== 'closed');
+
+  const residentForSync = {
+    id: residentId,
+    mrn: residentId.startsWith("Q:") ? residentId : residentId,
+    displayName: (resident as any)?.displayName ?? '',
+    currentUnit: (resident as any)?.currentUnit ?? (resident as any)?.unitSnapshot,
+  };
+
+  const currentShift: ShiftLogEntry['shift'] =
+    new Date().getHours() >= 7 && new Date().getHours() < 19 ? 'Day' : 'Night';
+
+  const [showLineListPrompt, setShowLineListPrompt] = useState<{ symptomClass: 'resp' | 'gi' } | null>(null);
+
+  const { syncHashtagToShiftLog } = useHashtagShiftLogSync({
+    resident: residentForSync,
+    currentShift,
+  });
 
   // Core Identity & Status
   const [status, setStatus] = useState<IPEvent["status"]>(existingIp?.status || "active");
@@ -340,7 +360,40 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       };
     }, { action: existingIp ? 'update' : 'create', entityType: 'IPEvent', entityId: existingIp?.id || newIpId });
 
-    onClose();
+    // Determine symptom class for GI-related categories
+    const effectiveCatForSync = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
+    const isGiCategory = /\bgi\b|c\.?\s*diff|norovirus/i.test(effectiveCatForSync);
+    const detectedSymptomClass: 'resp' | 'gi' = isGiCategory ? 'gi' : 'resp';
+
+    // Determine linked outbreak ref if any
+    const linkedOutbreak = outbreakId
+      ? activeOutbreaks.find(o => o.id === outbreakId)
+      : undefined;
+    const outbreakRefForSync = linkedOutbreak
+      ? { id: linkedOutbreak.id, name: linkedOutbreak.title ?? linkedOutbreak.pathogen ?? 'Outbreak' }
+      : undefined;
+
+    // Trigger shift log sync for each applicable hashtag
+    let lineListResult: { suggestsLineList: boolean; symptomClass?: 'resp' | 'gi' } = { suggestsLineList: false };
+
+    if (status === 'active' && protocol === 'isolation' && isolationTypes.length > 0) {
+      lineListResult = syncHashtagToShiftLog('Isolation');
+    }
+    if (status === 'active' && outbreakId) {
+      lineListResult = syncHashtagToShiftLog('Outbreak', {
+        symptomClassOverride: detectedSymptomClass,
+      });
+    }
+    if (specimenCollectedDate) {
+      const labResult = syncHashtagToShiftLog('LabPending');
+      if (labResult.suggestsLineList) lineListResult = labResult;
+    }
+
+    if (lineListResult.suggestsLineList) {
+      setShowLineListPrompt({ symptomClass: lineListResult.symptomClass ?? 'resp' });
+    } else {
+      onClose();
+    }
   };
 
   return (
@@ -682,20 +735,41 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
 
         </div>
         
-        <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex justify-end gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
-          >
-            <Save className="w-4 h-4" />
-            Save IP Event
-          </button>
+        <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex flex-col gap-3 shrink-0">
+          {showLineListPrompt && (
+            <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-sm text-amber-900">
+              <span className="font-medium">📋 This resident may need a line list entry ({showLineListPrompt.symptomClass === 'gi' ? 'GI' : 'Respiratory'}).</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => navigate('/linelist-report', { state: { symptomClass: showLineListPrompt.symptomClass } })}
+                  className="px-3 py-1 bg-amber-600 text-white rounded-md text-xs font-medium hover:bg-amber-700"
+                >
+                  Open Line List →
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-3 py-1 border border-amber-300 text-amber-800 rounded-md text-xs font-medium hover:bg-amber-100"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
+            >
+              <Save className="w-4 h-4" />
+              Save IP Event
+            </button>
+          </div>
         </div>
       </div>
     </div>
