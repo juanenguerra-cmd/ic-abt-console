@@ -517,6 +517,40 @@ export interface AppNotification {
 
 }
 
+// ─── Contact Tracing ─────────────────────────────────────────────────────────
+
+export interface ContactTraceCase {
+  id: string;
+  status: 'open' | 'closed';
+  indexResidentMrn: string;
+  indexRef:
+    | { kind: 'ipEvent'; id: string }
+    | { kind: 'symptom'; residentMrn: string; startISO: string; endISO?: string };
+  syndromeOrOrganism?: string;
+  notes?: string;
+  createdAt: ISO;
+  updatedAt: ISO;
+}
+
+export interface ContactTraceExposure {
+  id: string;
+  caseId: string;
+  personRef: { kind: 'resident'; mrn: string } | { kind: 'staff'; staffId: string };
+  exposureStartISO: string;
+  exposureEndISO?: string;
+  location?: string;
+  risk: 'low' | 'medium' | 'high';
+  actions: {
+    monitoring?: boolean;
+    testing?: boolean;
+    isolation?: boolean;
+    notes?: string;
+  };
+  outcome?: string;
+  createdAt: ISO;
+  updatedAt: ISO;
+}
+
 export interface MutationLogEntry {
   /** ISO timestamp of the mutation. */
   timestamp: ISO;
@@ -552,6 +586,8 @@ export interface FacilityStore {
   infectionControlAuditSessions: Record<string, InfectionControlAuditSession>;
   infectionControlAuditItems: Record<string, InfectionControlAuditItem>;
   notifications: Record<string, AppNotification>;
+  contactTraceCases?: Record<string, ContactTraceCase>;
+  contactTraceExposures?: Record<string, ContactTraceExposure>;
   lineListEvents?: Record<string, LineListEvent>;
   lineListOverrides?: Record<string, Record<string, string>>;
   shiftLog?: Record<string, ShiftLogEntry>;
