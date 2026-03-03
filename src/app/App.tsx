@@ -34,6 +34,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
+import { AnalyticsDashboard } from '../features/Analytics';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -289,8 +290,18 @@ const AppShell = () => {
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center" aria-hidden="true">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-emerald-900 hidden sm:inline-block">Infection Control & Antibiotic Stewardship Console</span>
+            <span className="font-bold text-lg text-emerald-900 hidden sm:inline-block">ICN Console</span>
           </div>
+
+          {/* Header Navigation */}
+          <nav className="hidden lg:flex items-center gap-1 ml-6">
+            <NavLink to="/home" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Home</NavLink>
+            <NavLink to="/dashboard" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Dashboard</NavLink>
+            <NavLink to="/analytics" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Analytics</NavLink>
+            <NavLink to="/resident-board" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Resident Board</NavLink>
+            <NavLink to="/staff" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Staff</NavLink>
+            <NavLink to="/notifications" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Notifications</NavLink>
+          </nav>
         </div>
 
         <div className="flex items-center gap-3">
@@ -379,6 +390,7 @@ const AppShell = () => {
             <SidebarLink to="/home" icon={Home} label="Home" />
             <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+              <SidebarLink to="/analytics" icon={BarChart3} label="Analytics" />
               <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
               <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
             </SidebarAccordion>
@@ -429,6 +441,7 @@ const AppShell = () => {
                 <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/analytics" element={<PageTransition><AnalyticsDashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
