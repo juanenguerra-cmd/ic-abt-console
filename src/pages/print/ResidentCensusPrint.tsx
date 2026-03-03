@@ -14,7 +14,7 @@ const ResidentCensusPrint: React.FC = () => {
     loadDBAsync().then(setDb);
   }, []);
 
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
 

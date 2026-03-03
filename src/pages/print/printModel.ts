@@ -40,14 +40,8 @@ export const validatePrintableContent = (model: PrintModel): string[] => {
   if (!model.generatedAt.trim()) warnings.push("Missing generated timestamp.");
   if (!model.filtersSummary.trim()) warnings.push("Missing filters summary.");
 
-  const hasSectionWithData = model.sections.some((section) => section.count > 0);
-  if (!hasSectionWithData) {
-    warnings.push(
-      `No printable data found. Checked sections: ${model.sections
-        .map((section) => `${section.key}=${section.count}`)
-        .join(", ") || "none"}.`
-    );
-  }
+  // Empty datasets are valid for many reports when filters exclude records.
+  // Individual print views should render an explicit "No records match your filters" section.
 
   return warnings;
 };

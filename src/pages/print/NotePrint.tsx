@@ -13,7 +13,7 @@ const NotePrint: React.FC = () => {
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const noteId = params.get("noteId");
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
   

@@ -28,7 +28,7 @@ const AuditReportPrint: React.FC = () => {
   }, []);
 
   const sessionId = useMemo(() => new URLSearchParams(window.location.search).get("sessionId") || "", []);
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
   const session: InfectionControlAuditSession | undefined = sessionId
