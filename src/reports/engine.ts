@@ -76,6 +76,15 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
         return { ...abt, resident };
       });
       break;
+    case "vaxEvents":
+    case "vax":
+      data = Object.values(store.vaxEvents).map(vax => {
+        const resident = vax.residentRef.kind === 'mrn'
+          ? store.residents[vax.residentRef.id]
+          : store.quarantine[vax.residentRef.id];
+        return { ...vax, resident, vax };
+      });
+      break;
     case "infections":
       data = Object.values(store.infections).map(inf => {
         const resident = inf.residentRef.kind === 'mrn' 

@@ -35,7 +35,10 @@ export class SchemaMigrationError extends Error {
 // ---------------------------------------------------------------------------
 
 /** Builds an empty FacilityStore used when back-filling missing stores. */
-function emptyFacilityStore(): FacilityStore {
+function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
+  const now = new Date().toISOString();
+  const vaccineConsentProfileId = 'seed-vax-consent-profile';
+
   return {
     residents: {},
     quarantine: {},
@@ -51,7 +54,27 @@ function emptyFacilityStore(): FacilityStore {
     outbreakCases: {},
     outbreakExposures: {},
     outbreakDailyStatuses: {},
-    exportProfiles: {},
+    exportProfiles: {
+      [vaccineConsentProfileId]: {
+        id: vaccineConsentProfileId,
+        name: 'Vaccine Consent Form',
+        facilityId,
+        type: 'pdf',
+        dataset: 'vaxEvents',
+        includePHI: true,
+        columns: [
+          { header: 'Resident Name', fieldPath: 'resident.displayName' },
+          { header: 'DOB', fieldPath: 'resident.dob' },
+          { header: 'Vaccine', fieldPath: 'vax.vaccine' },
+          { header: 'Dose', fieldPath: 'vax.dose' },
+          { header: 'Offer Date', fieldPath: 'vax.offerDate' },
+          { header: 'Administered By', fieldPath: 'vax.administeredBy' },
+          { header: 'Signature Line', fieldPath: 'vax.notes' },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+    },
     surveyPackets: {},
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},
@@ -135,7 +158,7 @@ function migratePreV2toV2(raw: Record<string, unknown>): Record<string, unknown>
 
   for (const fid of Object.keys(facilities.byId)) {
     if (!facilityData[fid]) {
-      facilityData[fid] = emptyFacilityStore();
+      facilityData[fid] = emptyFacilityStore(fid);
     } else {
       const store = facilityData[fid] as unknown as Record<string, unknown>;
       // Back-fill stores added in V2
@@ -143,7 +166,7 @@ function migratePreV2toV2(raw: Record<string, unknown>): Record<string, unknown>
       if (!store.infectionControlAuditItems) store.infectionControlAuditItems = {};
       if (!store.notifications) store.notifications = {};
       if (!store.surveyPackets) store.surveyPackets = {};
-      if (!store.exportProfiles) store.exportProfiles = {};
+      if (!store.exportProfiles) store.exportProfiles = emptyFacilityStore(fid).exportProfiles;
       if (!store.outbreakDailyStatuses) store.outbreakDailyStatuses = {};
       if (!store.outbreakExposures) store.outbreakExposures = {};
       if (!store.outbreakCases) store.outbreakCases = {};
