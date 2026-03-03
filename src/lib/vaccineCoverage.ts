@@ -59,6 +59,8 @@ export interface VaccineCoverageResult {
   declinedRsv: number;
   /** VaxEvents that could not be linked to an active census resident. */
   unlinkedEventCount: number;
+  /** The actual VaxEvent objects that could not be linked to an active census resident. */
+  unlinkedEvents: VaxEvent[];
   /** Human-readable accuracy risk warnings. */
   accuracyRisks: string[];
   /** ISO date range used for the current flu season (for display). */
@@ -261,6 +263,7 @@ export const computeVaccineCoverage = (
   const declinedRsv = new Set<string>();
 
   let unlinkedEventCount = 0;
+  const unlinkedEvents: VaxEvent[] = [];
   const accuracyRisks: string[] = [];
 
   // Tracking for risk detection
@@ -278,6 +281,7 @@ export const computeVaccineCoverage = (
     // Unlinked: can't find this MRN in the active residents set
     if (!activeResidentMrns.has(mrn)) {
       unlinkedEventCount++;
+      unlinkedEvents.push(event);
       continue;
     }
 
@@ -370,6 +374,7 @@ export const computeVaccineCoverage = (
     declinedCovid19: declinedCovid.size,
     declinedRsv: declinedRsv.size,
     unlinkedEventCount,
+    unlinkedEvents,
     accuracyRisks,
     fluSeasonWindow: {
       start: fluWindow.start.toISOString().split('T')[0],

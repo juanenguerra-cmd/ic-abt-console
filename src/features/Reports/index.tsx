@@ -4,10 +4,11 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { FileText, Download, Link as LinkIcon, X } from 'lucide-react';
+import { FileText, Download, Link as LinkIcon, X, Edit, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
 import { SymptomWatchReport } from './SymptomWatchReport';
+import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -1510,10 +1511,21 @@ const QapiRollup: React.FC = () => {
 
 const VaccineCoverageReport: React.FC = () => {
   const { store } = useFacilityData();
+  const { updateDB } = useDatabase();
   const [selectedVaccine, setSelectedVaccine] = useState<string | null>(null);
+  const [showUnlinked, setShowUnlinked] = useState(false);
+  const [editingVaxEvent, setEditingVaxEvent] = useState<VaxEvent | undefined>(undefined);
 
   const result = useMemo(() => computeVaccineCoverage(store), [store]);
   const handlePrint = () => window.print();
+
+  const handleDeleteUnlinkedEvent = (id: string) => {
+    if (!confirm('Are you sure you want to delete this VAX event?')) return;
+    updateDB(draft => {
+      const facilityId = draft.data.facilities.activeFacilityId;
+      delete draft.data.facilityData[facilityId].vaxEvents[id];
+    });
+  };
 
   const pct = (n: number) =>
     result.totalActiveCensus > 0
@@ -1757,17 +1769,85 @@ const VaccineCoverageReport: React.FC = () => {
 
       {/* Unlinked events */}
       <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
-          <h3 className="text-base font-bold text-amber-900">Unlinked Vaccine Events</h3>
-          <p className="text-xs text-amber-700 mt-0.5">
-            Qualifying events that could not be matched to an active census resident.
-          </p>
+        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-bold text-amber-900">Unlinked Vaccine Events</h3>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Qualifying events that could not be matched to an active census resident.
+            </p>
+          </div>
+          {result.unlinkedEventCount > 0 && (
+            <button
+              onClick={() => setShowUnlinked(v => !v)}
+              className="shrink-0 px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-md text-sm font-medium hover:bg-amber-50"
+            >
+              {showUnlinked ? 'Hide' : 'View All'}
+            </button>
+          )}
         </div>
         <div className="px-6 py-4">
           <span className="text-3xl font-bold text-amber-700">{result.unlinkedEventCount}</span>
           <span className="text-sm text-neutral-500 ml-2">event(s) with no active-resident match</span>
         </div>
+        {showUnlinked && result.unlinkedEvents.length > 0 && (
+          <div className="border-t border-neutral-200 overflow-x-auto">
+            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+              <thead className="bg-neutral-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN / Ref</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Source</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-neutral-200">
+                {result.unlinkedEvents.map(event => {
+                  // Attempt to look up the resident even for unlinked events — they may be
+                  // discharged or historical (still in store.residents) but not in the active set.
+                  const resident = store.residents[event.residentRef.id];
+                  const eventDate = event.dateGiven ?? event.administeredDate ?? event.createdAt;
+                  return (
+                    <tr key={event.id} className="hover:bg-amber-50">
+                      <td className="px-4 py-2 text-neutral-500 font-mono text-xs">{event.residentRef.id}</td>
+                      <td className="px-4 py-2 font-medium text-neutral-900">{resident?.displayName ?? <span className="text-neutral-400 italic">Unknown</span>}</td>
+                      <td className="px-4 py-2 text-neutral-700">{event.vaccine || '—'}</td>
+                      <td className="px-4 py-2 text-neutral-500">{eventDate ? new Date(eventDate).toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-2 text-neutral-500">{event.status}</td>
+                      <td className="px-4 py-2 text-neutral-500">{event.source || '—'}</td>
+                      <td className="px-4 py-2 text-right space-x-3">
+                        <button
+                          onClick={() => setEditingVaxEvent(event)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUnlinkedEvent(event.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {editingVaxEvent && (
+        <HistoricalVaxEventModal
+          onClose={() => setEditingVaxEvent(undefined)}
+          existingEvent={editingVaxEvent}
+        />
+      )}
 
       {/* Accuracy risks */}
       {result.accuracyRisks.length > 0 && (
