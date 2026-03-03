@@ -680,6 +680,25 @@ const OnDemandReport: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [unitFilter, setUnitFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
+
+  const TYPE_FILTER_OPTIONS: Record<string, string[]> = {
+    infections: ["UTI", "Pneumonia", "Skin/Soft Tissue", "GI", "Bloodstream", "Sepsis", "MRSA", "VRE", "C. diff", "Scabies", "Lice", "Norovirus", "Influenza", "COVID-19", "RSV", "Meningitis", "Pertussis", "Tuberculosis", "Varicella (Chickenpox)", "Measles", "CAUTI", "CLABSI", "VAP", "Surgical Site Infection", "Pressure Ulcer", "Routine surveillance", "Other"],
+    abts: ["Respiratory", "Urinary", "Skin/Soft Tissue", "GI", "Bloodstream", "Other"],
+    vax: ["Influenza", "Pneumococcal", "Covid-19", "RSV", "Other"],
+  };
+
+  const TYPE_FILTER_LABEL: Record<string, string> = {
+    infections: 'Category',
+    abts: 'Syndrome',
+    vax: 'Vaccine Type',
+  };
+
+  const TYPE_FILTER_ALL_LABEL: Record<string, string> = {
+    infections: 'All Categories',
+    abts: 'All Syndromes',
+    vax: 'All Vaccine Types',
+  };
 
   type EditModal =
     | { type: 'ip';  recordId: string; residentId: string }
@@ -733,6 +752,7 @@ const OnDemandReport: React.FC = () => {
       const filtered = (Object.values(store.infections) as IPEvent[]).filter(ip => {
         if (!inRange(ip.onsetDate || ip.createdAt)) return false;
         if (statusFilter !== 'all' && ip.status !== statusFilter) return false;
+        if (typeFilter !== 'all' && ip.infectionCategory !== typeFilter) return false;
         const res = getRes(ip.residentRef);
         if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
         return true;
@@ -761,6 +781,7 @@ const OnDemandReport: React.FC = () => {
       const filtered = (Object.values(store.abts) as ABTCourse[]).filter(a => {
         if (!inRange(a.startDate || a.createdAt)) return false;
         if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+        if (typeFilter !== 'all' && a.syndromeCategory !== typeFilter) return false;
         const res = getRes(a.residentRef);
         if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
         return true;
@@ -789,6 +810,7 @@ const OnDemandReport: React.FC = () => {
       const filtered = (Object.values(store.vaxEvents) as VaxEvent[]).filter(v => {
         if (!inRange(v.administeredDate || v.dateGiven || v.createdAt)) return false;
         if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+        if (typeFilter !== 'all' && v.vaccine !== typeFilter) return false;
         const res = getRes(v.residentRef);
         if (unitFilter !== 'all' && (res as any)?.currentUnit !== unitFilter) return false;
         return true;
@@ -829,7 +851,7 @@ const OnDemandReport: React.FC = () => {
       ]),
       rowMeta: filtered.map(() => null as RowMeta),
     };
-  }, [dataset, startDate, endDate, unitFilter, statusFilter, store]);
+  }, [dataset, startDate, endDate, unitFilter, statusFilter, typeFilter, store]);
 
   const HEADERS: Record<string, string[]> = {
     infections: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Site', 'Status', 'Isolation', 'EBP', 'Organism', 'Date'],
@@ -927,7 +949,7 @@ const OnDemandReport: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">Dataset</label>
-            <select value={dataset} onChange={e => { setDataset(e.target.value as any); setStatusFilter('all'); }} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+            <select value={dataset} onChange={e => { setDataset(e.target.value as any); setStatusFilter('all'); setTypeFilter('all'); }} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500">
               <option value="infections">IP (Infections)</option>
               <option value="abts">ABT (Antibiotics)</option>
               <option value="vax">VAX (Vaccinations)</option>
@@ -959,6 +981,15 @@ const OnDemandReport: React.FC = () => {
             </div>
           </div>
         </div>
+        {TYPE_FILTER_OPTIONS[dataset] && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-neutral-600 mb-1 uppercase">{TYPE_FILTER_LABEL[dataset]}</label>
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="w-full border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500 md:w-64">
+              <option value="all">{TYPE_FILTER_ALL_LABEL[dataset]}</option>
+              {TYPE_FILTER_OPTIONS[dataset].map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-sm text-neutral-500">{rows.length} record{rows.length !== 1 ? 's' : ''} found</span>
           <button onClick={handleExportCsv} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">
