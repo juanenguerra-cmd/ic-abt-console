@@ -1,8 +1,9 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import {
   InfectionControlAuditItem,
   InfectionControlAuditSession,
+  UnifiedDB,
 } from "../../domain/models";
 import { InfectionControlAuditCategory } from "../../constants/infectionControlAuditTemplates";
 import { PrintLayout } from "./PrintLayout";
@@ -19,20 +20,25 @@ const categoryLabel: Record<InfectionControlAuditCategory, string> = {
 };
 
 const AuditReportPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
+
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
   const sessionId = useMemo(() => new URLSearchParams(window.location.search).get("sessionId") || "", []);
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
   const session: InfectionControlAuditSession | undefined = sessionId
-    ? store.infectionControlAuditSessions?.[sessionId]
+    ? store?.infectionControlAuditSessions?.[sessionId]
     : undefined;
   
   const items: InfectionControlAuditItem[] = useMemo(() => {
-    if (!store.infectionControlAuditItems) return [];
+    if (!store?.infectionControlAuditItems) return [];
     const all = Object.values(store.infectionControlAuditItems);
     return all.filter(i => i.sessionId === sessionId);
-  }, [store.infectionControlAuditItems, sessionId]);
+  }, [store?.infectionControlAuditItems, sessionId]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -49,10 +55,7 @@ const AuditReportPrint: React.FC = () => {
     return { total, compliant, nonCompliant, na, complianceRate, openCorrectiveActions };
   }, [items]);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
-  }, []);
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
 
   if (!session) {
     return <div className="p-6 text-sm text-red-700">Audit session not found.</div>;

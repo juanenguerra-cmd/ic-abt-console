@@ -1,31 +1,27 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
-import { LineListEvent, Resident } from "../../domain/models";
+import { UnifiedDB } from "../../domain/models";
 
 const LineListPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
-  const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const facilityId = params.get("facilityId") || db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
-  
-  const events = useMemo(() => {
-    return Object.values(store.lineListEvents || {})
-      .filter(e => e.disposition !== "ruled_out")
-      .sort((a, b) => new Date(b.onsetDateISO).getTime() - new Date(a.onsetDateISO).getTime());
-  }, [store.lineListEvents]);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
 
-  const getResident = (ref: { kind: "mrn" | "quarantine"; id: string }) => {
-    if (ref.kind === "mrn") return store.residents[ref.id];
-    return store.quarantine[ref.id];
-  };
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    loadDBAsync().then(setDb);
   }, []);
 
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const facilityId = params.get("facilityId") || db?.data.facilities.activeFacilityId || "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
+  
+  const events = useMemo(() => {
+    return Object.values(store?.lineListEvents || {})
+      .filter(e => e.disposition !== "ruled_out")
+      .sort((a, b) => new Date(b.onsetDateISO).getTime() - new Date(a.onsetDateISO).getTime());
+  }, [store?.lineListEvents]);
+
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!facility) return <div className="p-8 text-red-600">Facility not found</div>;
 
   return (
@@ -56,7 +52,7 @@ const LineListPrint: React.FC = () => {
           </thead>
           <tbody>
             {events.map(event => {
-              const resident = store.residents[event.residentId];
+              const resident = store?.residents[event.residentId];
               return (
                 <tr key={event.id} className="border-b border-neutral-200 break-inside-avoid">
                   <td className="p-2 align-top font-mono text-neutral-600">

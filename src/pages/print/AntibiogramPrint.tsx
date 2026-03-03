@@ -1,20 +1,25 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
-import { ABTCourse } from "../../domain/models";
+import { ABTCourse, UnifiedDB } from "../../domain/models";
 
 const AntibiogramPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
+
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const facilityId = params.get("facilityId") || db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
+  const facilityId = params.get("facilityId") || db?.data.facilities.activeFacilityId || "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
   
   // Optional filters
   const month = params.get("month"); // YYYY-MM
   
   const data = useMemo(() => {
-    const allAbts = Object.values(store.abts || {}) as ABTCourse[];
+    const allAbts = Object.values(store?.abts || {}) as ABTCourse[];
     
     // Filter by date range if month provided
     const filteredAbts = month 
@@ -55,13 +60,9 @@ const AntibiogramPrint: React.FC = () => {
       antibiotics: Array.from(antibiotics).sort(),
       organisms: Object.keys(matrix).sort() 
     };
-  }, [store.abts, month]);
+  }, [store?.abts, month]);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!facility) return <div className="p-8 text-red-600">Facility not found</div>;
 
   return (

@@ -1,36 +1,41 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
-import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
+import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus, UnifiedDB } from "../../domain/models";
 
 const OutbreakSummaryPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
+
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const outbreakId = params.get("outbreakId");
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
   
   const outbreak = useMemo(() => {
-    return store.outbreaks?.[outbreakId || ""];
-  }, [store.outbreaks, outbreakId]);
+    return store?.outbreaks?.[outbreakId || ""];
+  }, [store?.outbreaks, outbreakId]);
 
   const cases = useMemo(() => {
-    return Object.values(store.outbreakCases || {})
+    return Object.values(store?.outbreakCases || {})
       .filter(c => c.outbreakId === outbreakId)
       .sort((a, b) => new Date(b.symptomOnsetDate || "").getTime() - new Date(a.symptomOnsetDate || "").getTime());
-  }, [store.outbreakCases, outbreakId]);
+  }, [store?.outbreakCases, outbreakId]);
 
   const exposures = useMemo(() => {
-    return Object.values(store.outbreakExposures || {})
+    return Object.values(store?.outbreakExposures || {})
       .filter(e => e.outbreakId === outbreakId);
-  }, [store.outbreakExposures, outbreakId]);
+  }, [store?.outbreakExposures, outbreakId]);
 
   const dailyStatuses = useMemo(() => {
-    return Object.values(store.outbreakDailyStatuses || {})
+    return Object.values(store?.outbreakDailyStatuses || {})
       .filter(s => s.outbreakId === outbreakId)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [store.outbreakDailyStatuses, outbreakId]);
+  }, [store?.outbreakDailyStatuses, outbreakId]);
 
   const stats = useMemo(() => {
     return {
@@ -40,31 +45,27 @@ const OutbreakSummaryPrint: React.FC = () => {
       exposed: exposures.length,
       deceased: cases.filter(c => {
         if (c.residentRef.kind === 'mrn') {
-          return store.residents[c.residentRef.id]?.status === 'Deceased';
+          return store?.residents[c.residentRef.id]?.status === 'Deceased';
         }
         return false;
       }).length,
     };
-  }, [cases, exposures, store.residents]);
+  }, [cases, exposures, store?.residents]);
 
   const getResidentName = (ref: { kind: "mrn" | "quarantine"; id: string }) => {
-    if (ref.kind === "mrn") return store.residents[ref.id]?.displayName || "Unknown";
-    return store.quarantine[ref.id]?.displayName || "Unknown (Q)";
+    if (ref.kind === "mrn") return store?.residents[ref.id]?.displayName || "Unknown";
+    return store?.quarantine[ref.id]?.displayName || "Unknown (Q)";
   };
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!outbreak) return <div className="p-8 text-red-600">Outbreak not found</div>;
 
   return (
     <PrintLayout
       title={`Outbreak Summary: ${outbreak.title}`}
-      facilityName={facility.name}
-      facilityAddress={facility.address}
-      dohId={facility.dohId}
+      facilityName={facility?.name ?? ""}
+      facilityAddress={facility?.address}
+      dohId={facility?.dohId}
     >
       <div className="space-y-6">
         {/* Outbreak Meta */}
