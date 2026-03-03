@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { ABTCourse, Resident } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import { detectMedicationClass, MEDICATION_CLASS_OPTIONS } from '../../utils/medicationClassMap';
 
 interface Props {
   onClose: () => void;
@@ -32,6 +33,14 @@ export const HistoricalAbtEventModal: React.FC<Props> = ({ onClose, prefilledRes
   const [room, setRoom] = useState(existingEvent?.locationSnapshot?.room || '');
   const [status, setStatus] = useState<'completed' | 'ongoing-at-discharge' | 'discontinued'>((existingEvent?.status as any) || 'completed');
   const [notes, setNotes] = useState(existingEvent?.notes || '');
+
+  // Auto-detect medication class from medication name when the field is blank or was auto-set
+  const [classAutoDetected, setClassAutoDetected] = useState(!existingEvent?.medicationClass);
+  useEffect(() => {
+    if (!classAutoDetected) return;
+    const detected = detectMedicationClass(medication);
+    setMedicationClass(detected);
+  }, [medication, classAutoDetected]);
 
   const allResidents = Object.values(store.residents || {}) as Resident[];
 
@@ -136,13 +145,23 @@ export const HistoricalAbtEventModal: React.FC<Props> = ({ onClose, prefilledRes
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 mb-1">Medication Class</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-neutral-700 mb-1">
+                  Medication Class
+                  {classAutoDetected && medicationClass && (
+                    <span className="ml-1.5 text-xs font-normal text-indigo-600">(auto-detected)</span>
+                  )}
+                </label>
+                <select
                   value={medicationClass}
-                  onChange={e => setMedicationClass(e.target.value)}
+                  onChange={e => {
+                    setClassAutoDetected(false);
+                    setMedicationClass(e.target.value);
+                  }}
                   className="w-full border-neutral-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                />
+                >
+                  <option value="">Select...</option>
+                  {MEDICATION_CLASS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
               </div>
             </div>
 
