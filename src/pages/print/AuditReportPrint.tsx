@@ -7,6 +7,7 @@ import {
 } from "../../domain/models";
 import { InfectionControlAuditCategory } from "../../constants/infectionControlAuditTemplates";
 import { PrintLayout } from "./PrintLayout";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const categoryLabel: Record<InfectionControlAuditCategory, string> = {
   HAND_HYGIENE: "Hand Hygiene",
@@ -61,6 +62,16 @@ const AuditReportPrint: React.FC = () => {
     return <div className="p-6 text-sm text-red-700">Audit session not found.</div>;
   }
 
+  const filtersSummary = `Session=${session.id} Unit=${session.unit} Shift=${session.shift}`;
+  const printModel = buildPrintModel({
+    facilityName: facility?.name || "Unknown Facility",
+    reportTitle: `Audit Report: ${categoryLabel[session.auditType]}`,
+    filtersSummary,
+    sections: [{ key: "auditItems", label: "Audit Items", count: items.length }],
+    payload: { session, items, stats },
+  });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title={`Audit Report: ${categoryLabel[session.auditType]}`}
@@ -68,6 +79,8 @@ const AuditReportPrint: React.FC = () => {
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
       auditorName={session.auditorName}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-6">
         {/* Session Meta */}

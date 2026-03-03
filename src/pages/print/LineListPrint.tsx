@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const LineListPrint: React.FC = () => {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -24,12 +25,24 @@ const LineListPrint: React.FC = () => {
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!facility) return <div className="p-8 text-red-600">Facility not found</div>;
 
+  const filtersSummary = "Disposition != ruled_out";
+  const printModel = buildPrintModel({
+    facilityName: facility.name,
+    reportTitle: "Active Line List Report",
+    filtersSummary,
+    sections: [{ key: "lineListEvents", label: "Line List Events", count: events.length }],
+    payload: { events },
+  });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title="Active Line List Report"
       facilityName={facility.name}
       facilityAddress={facility.address}
       dohId={facility.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-6">
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-md text-sm text-amber-900">
@@ -103,7 +116,7 @@ const LineListPrint: React.FC = () => {
             {events.length === 0 && (
               <tr>
                 <td colSpan={9} className="p-8 text-center text-neutral-500 italic">
-                  No active line list events found.
+                  No records match your filters.
                 </td>
               </tr>
             )}

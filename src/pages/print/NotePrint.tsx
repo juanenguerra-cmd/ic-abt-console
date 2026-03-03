@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const NotePrint: React.FC = () => {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -23,12 +24,18 @@ const NotePrint: React.FC = () => {
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!note) return <div className="p-8 text-red-600">Note not found</div>;
 
+  const filtersSummary = `Note ID=${noteId ?? "N/A"}`;
+  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: "Shift Log Entry", filtersSummary, sections: [{ key: "noteBody", label: "Note Body", count: note.body?.trim() ? 1 : 0 }], payload: { note } });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title="Shift Log Entry"
       facilityName={facility?.name ?? ""}
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="border border-neutral-200 rounded-lg p-6 bg-white">
         <div className="flex justify-between items-start mb-4 border-b border-neutral-100 pb-4">
