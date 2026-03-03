@@ -96,10 +96,11 @@ export const PrintLayout: React.FC<Props> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
+            disabled={Boolean(printBlockedReason)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md font-medium transition-colors flex items-center gap-2"
           >
             <Printer className="w-4 h-4" />
-            Print Now
+            {printBlockedReason ? "Print Blocked" : "Print Now"}
           </button>
           <button
             onClick={() => window.close()}
