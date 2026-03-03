@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, ABTCourse, IPEvent } from '../../domain/models';
 import { FileText, Copy } from 'lucide-react';
@@ -31,6 +31,30 @@ export const NoteGenerator: React.FC = () => {
   const [noteType, setNoteType] = useState<NoteType>('ABT_STEWARDSHIP');
   const [noteContent, setNoteContent] = useState('');
   const [copied, setCopied] = useState(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [noteContent]);
+
+  const highlightedNote = useMemo(() => {
+    if (!noteContent) return '';
+    // HTML-special chars are escaped before the regex runs, so no XSS is possible:
+    // any user-typed '<', '>', or '&' becomes '&lt;', '&gt;', '&amp;' and the
+    // [bracket] regex can never capture raw HTML.
+    const escaped = noteContent
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return escaped.replace(
+      /\[[^\]]+\]/g,
+      '<mark style="background-color:rgba(251,191,36,0.4);border-radius:2px;color:transparent">$&</mark>',
+    );
+  }, [noteContent]);
 
   React.useEffect(() => {
     const mrn = searchParams.get('mrn');
@@ -164,14 +188,25 @@ export const NoteGenerator: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col">
+          <div className="flex flex-col">
             <label className="block text-sm font-medium text-neutral-700 mb-1">Note Content</label>
-            <textarea
-              value={noteContent}
-              onChange={e => setNoteContent(e.target.value)}
-              className="w-full flex-1 border border-neutral-300 rounded-md p-3 text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-              placeholder="Generated note will appear here..."
-            />
+            <div className="relative rounded-md border border-neutral-300 focus-within:ring-1 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 p-3 text-sm font-mono whitespace-pre-wrap break-words pointer-events-none select-none overflow-hidden"
+                style={{ color: 'transparent' }}
+                // Trailing space ensures the backdrop height matches the textarea when
+                // content ends with a newline (prevents a 1-line height mismatch).
+                dangerouslySetInnerHTML={{ __html: highlightedNote + ' ' }}
+              />
+              <textarea
+                ref={textareaRef}
+                value={noteContent}
+                onChange={e => setNoteContent(e.target.value)}
+                className="relative w-full border-0 focus:ring-0 focus:outline-none rounded-md p-3 text-sm font-mono bg-transparent resize-none overflow-y-auto min-h-48"
+                placeholder="Generated note will appear here..."
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2">
