@@ -7,6 +7,8 @@ interface Props {
   facilityAddress?: string;
   dohId?: string;
   auditorName?: string;
+  filtersSummary?: string;
+  printBlockedReason?: string;
   children: ReactNode;
 }
 
@@ -16,6 +18,8 @@ export const PrintLayout: React.FC<Props> = ({
   facilityAddress,
   dohId,
   auditorName,
+  filtersSummary,
+  printBlockedReason,
   children,
 }) => {
   const printDate = new Date().toLocaleString();
@@ -41,6 +45,12 @@ export const PrintLayout: React.FC<Props> = ({
             width: 100%;
             border-collapse: collapse;
           }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
           th, td {
             border: 1px solid #e5e7eb;
             padding: 0.5rem;
@@ -52,6 +62,10 @@ export const PrintLayout: React.FC<Props> = ({
             font-weight: 600;
           }
           tr {
+            page-break-inside: avoid;
+          }
+          section, .break-inside-avoid {
+            break-inside: avoid;
             page-break-inside: avoid;
           }
           .page-break {
@@ -109,9 +123,16 @@ export const PrintLayout: React.FC<Props> = ({
           <div className="text-right">
             <h2 className="text-xl font-semibold text-neutral-800">{title}</h2>
             <p className="text-sm text-neutral-500 mt-1">Generated: {printDate}</p>
+            {filtersSummary && <p className="text-sm text-neutral-500">Filters: {filtersSummary}</p>}
             {auditorName && <p className="text-sm text-neutral-600 mt-0.5">Prepared by: {auditorName}</p>}
           </div>
         </header>
+
+        {printBlockedReason && (
+          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Printable content validation warning:</strong> {printBlockedReason}
+          </div>
+        )}
 
         {/* Main Content */}
         <main>

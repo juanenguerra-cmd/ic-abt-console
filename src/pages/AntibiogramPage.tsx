@@ -103,7 +103,7 @@ type SortDir = "asc" | "desc";
 type DateRange = "30" | "90" | "180" | "custom";
 
 export const AntibiogramPage: React.FC = () => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
 
   const [dateRange, setDateRange] = useState<DateRange>("90");
   const [customStart, setCustomStart] = useState("");
@@ -244,7 +244,12 @@ export const AntibiogramPage: React.FC = () => {
     // Let's just open the print view without a month filter to show all data, or maybe the last month?
     // Actually, the print view implementation supports a 'month' param.
     // Let's just open it.
-    window.open(`/print/antibiogram`, '_blank');
+    const params = new URLSearchParams();
+    params.set('facilityId', activeFacilityId);
+    if (dateRange !== 'custom' && months.length === 1) {
+      params.set('month', months[0]);
+    }
+    window.open(`/print/antibiogram?${params.toString()}`, '_blank');
   };
 
   return (

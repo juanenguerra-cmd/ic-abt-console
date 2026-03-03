@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus, UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const OutbreakSummaryPrint: React.FC = () => {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -12,7 +13,7 @@ const OutbreakSummaryPrint: React.FC = () => {
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const outbreakId = params.get("outbreakId");
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
   
@@ -60,12 +61,18 @@ const OutbreakSummaryPrint: React.FC = () => {
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!outbreak) return <div className="p-8 text-red-600">Outbreak not found</div>;
 
+  const filtersSummary = `Outbreak=${outbreak.title}`;
+  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: `Outbreak Summary: ${outbreak.title}`, filtersSummary, sections: [{ key: "cases", label: "Cases", count: cases.length }, { key: "exposures", label: "Exposures", count: exposures.length }, { key: "dailyStatuses", label: "Daily Statuses", count: dailyStatuses.length }], payload: { outbreak, cases, exposures, dailyStatuses } });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title={`Outbreak Summary: ${outbreak.title}`}
       facilityName={facility?.name ?? ""}
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-6">
         {/* Outbreak Meta */}

@@ -3,6 +3,7 @@ import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { getDataForProfile } from "../../reports/engine";
 import { UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 // Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
@@ -19,7 +20,7 @@ const ReportExportPrint: React.FC = () => {
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const profileId = params.get("profileId");
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
 
@@ -49,12 +50,18 @@ const ReportExportPrint: React.FC = () => {
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!profile) return <div className="p-8 text-red-600">Report profile not found</div>;
 
+  const filtersSummary = `Dataset=${profile.dataset}`;
+  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: `Report: ${profile.name}`, filtersSummary, sections: [{ key: "rows", label: "Rows", count: data.length }], payload: { profile, data } });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title={`Report: ${profile.name}`}
       facilityName={facility?.name ?? ""}
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-6">
         <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-md text-sm">
@@ -115,7 +122,7 @@ const ReportExportPrint: React.FC = () => {
               {data.length === 0 && (
                 <tr>
                   <td colSpan={profile.columns.length} className="p-8 text-center text-neutral-500 italic">
-                    No data found for this report configuration.
+                    No records match your filters.
                   </td>
                 </tr>
               )}

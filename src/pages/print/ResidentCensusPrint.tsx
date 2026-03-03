@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { UnifiedDB, Resident, ABTCourse, IPEvent, VaxEvent } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { computeResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
@@ -13,7 +14,7 @@ const ResidentCensusPrint: React.FC = () => {
     loadDBAsync().then(setDb);
   }, []);
 
-  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];
 
@@ -58,12 +59,18 @@ const ResidentCensusPrint: React.FC = () => {
     return <div className="p-8 text-center text-neutral-500">Loading census data…</div>;
   }
 
+  const filtersSummary = "Active census residents";
+  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: "Resident Census & Status Report", filtersSummary, sections: [{ key: "residents", label: "Residents", count: filteredResidents.length }], payload: { units } });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title="Resident Census & Status Report"
       facilityName={facility?.name ?? ""}
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-8">
         {Object.entries(units)
