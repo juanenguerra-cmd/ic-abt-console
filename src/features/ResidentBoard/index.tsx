@@ -662,7 +662,7 @@ export const ResidentBoard: React.FC = () => {
             updateDB(draft => { delete draft.data.facilityData[activeFacilityId].vaxEvents[id]; }, { action: 'delete', entityType: 'VaxEvent', entityId: id });
             showUndo({ message: "Vaccination record deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].vaxEvents[id] = snapshot; }) });
           }}
-          onStartContactTrace={(ipEventId) => {
+          onStartContactTrace={(ref) => {
             if (!selectedResidentId) return;
             const now = new Date().toISOString();
             const newCaseId = uuidv4();
@@ -673,7 +673,7 @@ export const ResidentBoard: React.FC = () => {
                 id: newCaseId,
                 status: 'open',
                 indexResidentMrn: selectedResidentId,
-                indexRef: { kind: 'ipEvent', id: ipEventId },
+                indexRef: ref,
                 createdAt: now,
                 updatedAt: now,
               };

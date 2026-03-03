@@ -15,7 +15,7 @@ interface Props {
   onDeleteAbt: (id: string) => void;
   onDeleteIp: (id: string) => void;
   onDeleteVax: (id: string) => void;
-  onStartContactTrace?: (ipEventId: string) => void;
+  onStartContactTrace?: (ref: { kind: 'ipEvent'; id: string } | { kind: 'symptom'; residentMrn: string; startISO: string }) => void;
 }
 
 export const ResidentProfileModal: React.FC<Props> = ({ 
@@ -294,6 +294,26 @@ export const ResidentProfileModal: React.FC<Props> = ({
               <div className="flex justify-between items-center mb-4 border-b pb-1">
                 <h3 className="text-sm font-bold text-neutral-900">Clinical Timelines</h3>
                 <div className="flex gap-2">
+                  {onStartContactTrace && (
+                    <button 
+                      onClick={() => {
+                        const dateStr = window.prompt("Enter symptom onset date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+                        if (dateStr) {
+                          const d = new Date(dateStr);
+                          if (!isNaN(d.getTime())) {
+                            onStartContactTrace({ kind: 'symptom', residentMrn: residentId, startISO: d.toISOString() });
+                          } else {
+                            alert("Invalid date format.");
+                          }
+                        }
+                      }}
+                      className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700 bg-teal-50 hover:bg-teal-100 px-2 py-1 rounded"
+                      title="Start Contact Trace for Symptom Onset"
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                      Trace Symptom
+                    </button>
+                  )}
                   <button onClick={onAddAbt} className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded">
                     ABT
                   </button>
@@ -370,7 +390,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                       </div>
                       {onStartContactTrace && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); onStartContactTrace(ip.id); }}
+                          onClick={(e) => { e.stopPropagation(); onStartContactTrace({ kind: 'ipEvent', id: ip.id }); }}
                           className="shrink-0 px-2 py-1 text-[11px] font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded transition-colors"
                           title="Start Contact Trace"
                         >
