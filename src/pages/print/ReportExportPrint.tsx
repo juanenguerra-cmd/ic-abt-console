@@ -24,7 +24,21 @@ const ReportExportPrint: React.FC = () => {
   const store = db?.data.facilityData[facilityId];
 
   const profile = useMemo(() => {
-    return store?.exportProfiles?.[profileId || ""];
+    const fromDB = store?.exportProfiles?.[profileId || ""];
+    if (fromDB) return fromDB;
+
+    // Fall back to the temp profile written to localStorage by ReportBuilder
+    // before the print window was opened (guards against the async IDB write
+    // not completing before this tab calls loadDBAsync).
+    try {
+      const raw = localStorage.getItem('ltc_print_temp_profile');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.id === profileId) return parsed;
+      }
+    } catch {}
+
+    return undefined;
   }, [store?.exportProfiles, profileId]);
 
   const data = useMemo(() => {

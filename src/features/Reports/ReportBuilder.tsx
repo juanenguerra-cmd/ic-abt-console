@@ -179,6 +179,14 @@ export const ReportBuilder: React.FC = () => {
       draft.data.facilityData[activeFacilityId].exportProfiles[tempId] = tempProfile;
     });
 
+    // Also persist the temp profile directly to localStorage so the print tab
+    // can access it immediately, regardless of whether the async IDB write has
+    // completed (avoids a race condition between saveDBAsync and the new tab
+    // calling loadDBAsync).
+    try {
+      localStorage.setItem('ltc_print_temp_profile', JSON.stringify(tempProfile));
+    } catch {}
+
     // Now open the print view
     generatePDF(tempProfile);
   };
