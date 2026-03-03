@@ -216,6 +216,17 @@ export const Dashboard: React.FC = () => {
   const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n && n.status === 'unread').length;
   const abtNeedsReviewCount = activeAbtCourses.filter(a => a && a.reviewDate && a.reviewDate <= today).length;
 
+  // Action Items Lists
+  const nowForDot = new Date();
+  const vaxDueList = (Object.values(store.vaxEvents || {}) as any[]).filter(v => v && (v.status === 'due' || v.status === 'overdue'));
+  const ipActive14DaysList = (Object.values(store.infections || {}) as any[]).filter(ip => {
+    if (!ip || ip.status !== 'active') return false;
+    const createdDate = new Date(ip.createdAt || ip.onsetDate || nowForDot);
+    const fourteenDaysAgo = new Date(nowForDot.getTime() - 14 * 24 * 60 * 60 * 1000);
+    return createdDate < fourteenDaysAgo;
+  });
+  const abtActiveList = activeAbtCourses;
+
   // Audit Center metrics
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -245,7 +256,6 @@ export const Dashboard: React.FC = () => {
   const capacityRate = (facility as any)?.bedCapacity ? ((residentCount / (facility as any).bedCapacity) * 100).toFixed(1) : null;
 
   // E1: Days-of-Therapy (DOT) calculator
-  const nowForDot = new Date();
   const totalDotDays = (Object.values(store.abts || {}) as any[]).reduce((sum: number, abt: any) => {
     if (normalizeStatus(abt.status) !== 'active' || !abt.startDate) return sum;
     const start = new Date(abt.startDate);
@@ -564,6 +574,105 @@ export const Dashboard: React.FC = () => {
               </div>
               <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-emerald-400 shrink-0 transition-colors" />
             </button>
+          </div>
+        </div>
+
+        {/* Action Items / Needs Review */}
+        <div>
+          <h2 className="text-lg font-bold text-neutral-900 mb-4">Needs Review</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* VAX Due */}
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
+              <div className="bg-amber-50 border-b border-amber-100 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-600" />
+                  <h3 className="font-semibold text-amber-900 text-sm">Vaccinations Due</h3>
+                </div>
+                <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">{vaxDueList.length}</span>
+              </div>
+              <div className="p-0 flex-1 overflow-y-auto max-h-60">
+                {vaxDueList.length > 0 ? (
+                  <ul className="divide-y divide-neutral-100">
+                    {vaxDueList.map(vax => {
+                      const res = store.residents?.[vax.residentRef?.id];
+                      return (
+                        <li key={vax.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-medium text-neutral-900">{res?.displayName || 'Unknown'}</p>
+                            <p className="text-xs text-neutral-500">{vax.vaccine} • Due: {vax.dueDate || 'Unknown'}</p>
+                          </div>
+                          <button onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Review</button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="p-6 text-center text-sm text-neutral-400">No vaccinations due.</div>
+                )}
+              </div>
+            </div>
+
+            {/* IP > 14 Days */}
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
+              <div className="bg-red-50 border-b border-red-100 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600" />
+                  <h3 className="font-semibold text-red-900 text-sm">IP Events &gt; 14 Days</h3>
+                </div>
+                <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-0.5 rounded-full">{ipActive14DaysList.length}</span>
+              </div>
+              <div className="p-0 flex-1 overflow-y-auto max-h-60">
+                {ipActive14DaysList.length > 0 ? (
+                  <ul className="divide-y divide-neutral-100">
+                    {ipActive14DaysList.map(ip => {
+                      const res = store.residents?.[ip.residentRef?.id];
+                      return (
+                        <li key={ip.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-medium text-neutral-900">{res?.displayName || 'Unknown'}</p>
+                            <p className="text-xs text-neutral-500">{ip.infectionCategory || 'Infection'} • Started: {ip.onsetDate || ip.createdAt?.split('T')[0]}</p>
+                          </div>
+                          <button onClick={() => navigate('/resident-board', { state: { onPrecautions: true } })} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Review</button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="p-6 text-center text-sm text-neutral-400">No prolonged IP events.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Active ABT Courses */}
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
+              <div className="bg-emerald-50 border-b border-emerald-100 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                  <h3 className="font-semibold text-emerald-900 text-sm">Active ABT Courses</h3>
+                </div>
+                <span className="bg-emerald-200 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-full">{abtActiveList.length}</span>
+              </div>
+              <div className="p-0 flex-1 overflow-y-auto max-h-60">
+                {abtActiveList.length > 0 ? (
+                  <ul className="divide-y divide-neutral-100">
+                    {abtActiveList.map(abt => {
+                      const res = store.residents?.[abt.residentRef?.id];
+                      return (
+                        <li key={abt.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-medium text-neutral-900">{res?.displayName || 'Unknown'}</p>
+                            <p className="text-xs text-neutral-500">{abt.medication} • End: {abt.endDate || 'Ongoing'}</p>
+                          </div>
+                          <button onClick={() => setShowAbtModal(true)} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Review</button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div className="p-6 text-center text-sm text-neutral-400">No active ABT courses.</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

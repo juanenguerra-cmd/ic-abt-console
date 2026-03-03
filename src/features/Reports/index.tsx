@@ -7,6 +7,7 @@ import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
 import { FileText, Download, Link as LinkIcon, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
+import { SymptomWatchReport } from './SymptomWatchReport';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -30,15 +31,21 @@ const ReportsConsole: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const formsRoute = '/reports/forms';
-  const [activeTab, setActiveTab] = useState(location.pathname === formsRoute ? 'forms' : 'monthly');
+  const [activeTab, setActiveTab] = useState(
+    (location.state as any)?.activeTab || (location.pathname === formsRoute ? 'forms' : 'monthly')
+  );
 
   useEffect(() => {
-    if (location.pathname === formsRoute) {
+    if ((location.state as any)?.activeTab) {
+      setActiveTab((location.state as any).activeTab);
+      // Clear state so it doesn't persist on reload
+      window.history.replaceState({}, document.title);
+    } else if (location.pathname === formsRoute) {
       setActiveTab('forms');
     } else if (activeTab === 'forms') {
       setActiveTab('monthly');
     }
-  }, [location.pathname, activeTab]);
+  }, [location.pathname, location.state, activeTab]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -100,6 +107,12 @@ const ReportsConsole: React.FC = () => {
             Forms
           </button>
           <button
+            data-testid="symptomwatch-tab-button"
+            onClick={() => handleTabChange('symptomwatch')}
+            className={`${activeTab === 'symptomwatch' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Symptom Watch
+          </button>
+          <button
             data-testid="vax-coverage-tab-button"
             onClick={() => handleTabChange('vaxcoverage')}
             className={`${activeTab === 'vaxcoverage' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
@@ -116,6 +129,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
         {activeTab === 'forms' && <FormsTab />}
+        {activeTab === 'symptomwatch' && <SymptomWatchReport />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
       </div>
     </div>

@@ -203,6 +203,13 @@ export const ShiftLogPage: React.FC = () => {
           )}
 
           {/* Toolbar buttons */}
+          <button
+            onClick={() => navigate('/reports', { state: { activeTab: 'symptomwatch' } })}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-700 border border-neutral-300 rounded-md hover:bg-neutral-50 bg-white"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Symptom Watch Report
+          </button>
+          
           {entries.length >= 3 && (
             <button
               onClick={() => { rerunAnalysis(); setAlertDismissKey(k => k + 1); }}

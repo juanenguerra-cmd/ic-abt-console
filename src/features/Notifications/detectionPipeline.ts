@@ -1,4 +1,5 @@
 import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident, InfectionControlAuditItem, LineListNotificationPayload, SymptomClass } from '../../domain/models';
+import { SYMPTOM_HASHTAG_LIBRARY } from '../../utils/symptomHashtagLibrary';
 
 export const runDetectionPipeline = (
   store: FacilityStore,
@@ -274,7 +275,7 @@ export const runDetectionPipeline = (
 
   // 5. Symptom Watch (SYMPTOM_WATCH) & A2 (Hashtags)
   const keywords = ['fever', 'cough', 'antibiotic', 'infection', 'vomiting', 'diarrhea'];
-  const triggerTags = ['#cough', '#runnynose', '#fever', '#sorethroat', '#abdominalpain', '#diarrhea', '#sob', '#vomiting', '#nausea'];
+  const triggerTags = SYMPTOM_HASHTAG_LIBRARY.map(h => h.hashtag.toLowerCase());
 
   Object.values(store.notes || {}).forEach((note: ResidentNote) => {
     if (isNewer(note.updatedAt) || isNewer(note.createdAt)) {
