@@ -4,10 +4,11 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { FileText, Download, Link as LinkIcon, X, Edit, Trash2 } from 'lucide-react';
+import { FileText, Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FormsTab } from '../../components/FormsTab';
 import { SymptomWatchReport } from './SymptomWatchReport';
+import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import {
   computeVaccineCoverage,
@@ -130,6 +131,13 @@ const ReportsConsole: React.FC = () => {
             className={`${activeTab === 'vaxcoverage' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Vaccine Coverage
           </button>
+          <button
+            data-testid="vax-reoffer-tab-button"
+            onClick={() => handleTabChange('vaxreoffer')}
+            className={`${activeTab === 'vaxreoffer' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95 inline-flex items-center gap-2`}>
+            <Syringe className="h-4 w-4" />
+            Vax Re-offer
+          </button>
         </nav>
       </div>
 
@@ -143,6 +151,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'forms' && <FormsTab />}
         {activeTab === 'symptomwatch' && <SymptomWatchReport />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
+        {activeTab === 'vaxreoffer' && <VaxReofferList />}
       </div>
     </div>
   );
