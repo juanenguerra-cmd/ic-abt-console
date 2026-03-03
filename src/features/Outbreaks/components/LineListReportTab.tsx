@@ -133,6 +133,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
 
   const [startDate, setStartDate] = useState(initialStart);
   const [endDate, setEndDate] = useState(initialEnd);
+  const [selectedUnit, setSelectedUnit] = useState('all');
 
   const inferred = inferSymptomClass(outbreak);
   const [symptomClass, setSymptomClass] = useState<'resp' | 'gi'>(inferred ?? 'resp');
@@ -148,6 +149,14 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
       const onset = ev.onsetDateISO?.split('T')[0] ?? '';
       if (startDate && onset < startDate) return false;
       if (endDate && onset > endDate) return false;
+      
+      if (selectedUnit !== 'all') {
+        const resident = store.residents[ev.residentId];
+        if (!resident || resident.currentUnit !== selectedUnit) {
+          return false;
+        }
+      }
+      
       return true;
     });
 
@@ -212,7 +221,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
         notes: ev.notes ?? '',
       };
     });
-  }, [store, outbreak.facilityId, symptomClass, startDate, endDate]);
+  }, [store, outbreak.facilityId, symptomClass, startDate, endDate, selectedUnit]);
 
   const handlePrint = () => {
     window.print();
@@ -221,6 +230,9 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
   const title = symptomClass === 'resp'
     ? 'Respiratory / ILI Line List'
     : 'Gastroenteritis Line List';
+
+  const facility = db.data.facilities.byId[outbreak.facilityId];
+  const units: string[] = facility?.units?.map((u) => u.name) ?? [];
 
   return (
     <div>
@@ -271,6 +283,22 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
               onChange={(e) => setEndDate(e.target.value)}
               className="text-sm border border-neutral-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-neutral-600">Unit:</span>
+            <select
+              value={selectedUnit}
+              onChange={(e) => setSelectedUnit(e.target.value)}
+              className="text-sm border border-neutral-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Units</option>
+              {units.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
           </div>
 
           <span className="text-xs text-neutral-500">

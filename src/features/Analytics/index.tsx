@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area
+  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
-import { TrendingUp, AlertTriangle, Activity, Pill, Users } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Activity, Pill, Users, ShieldAlert, CheckCircle, Stethoscope, ClipboardList } from 'lucide-react';
 
 export const AnalyticsDashboard: React.FC = () => {
   const { store } = useFacilityData();
@@ -116,6 +116,55 @@ export const AnalyticsDashboard: React.FC = () => {
     };
   }, [store.infections, store.abts, store.residents]);
 
+  // 4. Quality & Stewardship Metrics
+  const qualityMetrics = useMemo(() => {
+    const abts = Object.values(store.abts || {});
+    const infections = Object.values(store.infections || {});
+    const audits = Object.values(store.infectionControlAuditSessions || {});
+
+    // Timeout Compliance (ABTs with a review date)
+    const totalAbts = abts.length;
+    const reviewedAbts = abts.filter((a: any) => a && a.reviewDate).length;
+    const timeoutCompliance = totalAbts > 0 ? Math.round((reviewedAbts / totalAbts) * 100) : 0;
+
+    // MDRO & Device Infections
+    let mdroCount = 0;
+    let deviceCount = 0;
+    infections.forEach((inf: any) => {
+      if (!inf) return;
+      if (inf.mdro || inf.type?.toLowerCase().includes('mrsa') || inf.type?.toLowerCase().includes('c. diff')) {
+        mdroCount++;
+      }
+      if (inf.deviceRelated || inf.type?.toLowerCase().includes('cauti') || inf.type?.toLowerCase().includes('clabsi')) {
+        deviceCount++;
+      }
+    });
+
+    // Average Audit Score
+    let totalScore = 0;
+    let auditCount = 0;
+    audits.forEach((audit: any) => {
+      if (audit && typeof audit.score === 'number') {
+        totalScore += audit.score;
+        auditCount++;
+      }
+    });
+    const avgAuditScore = auditCount > 0 ? Math.round(totalScore / auditCount) : 0;
+
+    return {
+      timeoutCompliance,
+      mdroCount,
+      deviceCount,
+      avgAuditScore,
+      totalInfections: infections.length
+    };
+  }, [store.abts, store.infections, store.infectionControlAuditSessions]);
+
+  const mdroPieData = [
+    { name: 'MDROs', value: qualityMetrics.mdroCount, color: '#ef4444' },
+    { name: 'Other Infections', value: Math.max(0, qualityMetrics.totalInfections - qualityMetrics.mdroCount), color: '#e5e7eb' }
+  ];
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -124,7 +173,47 @@ export const AnalyticsDashboard: React.FC = () => {
             <TrendingUp className="w-6 h-6 text-indigo-600" />
             Analytics & Projections
           </h1>
-          <p className="text-neutral-500 mt-1">Historical trends, predictive analytics, and top risk factors.</p>
+          <p className="text-neutral-500 mt-1">Historical trends, predictive analytics, and quality stewardship matrices.</p>
+        </div>
+      </div>
+
+      {/* Quality & Stewardship Matrix */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-emerald-50 rounded-lg">
+            <CheckCircle className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-sm text-neutral-500 font-medium">72h Timeout Compliance</p>
+            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.timeoutCompliance}%</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-red-50 rounded-lg">
+            <ShieldAlert className="w-6 h-6 text-red-600" />
+          </div>
+          <div>
+            <p className="text-sm text-neutral-500 font-medium">Active MDRO Cases</p>
+            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.mdroCount}</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-amber-50 rounded-lg">
+            <Stethoscope className="w-6 h-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="text-sm text-neutral-500 font-medium">Device-Associated</p>
+            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.deviceCount}</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-indigo-50 rounded-lg">
+            <ClipboardList className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-sm text-neutral-500 font-medium">Avg Audit Compliance</p>
+            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.avgAuditScore > 0 ? `${qualityMetrics.avgAuditScore}%` : 'N/A'}</p>
+          </div>
         </div>
       </div>
 
@@ -183,9 +272,9 @@ export const AnalyticsDashboard: React.FC = () => {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Infections Trend & Projection */}
-        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
+        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm lg:col-span-2">
           <div className="mb-4">
             <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Activity className="w-5 h-5 text-indigo-500" />
@@ -224,8 +313,54 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* ABT Usage Trend & Projection */}
+        {/* MDRO Breakdown */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
+          <div className="mb-4">
+            <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-red-500" />
+              MDRO Prevalence
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1">Proportion of infections identified as Multi-Drug Resistant Organisms.</p>
+          </div>
+          <div className="h-64 flex flex-col items-center justify-center relative">
+            {qualityMetrics.totalInfections > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={mdroPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {mdroPieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-3xl font-bold text-neutral-900">
+                    {Math.round((qualityMetrics.mdroCount / qualityMetrics.totalInfections) * 100)}%
+                  </span>
+                  <span className="text-xs text-neutral-500">MDRO</span>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-400">No infection data available</p>
+            )}
+          </div>
+        </div>
+
+        {/* ABT Usage Trend & Projection */}
+        <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm lg:col-span-3">
           <div className="mb-4">
             <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
               <Pill className="w-5 h-5 text-emerald-500" />
@@ -271,6 +406,10 @@ export const AnalyticsDashboard: React.FC = () => {
           <li className="flex items-start gap-2">
             <span className="mt-0.5">•</span>
             <span><strong>{topTrends.units[0]?.name || 'Certain units'}</strong> shows the highest concentration of recent infections and may require targeted rounding or environmental audits.</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="mt-0.5">•</span>
+            <span>Your 72-hour antibiotic timeout compliance is currently at <strong>{qualityMetrics.timeoutCompliance}%</strong>. {qualityMetrics.timeoutCompliance < 80 ? 'Consider reviewing documentation practices to improve this metric.' : 'Great job maintaining high stewardship standards.'}</span>
           </li>
         </ul>
       </div>
