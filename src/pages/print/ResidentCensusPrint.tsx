@@ -13,12 +13,6 @@ const ResidentCensusPrint: React.FC = () => {
     loadDBAsync().then(setDb);
   }, []);
 
-  useEffect(() => {
-    if (!db) return;
-    const timer = setTimeout(() => window.print(), 500); // Slightly longer delay for signals to compute
-    return () => clearTimeout(timer);
-  }, [db]);
-
   const facilityId = db?.data.facilities.activeFacilityId ?? "";
   const facility = db?.data.facilities.byId[facilityId];
   const store = db?.data.facilityData[facilityId];

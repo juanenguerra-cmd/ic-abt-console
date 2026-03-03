@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { getDataForProfile } from "../../reports/engine";
+import { UnifiedDB } from "../../domain/models";
 
 // Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
@@ -10,35 +11,36 @@ const resolvePath = (obj: any, path: string): any => {
 };
 
 const ReportExportPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
+
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const profileId = params.get("profileId");
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
 
   const profile = useMemo(() => {
-    return store.exportProfiles?.[profileId || ""];
-  }, [store.exportProfiles, profileId]);
+    return store?.exportProfiles?.[profileId || ""];
+  }, [store?.exportProfiles, profileId]);
 
   const data = useMemo(() => {
-    if (!profile) return [];
+    if (!profile || !store) return [];
     return getDataForProfile(store, profile);
   }, [store, profile]);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!profile) return <div className="p-8 text-red-600">Report profile not found</div>;
 
   return (
     <PrintLayout
       title={`Report: ${profile.name}`}
-      facilityName={facility.name}
-      facilityAddress={facility.address}
-      dohId={facility.dohId}
+      facilityName={facility?.name ?? ""}
+      facilityAddress={facility?.address}
+      dohId={facility?.dohId}
     >
       <div className="space-y-6">
         <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-md text-sm">

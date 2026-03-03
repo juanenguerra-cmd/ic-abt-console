@@ -1,13 +1,19 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { FloorMap } from "../../features/Heatmap/FloorMap";
 import { useFloorMapData } from "../../features/FloorMapPage/useFloorMapData";
+import { UnifiedDB } from "../../domain/models";
 
 const FloorMapPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
+  const [db, setDb] = useState<UnifiedDB | null>(null);
+
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
   
   const layout = facility?.floorLayouts?.[0] ?? {
     id: 'floor-map-default',
@@ -29,17 +35,14 @@ const FloorMapPrint: React.FC = () => {
   
   const { roomStatuses, symptomIndicators } = useFloorMapData(layout);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 500);
-    return () => clearTimeout(timer);
-  }, []);
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
 
   return (
     <PrintLayout
       title="Facility Floor Map"
-      facilityName={facility.name}
-      facilityAddress={facility.address}
-      dohId={facility.dohId}
+      facilityName={facility?.name ?? ""}
+      facilityAddress={facility?.address}
+      dohId={facility?.dohId}
     >
       <div className="flex justify-center items-center p-4 border border-neutral-200 rounded-xl bg-white min-h-[600px]">
          <FloorMap

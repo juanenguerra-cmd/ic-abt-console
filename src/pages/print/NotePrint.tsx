@@ -1,33 +1,34 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
-import { ShiftLogEntry } from "../../domain/models";
+import { UnifiedDB } from "../../domain/models";
 
 const NotePrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
-  const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const noteId = params.get("noteId");
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
-  
-  const note = useMemo(() => {
-    return store.shiftLog?.[noteId || ""];
-  }, [store.shiftLog, noteId]);
+  const [db, setDb] = useState<UnifiedDB | null>(null);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 100);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    loadDBAsync().then(setDb);
   }, []);
 
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const noteId = params.get("noteId");
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
+  
+  const note = useMemo(() => {
+    return store?.shiftLog?.[noteId || ""];
+  }, [store?.shiftLog, noteId]);
+
+  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!note) return <div className="p-8 text-red-600">Note not found</div>;
 
   return (
     <PrintLayout
       title="Shift Log Entry"
-      facilityName={facility.name}
-      facilityAddress={facility.address}
-      dohId={facility.dohId}
+      facilityName={facility?.name ?? ""}
+      facilityAddress={facility?.address}
+      dohId={facility?.dohId}
     >
       <div className="border border-neutral-200 rounded-lg p-6 bg-white">
         <div className="flex justify-between items-start mb-4 border-b border-neutral-100 pb-4">
