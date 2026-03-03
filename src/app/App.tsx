@@ -229,9 +229,9 @@ const AppShell = () => {
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [isFacilitySwitcherOpen]);
 
-  const facilities = Object.values(db.data.facilities.byId) as any[];
-  const activeFacility = db.data.facilities.byId[activeFacilityId];
-  const quarantineCount = (Object.values(store.quarantine) as any[]).filter((q: any) => !q.resolvedToMrn).length;
+  const facilities = Object.values(db?.data?.facilities?.byId || {}) as any[];
+  const activeFacility = db?.data?.facilities?.byId?.[activeFacilityId];
+  const quarantineCount = (Object.values(store?.quarantine || {}) as any[]).filter((q: any) => !q.resolvedToMrn).length;
 
   if (isPrintRoute) {
     return (

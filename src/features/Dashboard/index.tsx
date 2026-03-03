@@ -21,10 +21,10 @@ export const Dashboard: React.FC = () => {
   const { activeFacilityId, store } = useFacilityData();
   const location = useLocation();
   const navigate = useNavigate();
-  const facility = db.data.facilities.byId[activeFacilityId];
+  const facility = db?.data?.facilities?.byId?.[activeFacilityId] || { units: [], floorLayouts: [] };
   
   const layout: FloorLayout = useMemo(() => {
-    if (facility.floorLayouts && facility.floorLayouts.length > 0) {
+    if (facility?.floorLayouts && facility.floorLayouts.length > 0) {
       return facility.floorLayouts[0];
     }
 
@@ -88,11 +88,11 @@ export const Dashboard: React.FC = () => {
 
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};
-    const activeInfections = Object.values(store.infections || {}).filter(ip => ip.status === 'active');
+    const activeInfections = Object.values(store.infections || {}).filter(ip => ip && ip.status === 'active');
     
-    (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach(res => {
+    (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly).forEach(res => {
       if (res.currentRoom) {
-        const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom.replace(/^\d/, ''));
+        const room = layout.rooms.find(r => r.label === res.currentRoom || r.label === res.currentRoom?.replace(/^\d/, ''));
         if (room) {
           const infection = activeInfections.find(ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn);
           if (infection) {
@@ -139,7 +139,7 @@ export const Dashboard: React.FC = () => {
 
   const units = useMemo(() => {
     const unitSet = new Set<string>();
-    (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).forEach(r => {
+    (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly).forEach(r => {
       if (r.currentUnit?.trim()) unitSet.add(r.currentUnit.trim());
     });
     return Array.from(unitSet).sort();
@@ -149,7 +149,7 @@ export const Dashboard: React.FC = () => {
     if (selectedUnit === "all") return layout;
     const roomsInUnit = new Set(
       (Object.values(store.residents || {}) as Resident[])
-        .filter(r => !r.isHistorical && !r.backOfficeOnly)
+        .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
         .filter(r => r.currentUnit === selectedUnit && r.currentRoom)
         .map(r => r.currentRoom!)
     );
@@ -164,13 +164,13 @@ export const Dashboard: React.FC = () => {
   const symptomIndicators = useMemo((): Record<string, SymptomIndicator> => {
     const perRoom: Record<string, SymptomIndicator> = {};
     (Object.values(store.residents || {}) as Resident[])
-      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
       .forEach(res => {
         if (!res.currentRoom) return;
         const sig = perResidentIndicators[res.mrn];
         if (!sig?.respiratory && !sig?.gi) return;
         const room = filteredLayout.rooms.find(
-          r => r.label === res.currentRoom || r.label === res.currentRoom!.replace(/^\d/, '')
+          r => r.label === res.currentRoom || r.label === res.currentRoom?.replace(/^\d/, '')
         );
         if (!room) return;
         const existing = perRoom[room.roomId];
@@ -185,7 +185,7 @@ export const Dashboard: React.FC = () => {
   const roomResidentsMap = useMemo(() => {
     const map: Record<string, Resident[]> = {};
     (Object.values(store.residents || {}) as Resident[])
-      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
       .forEach(r => {
         const room = filteredLayout.rooms.find(rm =>
           rm.label === r.currentRoom ||
@@ -201,37 +201,40 @@ export const Dashboard: React.FC = () => {
 
   // Calculate stats
   const activeResidents = (Object.values(store.residents || {}) as Resident[])
-    .filter(isActiveCensusResident)
-    .filter(r => normalizeStatus(r.status) === 'active');
+    .filter(r => r && isActiveCensusResident(r))
+    .filter(r => r && normalizeStatus(r.status) === 'active');
   
   const residentCount = activeResidents.length;
-  const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
-  const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o.status !== 'closed').length;
+  const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip && ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
+  const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o && o.status !== 'closed').length;
   const activeAbtCourses = getActiveABT(Object.values(store.abts || {})) as any[];
   const abtCount = activeAbtCourses.length;
-  const qCount = Object.keys(store.quarantine).length;
+  const qCount = Object.keys(store.quarantine || {}).length;
 
   // Today's work queue counts
   const today = new Date().toISOString().split('T')[0];
-  const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n.status === 'unread').length;
-  const abtNeedsReviewCount = activeAbtCourses.filter(a => a.reviewDate && a.reviewDate <= today).length;
+  const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n && n.status === 'unread').length;
+  const abtNeedsReviewCount = activeAbtCourses.filter(a => a && a.reviewDate && a.reviewDate <= today).length;
 
   // Audit Center metrics
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const auditSessions = Object.values(store.infectionControlAuditSessions || {}) as any[];
   const auditItems = Object.values(store.infectionControlAuditItems || {}) as any[];
-  const auditsLast30 = auditSessions.filter((s: any) => new Date(s.createdAt) >= thirtyDaysAgo).length;
-  const openCorrectiveActions = auditItems.filter((i: any) => i.response === 'NON_COMPLIANT' && i.correctiveAction?.trim() && !i.completedAt).length;
-  const nonCompliantItems = auditItems.filter((i: any) => i.response === 'NON_COMPLIANT').length;
+  const auditsLast30 = auditSessions.filter((s: any) => s && s.createdAt && new Date(s.createdAt) >= thirtyDaysAgo).length;
+  const openCorrectiveActions = auditItems.filter((i: any) => i && i.response === 'NON_COMPLIANT' && i.correctiveAction?.trim() && !i.completedAt).length;
+  const nonCompliantItems = auditItems.filter((i: any) => i && i.response === 'NON_COMPLIANT').length;
 
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-  const recentAdmissions = (Object.values(store.residents || {}) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).filter(r => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
+  const recentAdmissions = (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly).filter(r => r && r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
 
   const residentsNeedingScreeningCount = recentAdmissions.filter(r => {
+    if (!r) return false;
     const hasScreeningNote = Object.values(store.notes || {}).some(n => 
+      n && 
+      n.residentRef &&
       n.residentRef.kind === 'mrn' && 
       n.residentRef.id === r.mrn && 
       n.title?.includes('Admission Screening')
@@ -239,7 +242,7 @@ export const Dashboard: React.FC = () => {
     return !hasScreeningNote;
   }).length;
   
-  const capacityRate = facility.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
+  const capacityRate = (facility as any)?.bedCapacity ? ((residentCount / (facility as any).bedCapacity) * 100).toFixed(1) : null;
 
   // E1: Days-of-Therapy (DOT) calculator
   const nowForDot = new Date();
@@ -268,6 +271,7 @@ export const Dashboard: React.FC = () => {
   const fluVaxMrns = new Set<string>();
   const covidVaxMrns = new Set<string>();
   (Object.values(store.vaxEvents || {}) as any[]).forEach((vax: any) => {
+    if (!vax) return;
     const resId = vax.residentRef?.id;
     if (!resId || !activeResidentMrns.has(resId)) return;
     const vaccineLower = (vax.vaccine || '').toLowerCase();
@@ -294,7 +298,7 @@ export const Dashboard: React.FC = () => {
 
   // E2: Vaccination coverage (staff)
   const staffVaxTotal = Object.values(store.staffVaxEvents || {}).length;
-  const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v.status === 'given').length;
+  const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v && v.status === 'given').length;
   const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
 
   return (

@@ -27,7 +27,7 @@ const SAMPLE_CSV = `Name,Position,Department,Type,Hire Date\nJane Doe,RN,Nursing
 const StaffPage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
-  const staffList = Object.values(store.staff) as Staff[];
+  const staffList = Object.values(store.staff || {}) as Staff[];
   const staffVaxEvents = Object.values(store.staffVaxEvents || {}) as StaffVaxEvent[];
   const fitTestEvents = Object.values(store.fitTestEvents || {}) as FitTestEvent[];
 
@@ -252,9 +252,10 @@ const StaffPage: React.FC = () => {
 
   // Filtered + searched staff list
   const filteredStaff = staffList.filter(s => {
+    if (!s) return false;
     const matchesSearch = !searchQuery ||
-      s.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.role?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.role || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s as any).department?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
     return matchesSearch && matchesStatus;

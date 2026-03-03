@@ -42,7 +42,7 @@ export const ResidentBoard: React.FC = () => {
   const { showUndo } = useUndoToast();
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterActiveOnly, setFilterActiveOnly] = useState(false);
+  const [filterActiveOnly, setFilterActiveOnly] = useState(true);
   const [filterAbtOnly, setFilterAbtOnly] = useState(() => searchParams.get('abtActive') === 'true');
   const [filterUnit, setFilterUnit] = useState<string>(() => searchParams.get('unit') || "");
   const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
@@ -120,10 +120,10 @@ export const ResidentBoard: React.FC = () => {
     }
   }, [location.state]);
 
-  const residents = Object.values(store.residents || {}) as Resident[];
-  const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i.status === 'active');
+  const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => r);
+  const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i && i.status === 'active');
   const activeABTs = getActiveABT(Object.values(store.abts || {})) as any[];
-  const vaxEvents = Object.values(store.vaxEvents || {}) as any[];
+  const vaxEvents = (Object.values(store.vaxEvents || {}) as any[]).filter(v => v);
   const today = new Date().toISOString().split('T')[0];
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
@@ -133,7 +133,9 @@ export const ResidentBoard: React.FC = () => {
     const nowMs = Date.now();
     const map: Record<string, ResidentSignals> = {};
     residents.forEach(r => {
-      map[r.mrn] = computeResidentSignals(r.mrn, store, nowMs, symptomMap);
+      if (r && r.mrn) {
+        map[r.mrn] = computeResidentSignals(r.mrn, store, nowMs, symptomMap);
+      }
     });
     return map;
   }, [store, residents, symptomMap]);
@@ -161,8 +163,8 @@ export const ResidentBoard: React.FC = () => {
 
       // Global Search
       const matchesSearch = 
-        r.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        r.mrn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (r.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (r.mrn || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (r.currentRoom && r.currentRoom.toLowerCase().includes(searchQuery.toLowerCase()));
       
       if (!matchesSearch) return false;

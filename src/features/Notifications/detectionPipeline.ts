@@ -41,7 +41,7 @@ export const runDetectionPipeline = (
 
   const getResDetails = (resId?: string) => {
     if (!resId) return {};
-    const res = store.residents[resId];
+    const res = store.residents?.[resId];
     if (!res) return {};
     return {
       unit: res.currentUnit,

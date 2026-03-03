@@ -10,20 +10,20 @@ export const isVaxDueStatus = (status?: string | null): boolean => {
 };
 
 export const isActiveCensusResident = (resident: Resident): boolean => {
-  const unit = (resident.currentUnit ?? '').trim().toLowerCase();
-  return !resident.isHistorical && !resident.backOfficeOnly && unit !== '' && unit !== 'unassigned' && unit !== 'unknown';
+  if (!resident) return false;
+  return !resident.isHistorical && !resident.backOfficeOnly;
 };
 
 export const getActiveABT = (abts: ABTCourse[], residentMrn?: string): ABTCourse[] =>
-  abts.filter(abt => {
-    if (!isActiveAbtStatus(abt.status)) return false;
+  (abts || []).filter(abt => {
+    if (!abt || !isActiveAbtStatus(abt.status)) return false;
     if (!residentMrn) return true;
-    return abt.residentRef.kind === 'mrn' && abt.residentRef.id === residentMrn;
+    return abt.residentRef && abt.residentRef.kind === 'mrn' && abt.residentRef.id === residentMrn;
   });
 
 export const getVaxDue = (vaxEvents: VaxEvent[], residentMrn?: string): VaxEvent[] =>
-  vaxEvents.filter(vax => {
-    if (!isVaxDueStatus(vax.status)) return false;
+  (vaxEvents || []).filter(vax => {
+    if (!vax || !isVaxDueStatus(vax.status)) return false;
     if (!residentMrn) return true;
-    return vax.residentRef.kind === 'mrn' && vax.residentRef.id === residentMrn;
+    return vax.residentRef && vax.residentRef.kind === 'mrn' && vax.residentRef.id === residentMrn;
   });

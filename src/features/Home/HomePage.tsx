@@ -116,8 +116,8 @@ export const HomePage: React.FC = () => {
   // Residents for @mention autocomplete
   const residents = useMemo(
     () =>
-      (Object.values(store.residents) as Resident[]).filter(
-        (r) => !r.isHistorical && !r.backOfficeOnly
+      (Object.values(store.residents || {}) as Resident[]).filter(
+        (r) => r && !r.isHistorical && !r.backOfficeOnly
       ),
     [store.residents]
   );
@@ -136,8 +136,8 @@ export const HomePage: React.FC = () => {
 
   // Hashtag library from facility data (same source as ResidentBoard SettingsModal)
   const hashtagLibrary: string[] = useMemo(
-    () => db.data.facilities.byId[activeFacilityId]?.hashtagCategories ?? [],
-    [db.data.facilities.byId, activeFacilityId]
+    () => db?.data?.facilities?.byId?.[activeFacilityId]?.hashtagCategories ?? [],
+    [db?.data?.facilities?.byId, activeFacilityId]
   );
 
   const filteredHashtags = useMemo(

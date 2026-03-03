@@ -12,12 +12,13 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const { store, activeFacilityId } = useFacilityData();
   const { db } = useDatabase();
   const navigate = useNavigate();
-  const facility = db.data.facilities.byId[activeFacilityId];
+  const facility = db?.data?.facilities?.byId?.[activeFacilityId];
 
-  const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
+  const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly);
   const censusByUnit: Record<string, { total: number; male: number; female: number }> = {};
 
   residents.forEach((resident) => {
+    if (!resident) return;
     const trimmedUnit = resident.currentUnit?.trim();
     const unit = trimmedUnit || 'Unknown';
     const sex = resident.sex?.trim().toLowerCase() || '';
@@ -30,7 +31,7 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   });
 
   const residentCount = residents.length;
-  const capacityRate = facility.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
+  const capacityRate = facility?.bedCapacity ? ((residentCount / facility.bedCapacity) * 100).toFixed(1) : null;
 
   const handleUnitClick = (unit: string) => {
     onClose();
