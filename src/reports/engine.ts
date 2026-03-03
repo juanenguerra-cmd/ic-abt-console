@@ -95,6 +95,49 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
         return { ...c, resident };
       });
       break;
+    case "custom": {
+      // Auto-detect the primary entity from column fieldPaths so that nested
+      // paths (e.g. "abt.medication", "ip.infectionSite", "vax.vaccine",
+      // "resident.displayName") resolve correctly.
+      //
+      // Priority: ABT > IP > Vax > Resident-only.  If a report mixes ABT and
+      // IP columns, ABT is used as the primary entity (IP columns will be "—").
+      // Resident lookups may return undefined for orphaned records; resolvePath
+      // already returns undefined for missing nested paths, which the print view
+      // renders as "—".
+      const hasAbtCols = profile.columns.some(c => c.fieldPath.startsWith('abt.'));
+      const hasIpCols  = profile.columns.some(c => c.fieldPath.startsWith('ip.'));
+      const hasVaxCols = profile.columns.some(c => c.fieldPath.startsWith('vax.'));
+
+      if (hasAbtCols) {
+        data = Object.values(store.abts).map(abt => {
+          const resident = abt.residentRef.kind === 'mrn'
+            ? store.residents[abt.residentRef.id]
+            : store.quarantine[abt.residentRef.id];
+          return { resident, abt };
+        });
+      } else if (hasIpCols) {
+        data = Object.values(store.infections).map(inf => {
+          const resident = inf.residentRef.kind === 'mrn'
+            ? store.residents[inf.residentRef.id]
+            : store.quarantine[inf.residentRef.id];
+          return { resident, ip: inf };
+        });
+      } else if (hasVaxCols) {
+        data = Object.values(store.vaxEvents).map(vax => {
+          const resident = vax.residentRef.kind === 'mrn'
+            ? store.residents[vax.residentRef.id]
+            : store.quarantine[vax.residentRef.id];
+          return { resident, vax };
+        });
+      } else {
+        // Only resident-level columns selected
+        data = (Object.values(store.residents) as Resident[])
+          .filter(r => !r.isHistorical && !r.backOfficeOnly)
+          .map(r => ({ resident: r }));
+      }
+      break;
+    }
     default:
       console.warn(`Unknown dataset: ${profile.dataset}`);
       return [];

@@ -154,6 +154,7 @@ function migratePreV2toV2(raw: Record<string, unknown>): Record<string, unknown>
       if (!store.auditSessions) store.auditSessions = {};
       if (!store.contactTraceCases) store.contactTraceCases = {};
       if (!store.contactTraceExposures) store.contactTraceExposures = {};
+      if (!store.lineListEvents) store.lineListEvents = {};
     }
   }
 
