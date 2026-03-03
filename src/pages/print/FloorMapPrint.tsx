@@ -4,6 +4,7 @@ import { PrintLayout } from "./PrintLayout";
 import { FloorMap } from "../../features/Heatmap/FloorMap";
 import { useFloorMapData } from "../../features/FloorMapPage/useFloorMapData";
 import { UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const FloorMapPrint: React.FC = () => {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -37,12 +38,18 @@ const FloorMapPrint: React.FC = () => {
 
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
 
+  const filtersSummary = `Layout=${layout.name}`;
+  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: "Facility Floor Map", filtersSummary, sections: [{ key: "rooms", label: "Rooms", count: layout.rooms.length }], payload: { layout } });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title="Facility Floor Map"
       facilityName={facility?.name ?? ""}
       facilityAddress={facility?.address}
       dohId={facility?.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="flex justify-center items-center p-4 border border-neutral-200 rounded-xl bg-white min-h-[600px]">
          <FloorMap

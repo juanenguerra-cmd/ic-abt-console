@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
 import { ABTCourse, UnifiedDB } from "../../domain/models";
+import { buildPrintModel, validatePrintableContent } from "./printModel";
 
 const AntibiogramPrint: React.FC = () => {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -65,12 +66,18 @@ const AntibiogramPrint: React.FC = () => {
   if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
   if (!facility) return <div className="p-8 text-red-600">Facility not found</div>;
 
+  const filtersSummary = month ? `Month=${month}` : "All dates";
+  const printModel = buildPrintModel({ facilityName: facility.name, reportTitle: "Antibiogram Report", filtersSummary, sections: [{ key: "organisms", label: "Organisms", count: data.organisms.length }], payload: data });
+  const validationWarnings = validatePrintableContent(printModel);
+
   return (
     <PrintLayout
       title={`Antibiogram Report ${month ? `(${month})` : "(All Time)"}`}
       facilityName={facility.name}
       facilityAddress={facility.address}
       dohId={facility.dohId}
+      filtersSummary={printModel.filtersSummary}
+      printBlockedReason={validationWarnings.join(" ") || undefined}
     >
       <div className="space-y-6">
         <div className="bg-blue-50 border border-blue-200 p-4 rounded-md text-sm text-blue-800">
@@ -119,7 +126,7 @@ const AntibiogramPrint: React.FC = () => {
               {data.organisms.length === 0 && (
                 <tr>
                   <td colSpan={data.antibiotics.length + 1} className="p-8 text-center text-neutral-500 italic">
-                    No susceptibility data found for the selected period.
+                    No records match your filters.
                   </td>
                 </tr>
               )}
