@@ -1,29 +1,40 @@
-import React, { useMemo } from "react";
-import { loadDB } from "../../storage/engine";
+import React, { useMemo, useState, useEffect } from "react";
+import { loadDBAsync } from "../../storage/engine";
 import { PrintLayout } from "./PrintLayout";
-import { Resident, ABTCourse, IPEvent, VaxEvent } from "../../domain/models";
+import { UnifiedDB, Resident, ABTCourse, IPEvent, VaxEvent } from "../../domain/models";
 import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { computeResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 
 const ResidentCensusPrint: React.FC = () => {
-  const db = useMemo(() => loadDB(), []);
-  const facilityId = db.data.facilities.activeFacilityId;
-  const facility = db.data.facilities.byId[facilityId];
-  const store = db.data.facilityData[facilityId];
+  const [db, setDb] = useState<UnifiedDB | null>(null);
 
-  const residents = Object.values(store.residents || {}) as Resident[];
-  const activeABTs = getActiveABT(Object.values(store.abts || {})) as ABTCourse[];
-  const activeInfections = (Object.values(store.infections || {}) as IPEvent[]).filter(i => i.status === 'active');
-  const vaxEvents = Object.values(store.vaxEvents || {}) as VaxEvent[];
+  useEffect(() => {
+    loadDBAsync().then(setDb);
+  }, []);
+
+  useEffect(() => {
+    if (!db) return;
+    const timer = setTimeout(() => window.print(), 500); // Slightly longer delay for signals to compute
+    return () => clearTimeout(timer);
+  }, [db]);
+
+  const facilityId = db?.data.facilities.activeFacilityId ?? "";
+  const facility = db?.data.facilities.byId[facilityId];
+  const store = db?.data.facilityData[facilityId];
+
+  const residents = useMemo(() => Object.values(store?.residents || {}) as Resident[], [store]);
+  const activeABTs = useMemo(() => getActiveABT(Object.values(store?.abts || {})) as ABTCourse[], [store]);
+  const activeInfections = useMemo(() => (Object.values(store?.infections || {}) as IPEvent[]).filter(i => i.status === 'active'), [store]);
+  const vaxEvents = useMemo(() => Object.values(store?.vaxEvents || {}) as VaxEvent[], [store]);
 
   // Pre-compute symptom map + signal map
-  const symptomMap = useMemo(() => computeSymptomIndicators(store, Date.now()), [store]);
+  const symptomMap = useMemo(() => store ? computeSymptomIndicators(store, Date.now()) : {}, [store]);
   const signalMap = useMemo(() => {
     const nowMs = Date.now();
     const map: Record<string, any> = {};
     residents.forEach(r => {
-      map[r.mrn] = computeResidentSignals(r.mrn, store, nowMs, symptomMap);
+      if (store) map[r.mrn] = computeResidentSignals(r.mrn, store, nowMs, symptomMap);
     });
     return map;
   }, [store, residents, symptomMap]);
@@ -49,17 +60,16 @@ const ResidentCensusPrint: React.FC = () => {
     return groups;
   }, [filteredResidents]);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => window.print(), 500); // Slightly longer delay for signals to compute
-    return () => clearTimeout(timer);
-  }, []);
+  if (!db) {
+    return <div className="p-8 text-center text-neutral-500">Loading census data…</div>;
+  }
 
   return (
     <PrintLayout
       title="Resident Census & Status Report"
-      facilityName={facility.name}
-      facilityAddress={facility.address}
-      dohId={facility.dohId}
+      facilityName={facility?.name ?? ""}
+      facilityAddress={facility?.address}
+      dohId={facility?.dohId}
     >
       <div className="space-y-8">
         {Object.entries(units)

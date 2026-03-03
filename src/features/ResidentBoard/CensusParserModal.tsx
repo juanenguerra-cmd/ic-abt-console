@@ -316,13 +316,13 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
   const allCollisionsResolved = collisions.every(c => collisionChoices[c.parsed.mrn] !== undefined);
 
-  const handleCommit = () => {
+  const commitWithChoices = (choices: Record<string, 'keep' | 'apply'>) => {
     if (!results) return;
 
     // Rows to actually upsert = newRows + collisions where choice is 'apply'
     const applyMrns = new Set(
       collisions
-        .filter(c => collisionChoices[c.parsed.mrn] === 'apply')
+        .filter(c => choices[c.parsed.mrn] === 'apply')
         .map(c => c.parsed.mrn)
     );
     const rowsToUpsert = results.filter(p => {
@@ -441,6 +441,15 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
       }
     });
     onClose();
+  };
+
+  const handleCommit = () => commitWithChoices(collisionChoices);
+
+  const handleImportAll = () => {
+    const allApplyChoices = Object.fromEntries(
+      collisions.map(c => [c.parsed.mrn, 'apply' as const])
+    );
+    commitWithChoices(allApplyChoices);
   };
 
   const handleBack = () => {
@@ -605,6 +614,15 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                 >
                   Back
                 </button>
+                {collisions.length > 0 && (
+                  <button
+                    onClick={handleImportAll}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700"
+                    title="Import all records, applying all collision updates"
+                  >
+                    Import All
+                  </button>
+                )}
                 <button
                   onClick={handleCommit}
                   disabled={!allCollisionsResolved}
