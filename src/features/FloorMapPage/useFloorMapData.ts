@@ -21,6 +21,7 @@ export function useFloorMapData(layout: FloorLayout): {
   const roomStatuses = useMemo(() => {
     const statuses: Record<string, RoomStatus> = {};
     const activeInfections = Object.values(store.infections || {}).filter(ip => ip.status === 'active');
+    
     (Object.values(store.residents || {}) as Resident[])
       .filter(r => !r.isHistorical && !r.backOfficeOnly)
       .forEach(res => {
@@ -29,16 +30,31 @@ export function useFloorMapData(layout: FloorLayout): {
           r => r.label === res.currentRoom || r.label === res.currentRoom!.replace(/^\d/, '')
         );
         if (!room) return;
-        const infection = activeInfections.find(
+        
+        const residentInfections = activeInfections.filter(
           ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === res.mrn
         );
-        if (!infection) return;
-        if (infection.outbreakId) {
+        
+        let resStatus: RoomStatus = 'normal';
+        for (const infection of residentInfections) {
+          if (infection.outbreakId) {
+            resStatus = 'outbreak' as RoomStatus;
+            break; // Highest priority
+          } else if (infection.isolationType && resStatus !== 'outbreak') {
+            resStatus = 'isolation' as RoomStatus;
+          } else if (infection.ebp && resStatus === 'normal') {
+            resStatus = 'ebp' as RoomStatus;
+          }
+        }
+
+        // Update room status, keeping the highest priority status
+        const currentRoomStatus = statuses[room.roomId] || 'normal';
+        if (resStatus === 'outbreak' || currentRoomStatus === 'outbreak') {
           statuses[room.roomId] = 'outbreak';
-        } else if (infection.ebp) {
-          statuses[room.roomId] = 'ebp';
-        } else if (infection.isolationType) {
+        } else if (resStatus === 'isolation' || currentRoomStatus === 'isolation') {
           statuses[room.roomId] = 'isolation';
+        } else if (resStatus === 'ebp' || currentRoomStatus === 'ebp') {
+          statuses[room.roomId] = 'ebp';
         }
       });
     return statuses;

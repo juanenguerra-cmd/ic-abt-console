@@ -6,6 +6,7 @@ import { loadLayout, mergeLayout, resetLayout, saveLayout } from '../../utils/fl
 import { SymptomIndicator } from '../../utils/symptomIndicators';
 
 export type RoomStatus = "normal" | "isolation" | "outbreak" | "ebp";
+export type FloorMapFilter = 'all' | 'isolation' | 'outbreak' | 'ebp' | 'respiratory' | 'gi';
 
 interface FloorMapProps {
   layout: FloorLayout;
@@ -34,6 +35,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
 }) => {
   const { store } = useFacilityData();
   const [isEditMode, setIsEditMode] = React.useState(false);
+  const [filter, setFilter] = React.useState<FloorMapFilter>('all');
   const [draggingRoomId, setDraggingRoomId] = React.useState<string | null>(null);
   const [orderedRoomIds, setOrderedRoomIds] = React.useState<string[]>([]);
   const suppressNextClickRef = React.useRef(false);
@@ -80,7 +82,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
       );
       if (!resident) return 'ISO';
       const ipEvent = (Object.values(store.infections) as IPEvent[]).find(
-        ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === resident.mrn && ip.status === 'active'
+        ip => ip.residentRef.kind === 'mrn' && ip.residentRef.id === resident.mrn && ip.status === 'active' && !!ip.isolationType
       );
       const isoType = ipEvent?.isolationType?.trim();
       if (!isoType) return 'ISO';
@@ -120,9 +122,23 @@ export const FloorMap: React.FC<FloorMapProps> = ({
           {isEditMode ? 'Drag tiles to rearrange. Changes save automatically.' : ''}
         </div>
         <div className="flex items-center gap-2">
+          {!isEditMode && (
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as FloorMapFilter)}
+              className="text-xs border border-neutral-300 rounded-md px-2 py-1.5 focus:ring-indigo-500 focus:border-indigo-500 bg-white no-print"
+            >
+              <option value="all">All Rooms</option>
+              <option value="isolation">Isolation Precautions</option>
+              <option value="outbreak">Active Outbreaks</option>
+              <option value="ebp">Enhanced Barrier Precautions</option>
+              <option value="respiratory">Respiratory Symptoms</option>
+              <option value="gi">GI Symptoms</option>
+            </select>
+          )}
           <button
             onClick={() => setIsEditMode(prev => !prev)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md border ${
+            className={`px-3 py-1.5 text-xs font-medium rounded-md border no-print ${
               isEditMode
                 ? 'bg-indigo-600 text-white border-indigo-600'
                 : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
@@ -138,7 +154,7 @@ export const FloorMap: React.FC<FloorMapProps> = ({
                 setOrderedRoomIds(defaults);
                 saveLayout(facilityId, unitId, defaults);
               }}
-              className="px-3 py-1.5 text-xs font-medium rounded-md border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+              className="px-3 py-1.5 text-xs font-medium rounded-md border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 no-print"
             >
               Reset layout
             </button>
@@ -159,6 +175,16 @@ export const FloorMap: React.FC<FloorMapProps> = ({
           if (!slot) return null;
           const status = roomStatuses[room.roomId] || "normal";
           const colorClass = STATUS_COLORS[status];
+
+          const isHighlighted = (() => {
+            if (filter === 'all') return true;
+            if (filter === 'isolation') return status === 'isolation';
+            if (filter === 'outbreak') return status === 'outbreak';
+            if (filter === 'ebp') return status === 'ebp';
+            if (filter === 'respiratory') return symptomIndicators[room.roomId]?.respiratory === true;
+            if (filter === 'gi') return symptomIndicators[room.roomId]?.gi === true;
+            return true;
+          })();
 
           return (
             <div
@@ -189,7 +215,9 @@ export const FloorMap: React.FC<FloorMapProps> = ({
               onDragEnd={() => setDraggingRoomId(null)}
               className={`absolute group flex flex-col items-center justify-center border-2 rounded transition-all shadow-sm ${colorClass} ${
                 isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-              } ${draggingRoomId === room.roomId ? 'opacity-60' : ''}`}
+              } ${draggingRoomId === room.roomId ? 'opacity-60' : ''} ${
+                !isHighlighted ? 'opacity-30 grayscale' : ''
+              }`}
               style={{
                 left: `${slot.x * tileScale + 20}px`,
                 top: `${slot.y * tileScale + 20}px`,

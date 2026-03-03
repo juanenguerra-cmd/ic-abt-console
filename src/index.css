@@ -59,3 +59,27 @@
     width: 100%;
   }
 }
+
+@layer base {
+  button:not(:disabled), a[href] {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  button:not(:disabled):active, a[href]:active {
+    transform: scale(0.97);
+  }
+
+  input, select, textarea {
+    transition-property: border-color, box-shadow;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--color-indigo-500);
+    box-shadow: 0 0 0 2px var(--color-indigo-100);
+  }
+}
