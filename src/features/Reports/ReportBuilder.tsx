@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
-import { ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Save, X } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Save, X, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { generatePDF } from '../../reports/engine';
+import { ExportProfile } from '../../domain/models';
 
 interface ColumnDef {
   id: string;
@@ -109,7 +111,7 @@ export const ReportBuilder: React.FC = () => {
     const id = uuidv4();
     const colsWithHeaders = selectedCols.map(col => ({
       ...col,
-      displayHeader: displayHeaders[col.id]?.trim() || col.label,
+      header: displayHeaders[col.id]?.trim() || col.label,
     }));
 
     updateDB(draft => {
@@ -139,15 +141,67 @@ export const ReportBuilder: React.FC = () => {
     setDisplayHeaders({});
   };
 
+  const handlePreviewPrint = () => {
+    if (selectedCols.length === 0) {
+      alert("Please select at least one column to preview.");
+      return;
+    }
+
+    // Create a temporary profile object to pass to the print engine
+    // Note: We don't save this to the DB, we just construct it in memory 
+    // BUT generatePDF expects a profile ID to load from DB in the new tab.
+    // So we MUST save a temporary profile or use a special mechanism.
+    // The current implementation of ReportExportPrint reads from DB using profileId.
+    // So we have to save a temp profile.
+    
+    const tempId = uuidv4();
+    const colsWithHeaders = selectedCols.map(col => ({
+      header: displayHeaders[col.id]?.trim() || col.label,
+      fieldPath: col.fieldPath,
+      required: false
+    }));
+
+    const tempProfile: ExportProfile = {
+      id: tempId,
+      name: reportName || "Untitled Report Preview",
+      facilityId: activeFacilityId,
+      type: 'pdf',
+      dataset: 'custom', // This needs to be handled by getDataForProfile
+      columns: colsWithHeaders,
+      includePHI: true, // Defaulting to true for preview, maybe add toggle later
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // We need to save this to the store so the new tab can read it.
+    // We'll use updateDB to save it to `exportProfiles`.
+    updateDB(draft => {
+      draft.data.facilityData[activeFacilityId].exportProfiles[tempId] = tempProfile;
+    });
+
+    // Now open the print view
+    generatePDF(tempProfile);
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100 p-6">
       <div className="bg-white rounded-xl shadow-sm border border-neutral-200 flex flex-col h-full overflow-hidden">
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50 shrink-0">
           <h2 className="text-xl font-bold text-neutral-900">General Report Builder</h2>
-          <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">
-            <Save className="w-4 h-4" />
-            Save Template
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handlePreviewPrint}
+              disabled={selectedCols.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" />
+              Preview / Print
+            </button>
+            <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">
+              <Save className="w-4 h-4" />
+              Save Template
+            </button>
+          </div>
         </div>
         
         <div className="p-6 flex-1 flex flex-col min-h-0">

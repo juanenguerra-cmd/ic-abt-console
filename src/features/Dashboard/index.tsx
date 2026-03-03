@@ -203,8 +203,8 @@ export const Dashboard: React.FC = () => {
   const activeResidents = (Object.values(store.residents || {}) as Resident[])
     .filter(isActiveCensusResident)
     .filter(r => normalizeStatus(r.status) === 'active');
-  // Refined census: exclude residents with unit === 'unknown'
-  const residentCount = activeResidents.filter(r => r.currentUnit?.toLowerCase() !== 'unknown').length;
+  
+  const residentCount = activeResidents.length;
   const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
   const outbreakCount = (Object.values(store.outbreaks || {}) as any[]).filter(o => o.status !== 'closed').length;
   const activeAbtCourses = getActiveABT(Object.values(store.abts || {})) as any[];
@@ -252,35 +252,15 @@ export const Dashboard: React.FC = () => {
   // DOT per 1,000 resident-days (rolling 30-day denominator = residentCount * 30)
   const dotPer1000 = residentCount > 0 ? ((totalDotDays / (residentCount * 30)) * 1000).toFixed(1) : null;
 
-  // E2: Vaccination coverage (residents)
-  const residentVaxByMrn: Record<string, Set<string>> = {};
-  (Object.values(store.vaxEvents || {}) as any[]).forEach((vax: any) => {
-    if (vax.status === 'given' && vax.residentRef?.id) {
-      if (!residentVaxByMrn[vax.residentRef.id]) residentVaxByMrn[vax.residentRef.id] = new Set();
-      residentVaxByMrn[vax.residentRef.id].add((vax.vaccine || '').toLowerCase().split(' ')[0]);
-    }
-  });
-  const residentVaxTotal = (Object.values(store.vaxEvents || {}) as any[]).filter((v: any) => v.residentRef?.kind === 'mrn').length;
-  const residentVaxGiven = (Object.values(store.vaxEvents || {}) as any[]).filter((v: any) => v.residentRef?.kind === 'mrn' && v.status === 'given').length;
-  const residentVaxCoverage = residentVaxTotal > 0 ? Math.round((residentVaxGiven / residentVaxTotal) * 100) : null;
-
-  // E2: Vaccination coverage (staff)
-  const staffVaxTotal = Object.values(store.staffVaxEvents || {}).length;
-  const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v.status === 'given').length;
-  const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
-
   // Flu/COVID-19 season banner
   const nowForSeason = new Date();
-  const seasonYear = nowForSeason.getMonth() < 8 ? nowForSeason.getFullYear() - 1 : nowForSeason.getFullYear();
-  const fluSeasonStart = new Date(seasonYear, 9, 1); // Oct 1
-  const fluSeasonEnd = new Date(seasonYear + 1, 4, 15); // May 15
+  const seasonYear = nowForSeason.getMonth() < 7 ? nowForSeason.getFullYear() - 1 : nowForSeason.getFullYear();
+  const fluSeasonStart = new Date(seasonYear, 7, 1); // Aug 1
+  const fluSeasonEnd = new Date(seasonYear + 1, 4, 31); // May 31
   const isFluSeason = nowForSeason >= fluSeasonStart && nowForSeason <= fluSeasonEnd;
 
   const activeResidentMrns = new Set(
-    (Object.values(store.residents || {}) as Resident[])
-      .filter(isActiveCensusResident)
-      .filter(r => normalizeStatus(r.status) === 'active')
-      .map(r => r.mrn)
+    activeResidents.map(r => r.mrn)
   );
   const totalActiveResidents = activeResidentMrns.size;
 
@@ -291,8 +271,9 @@ export const Dashboard: React.FC = () => {
     const resId = vax.residentRef?.id;
     if (!resId || !activeResidentMrns.has(resId)) return;
     const vaccineLower = (vax.vaccine || '').toLowerCase();
-    if (vax.status === 'given' && vax.dateGiven) {
-      const givenDate = new Date(vax.dateGiven);
+    const dateToUse = vax.dateGiven || vax.administeredDate;
+    if (vax.status === 'given' && dateToUse) {
+      const givenDate = new Date(dateToUse);
       if (vaccineLower.includes('flu') || vaccineLower.includes('influenza')) {
         if (givenDate >= fluSeasonStart) fluVaxMrns.add(resId);
       }
@@ -303,6 +284,18 @@ export const Dashboard: React.FC = () => {
   });
   const fluCoverage = totalActiveResidents > 0 ? Math.round((fluVaxMrns.size / totalActiveResidents) * 100) : null;
   const covidCoverage = totalActiveResidents > 0 ? Math.round((covidVaxMrns.size / totalActiveResidents) * 100) : null;
+
+  // E2: Vaccination coverage (residents)
+  // We use the flu coverage during flu season, or COVID coverage otherwise.
+  const residentVaxCoverage = isFluSeason ? fluCoverage : covidCoverage;
+  const residentVaxGiven = isFluSeason ? fluVaxMrns.size : covidVaxMrns.size;
+  const residentVaxTotal = totalActiveResidents;
+  const vaxLabel = isFluSeason ? "Flu Vax Coverage" : "COVID Vax Coverage";
+
+  // E2: Vaccination coverage (staff)
+  const staffVaxTotal = Object.values(store.staffVaxEvents || {}).length;
+  const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v.status === 'given').length;
+  const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
 
   return (
     <>
@@ -324,236 +317,248 @@ export const Dashboard: React.FC = () => {
             <button onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="ml-auto text-xs underline text-neutral-600 hover:text-neutral-900">View Vaccination Board →</button>
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div onClick={() => setShowCensusModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Census</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-bold text-neutral-900">{residentCount}</p>
-                  {capacityRate && (
-                    <span className="text-xs font-medium text-neutral-500">
-                      ({capacityRate}% capacity)
-                    </span>
-                  )}
+        {/* Facility Overview */}
+        <div>
+          <h2 className="text-lg font-bold text-neutral-900 mb-4">Facility Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div onClick={() => setShowCensusModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Census</p>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold text-neutral-900">{residentCount}</p>
+                    {capacityRate && (
+                      <span className="text-xs font-medium text-neutral-500">
+                        ({capacityRate}% capacity)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-2 bg-blue-50 rounded-lg group-hover:bg-blue-100 transition-colors">
+                  <Users className="w-5 h-5 text-blue-600" />
                 </div>
               </div>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Users className="w-5 h-5 text-blue-600" />
+            </div>
+            <div onClick={() => setShowPrecautionsModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Active Precautions</p>
+                  <p className="text-2xl font-bold text-neutral-900">{activePrecautionsCount}</p>
+                </div>
+                <div className="p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                </div>
               </div>
             </div>
-          </div>
-          <div onClick={() => setShowPrecautionsModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Active Precautions</p>
-                <p className="text-2xl font-bold text-neutral-900">{activePrecautionsCount}</p>
-              </div>
-              <div className="p-2 bg-red-50 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-              </div>
-            </div>
-          </div>
-          <div onClick={() => setShowOutbreakModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Active Outbreaks</p>
-                <p className="text-2xl font-bold text-neutral-900">{outbreakCount}</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
-              </div>
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-orange-600" />
+            <div onClick={() => setShowOutbreakModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Active Outbreaks</p>
+                  <p className="text-2xl font-bold text-neutral-900">{outbreakCount}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
+                </div>
+                <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                </div>
               </div>
             </div>
-          </div>
-          <div onClick={() => navigate('/notifications', { state: { category: 'ADMISSION_SCREENING' } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Admission Screening</p>
-                <p className="text-2xl font-bold text-neutral-900">{residentsNeedingScreeningCount}</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Needs screening</p>
-              </div>
-              <div className="p-2 bg-emerald-50 rounded-lg">
-                <FileText className="w-5 h-5 text-emerald-600" />
+            <div onClick={() => navigate('/notifications', { state: { category: 'ADMISSION_SCREENING' } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Admission Screening</p>
+                  <p className="text-2xl font-bold text-neutral-900">{residentsNeedingScreeningCount}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Needs screening</p>
+                </div>
+                <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100 transition-colors">
+                  <FileText className="w-5 h-5 text-emerald-600" />
+                </div>
               </div>
             </div>
-          </div>
-          <div onClick={() => setShowAbtModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Active ABTs</p>
-                <p className="text-2xl font-bold text-neutral-900">{abtCount}</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
-              </div>
-              <div className="p-2 bg-amber-50 rounded-lg">
-                <Inbox className="w-5 h-5 text-amber-600" />
+            <div onClick={() => setShowAbtModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Active ABTs</p>
+                  <p className="text-2xl font-bold text-neutral-900">{abtCount}</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Click to drill down</p>
+                </div>
+                <div className="p-2 bg-amber-50 rounded-lg group-hover:bg-amber-100 transition-colors">
+                  <Inbox className="w-5 h-5 text-amber-600" />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Audit Center Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Audits (Last 30d)</p>
-                <p className="text-2xl font-bold text-neutral-900">{auditsLast30}</p>
-              </div>
-              <div className="p-2 bg-indigo-50 rounded-lg">
-                <ClipboardCheck className="w-5 h-5 text-indigo-600" />
-              </div>
-            </div>
-          </div>
-          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Open Corrective Actions</p>
-                <p className="text-2xl font-bold text-neutral-900">{openCorrectiveActions}</p>
-              </div>
-              <div className="p-2 bg-yellow-50 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-            </div>
-          </div>
-          <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Non-Compliant Items</p>
-                <p className="text-2xl font-bold text-neutral-900">{nonCompliantItems}</p>
-              </div>
-              <div className="p-2 bg-red-50 rounded-lg">
-                <ClipboardCheck className="w-5 h-5 text-red-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* E1: DOT Calculator & E2: Vaccination Coverage */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div onClick={() => navigate('/resident-board', { state: { abtActive: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Days of Therapy (DOT)</p>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl font-bold text-neutral-900">{totalDotDays}</p>
-                  <span className="text-xs text-neutral-500">days total</span>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
+          {/* Audit Center Metrics */}
+          <div>
+            <h2 className="text-lg font-bold text-neutral-900 mb-4">Compliance & Audits</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Audits (Last 30d)</p>
+                    <p className="text-2xl font-bold text-neutral-900">{auditsLast30}</p>
+                  </div>
+                  <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                    <ClipboardCheck className="w-5 h-5 text-indigo-600" />
+                  </div>
                 </div>
-                {dotPer1000 !== null && (
-                  <p className="text-xs text-neutral-500 mt-0.5">{dotPer1000} DOT / 1,000 resident-days</p>
-                )}
               </div>
-              <div className="p-2 bg-emerald-50 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-emerald-600" />
+              <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Open Corrective Actions</p>
+                    <p className="text-2xl font-bold text-neutral-900">{openCorrectiveActions}</p>
+                  </div>
+                  <div className="p-2 bg-yellow-50 rounded-lg group-hover:bg-yellow-100 transition-colors">
+                    <AlertCircle className="w-5 h-5 text-yellow-600" />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Resident Vax Coverage</p>
-                {residentVaxCoverage !== null ? (
-                  <>
-                    <p className="text-2xl font-bold text-neutral-900">{residentVaxCoverage}%</p>
-                    <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${residentVaxCoverage >= 80 ? 'bg-emerald-500' : residentVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${residentVaxCoverage}%` }} />
-                    </div>
-                    <p className="text-xs text-neutral-400 mt-0.5">{residentVaxGiven} of {residentVaxTotal} doses given</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-neutral-400 mt-1">No data</p>
-                )}
-              </div>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <Shield className="w-5 h-5 text-blue-600" />
+              <div onClick={() => navigate('/audit-center')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Non-Compliant Items</p>
+                    <p className="text-2xl font-bold text-neutral-900">{nonCompliantItems}</p>
+                  </div>
+                  <div className="p-2 bg-red-50 rounded-lg group-hover:bg-red-100 transition-colors">
+                    <ClipboardCheck className="w-5 h-5 text-red-600" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <div onClick={() => navigate('/staff')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:bg-neutral-50">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">Staff Vax Coverage</p>
-                {staffVaxCoverage !== null ? (
-                  <>
-                    <p className="text-2xl font-bold text-neutral-900">{staffVaxCoverage}%</p>
-                    <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${staffVaxCoverage >= 80 ? 'bg-emerald-500' : staffVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${staffVaxCoverage}%` }} />
+
+          {/* E1: DOT Calculator & E2: Vaccination Coverage */}
+          <div>
+            <h2 className="text-lg font-bold text-neutral-900 mb-4">Stewardship & Coverage</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div onClick={() => navigate('/resident-board', { state: { abtActive: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Days of Therapy (DOT)</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-2xl font-bold text-neutral-900">{totalDotDays}</p>
+                      <span className="text-xs text-neutral-500">days total</span>
                     </div>
-                    <p className="text-xs text-neutral-400 mt-0.5">{staffVaxGiven} of {staffVaxTotal} doses given</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-neutral-400 mt-1">No data</p>
-                )}
+                    {dotPer1000 !== null && (
+                      <p className="text-xs text-neutral-500 mt-0.5">{dotPer1000} DOT / 1,000 resident-days</p>
+                    )}
+                  </div>
+                  <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100 transition-colors">
+                    <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
               </div>
-              <div className="p-2 bg-indigo-50 rounded-lg">
-                <Shield className="w-5 h-5 text-indigo-600" />
+              <div onClick={() => navigate('/resident-board', { state: { vaxFilter: true } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 mr-4">
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">{vaxLabel}</p>
+                    {residentVaxCoverage !== null ? (
+                      <>
+                        <p className="text-2xl font-bold text-neutral-900">{residentVaxCoverage}%</p>
+                        <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-500 ${residentVaxCoverage >= 80 ? 'bg-emerald-500' : residentVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${residentVaxCoverage}%` }} />
+                        </div>
+                        <p className="text-xs text-neutral-400 mt-0.5">{residentVaxGiven} of {residentVaxTotal} vaccinated</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-neutral-400 mt-1">No data</p>
+                    )}
+                  </div>
+                  <div className="p-2 bg-blue-50 rounded-lg shrink-0 group-hover:bg-blue-100 transition-colors">
+                    <Shield className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+              </div>
+              <div onClick={() => navigate('/staff')} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 mr-4">
+                    <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Staff Vax Coverage</p>
+                    {staffVaxCoverage !== null ? (
+                      <>
+                        <p className="text-2xl font-bold text-neutral-900">{staffVaxCoverage}%</p>
+                        <div className="mt-1 h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all duration-500 ${staffVaxCoverage >= 80 ? 'bg-emerald-500' : staffVaxCoverage >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${staffVaxCoverage}%` }} />
+                        </div>
+                        <p className="text-xs text-neutral-400 mt-0.5">{staffVaxGiven} of {staffVaxTotal} doses given</p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-neutral-400 mt-1">No data</p>
+                    )}
+                  </div>
+                  <div className="p-2 bg-indigo-50 rounded-lg shrink-0 group-hover:bg-indigo-100 transition-colors">
+                    <Shield className="w-5 h-5 text-indigo-600" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Today's IC Work Queue */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
+        <div>
           <h2 className="text-lg font-bold text-neutral-900 mb-4">Today's IC Work Queue</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button
               onClick={() => navigate('/notifications')}
-              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-left group"
+              className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-indigo-200 transition-all text-left group"
             >
-              <div className="p-2 bg-red-50 rounded-lg shrink-0">
+              <div className="p-2 bg-red-50 rounded-lg shrink-0 group-hover:bg-red-100 transition-colors">
                 <Bell className="w-5 h-5 text-red-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xl font-bold text-neutral-900">{newNotificationsCount}</p>
-                <p className="text-xs font-medium text-neutral-600">New alerts / positives</p>
+                <p className="text-xs font-medium text-neutral-600 group-hover:text-indigo-600 transition-colors">New alerts / positives</p>
                 <p className="text-xs text-neutral-400">Open Notifications →</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-indigo-400 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-indigo-400 shrink-0 transition-colors" />
             </button>
 
             <button
               onClick={() => navigate('/resident-board', { state: { onPrecautions: true } })}
-              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-amber-300 hover:bg-amber-50 transition-colors text-left group"
+              className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-amber-200 transition-all text-left group"
             >
-              <div className="p-2 bg-amber-50 rounded-lg shrink-0">
+              <div className="p-2 bg-amber-50 rounded-lg shrink-0 group-hover:bg-amber-100 transition-colors">
                 <AlertCircle className="w-5 h-5 text-amber-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xl font-bold text-neutral-900">{activePrecautionsCount}</p>
-                <p className="text-xs font-medium text-neutral-600">Active precautions</p>
+                <p className="text-xs font-medium text-neutral-600 group-hover:text-amber-600 transition-colors">Active precautions</p>
                 <p className="text-xs text-neutral-400">Open Resident Board →</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-amber-400 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-amber-400 shrink-0 transition-colors" />
             </button>
 
             <button
               onClick={() => navigate('/outbreaks')}
-              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-orange-300 hover:bg-orange-50 transition-colors text-left group"
+              className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-orange-200 transition-all text-left group"
             >
-              <div className="p-2 bg-orange-50 rounded-lg shrink-0">
+              <div className="p-2 bg-orange-50 rounded-lg shrink-0 group-hover:bg-orange-100 transition-colors">
                 <AlertCircle className="w-5 h-5 text-orange-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xl font-bold text-neutral-900">{outbreakCount}</p>
-                <p className="text-xs font-medium text-neutral-600">Outbreak tasks due</p>
+                <p className="text-xs font-medium text-neutral-600 group-hover:text-orange-600 transition-colors">Outbreak tasks due</p>
                 <p className="text-xs text-neutral-400">Open Outbreak Manager →</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-orange-400 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-orange-400 shrink-0 transition-colors" />
             </button>
 
             <button
               onClick={() => navigate('/resident-board', { state: { abtActive: true } })}
-              className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 hover:border-emerald-300 hover:bg-emerald-50 transition-colors text-left group"
+              className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-neutral-200 hover:shadow-md hover:border-emerald-200 transition-all text-left group"
             >
-              <div className="p-2 bg-emerald-50 rounded-lg shrink-0">
+              <div className="p-2 bg-emerald-50 rounded-lg shrink-0 group-hover:bg-emerald-100 transition-colors">
                 <Activity className="w-5 h-5 text-emerald-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xl font-bold text-neutral-900">{abtNeedsReviewCount}</p>
-                <p className="text-xs font-medium text-neutral-600">ABT reviews due</p>
+                <p className="text-xs font-medium text-neutral-600 group-hover:text-emerald-600 transition-colors">ABT reviews due</p>
                 <p className="text-xs text-neutral-400">Open Resident Board →</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-emerald-400 shrink-0" />
+              <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-emerald-400 shrink-0 transition-colors" />
             </button>
           </div>
         </div>

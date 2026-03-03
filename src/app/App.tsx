@@ -21,6 +21,13 @@ import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
 import AuditReportPrint from "../pages/print/AuditReportPrint";
+import AntibiogramPrint from "../pages/print/AntibiogramPrint";
+import LineListPrint from "../pages/print/LineListPrint";
+import OutbreakSummaryPrint from "../pages/print/OutbreakSummaryPrint";
+import ReportExportPrint from "../pages/print/ReportExportPrint";
+import ResidentCensusPrint from "../pages/print/ResidentCensusPrint";
+import FloorMapPrint from "../pages/print/FloorMapPrint";
+import NotePrint from "../pages/print/NotePrint";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
@@ -142,7 +149,7 @@ const SidebarAccordion = ({
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPrintRoute = location.pathname === "/print/audit-report";
+  const isPrintRoute = location.pathname.startsWith("/print/");
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
@@ -227,7 +234,18 @@ const AppShell = () => {
   const quarantineCount = (Object.values(store.quarantine) as any[]).filter((q: any) => !q.resolvedToMrn).length;
 
   if (isPrintRoute) {
-    return <AuditReportPrint />;
+    return (
+      <Routes>
+        <Route path="/print/audit-report" element={<AuditReportPrint />} />
+        <Route path="/print/antibiogram" element={<AntibiogramPrint />} />
+        <Route path="/print/linelist" element={<LineListPrint />} />
+        <Route path="/print/outbreak" element={<OutbreakSummaryPrint />} />
+        <Route path="/print/report-export" element={<ReportExportPrint />} />
+        <Route path="/print/resident-census" element={<ResidentCensusPrint />} />
+        <Route path="/print/floor-map" element={<FloorMapPrint />} />
+        <Route path="/print/note" element={<NotePrint />} />
+      </Routes>
+    );
   }
 
   if (isLocked) {
@@ -427,7 +445,6 @@ const AppShell = () => {
                 <Route path="/linelist-report" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><LineListReportPage /></RoleGuard></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><InfectionControlAuditCenter /></RoleGuard></PageTransition>} />
                 <Route path="/report-builder" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><ReportBuilder /></RoleGuard></PageTransition>} />
-                <Route path="/print/audit-report" element={<AuditReportPrint />} />
                 <Route path="/quarantine" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><div className="p-6"><QuarantineInbox /></div></RoleGuard></PageTransition>} />
                 <Route path="/settings" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><div className="p-6"><SettingsConsole /></div></RoleGuard></PageTransition>} />
                 <Route path="/back-office" element={<PageTransition><RoleGuard allowedRoles={['Admin']}><BackOfficePage /></RoleGuard></PageTransition>} />

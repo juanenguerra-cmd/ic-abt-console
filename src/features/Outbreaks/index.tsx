@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
-import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
+import { Plus, Users, Activity, FileText, AlertCircle, Calendar, Printer } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { LineListReportTab } from "./components/LineListReportTab";
 import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
@@ -37,6 +37,12 @@ export const OutbreakManager: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
     });
+  };
+
+  const handlePrint = () => {
+    if (currentOutbreak) {
+      window.open(`/print/outbreak?outbreakId=${currentOutbreak.id}`, '_blank');
+    }
   };
 
   return (
@@ -104,37 +110,46 @@ export const OutbreakManager: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex space-x-1 bg-neutral-200 p-1 rounded-lg">
+              <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setActiveTab("linelist")}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    activeTab === "linelist" 
-                      ? "bg-white text-neutral-900 shadow-sm" 
-                      : "text-neutral-600 hover:text-neutral-900"
-                  }`}
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
                 >
-                  Line List
+                  <Printer className="w-4 h-4" />
+                  Print Summary
                 </button>
-                <button
-                  onClick={() => setActiveTab("report")}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    activeTab === "report" 
-                      ? "bg-white text-neutral-900 shadow-sm" 
-                      : "text-neutral-600 hover:text-neutral-900"
-                  }`}
-                >
-                  Line List Report
-                </button>
-                <button
-                  onClick={() => setActiveTab("sitrep")}
-                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    activeTab === "sitrep" 
-                      ? "bg-white text-neutral-900 shadow-sm" 
-                      : "text-neutral-600 hover:text-neutral-900"
-                  }`}
-                >
-                  SITREP / Daily Status
-                </button>
+                <div className="flex space-x-1 bg-neutral-200 p-1 rounded-lg">
+                  <button
+                    onClick={() => setActiveTab("linelist")}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "linelist" 
+                        ? "bg-white text-neutral-900 shadow-sm" 
+                        : "text-neutral-600 hover:text-neutral-900"
+                    }`}
+                  >
+                    Line List
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("report")}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "report" 
+                        ? "bg-white text-neutral-900 shadow-sm" 
+                        : "text-neutral-600 hover:text-neutral-900"
+                    }`}
+                  >
+                    Line List Report
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("sitrep")}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "sitrep" 
+                        ? "bg-white text-neutral-900 shadow-sm" 
+                        : "text-neutral-600 hover:text-neutral-900"
+                    }`}
+                  >
+                    SITREP / Daily Status
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -10,44 +10,7 @@ const resolvePath = (obj: any, path: string): any => {
 const PHI_FIELDS = ["displayName", "firstName", "lastName", "dob", "mrn", "residentRef.id", "name"];
 
 export const generateCSV = (store: FacilityStore, profile: ExportProfile): string => {
-  let data: any[] = [];
-
-  // 1. Select Dataset and Hydrate
-  switch (profile.dataset) {
-    case "residents":
-      data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
-      break;
-    case "abts":
-      data = Object.values(store.abts).map(abt => {
-        const resident = abt.residentRef.kind === 'mrn' 
-          ? store.residents[abt.residentRef.id] 
-          : store.quarantine[abt.residentRef.id];
-        return { ...abt, resident };
-      });
-      break;
-    case "infections":
-      data = Object.values(store.infections).map(inf => {
-        const resident = inf.residentRef.kind === 'mrn' 
-          ? store.residents[inf.residentRef.id] 
-          : store.quarantine[inf.residentRef.id];
-        return { ...inf, resident };
-      });
-      break;
-    case "outbreaks":
-      data = Object.values(store.outbreaks);
-      break;
-    case "outbreakCases":
-      data = Object.values(store.outbreakCases).map(c => {
-        const resident = c.residentRef.kind === 'mrn' 
-          ? store.residents[c.residentRef.id] 
-          : store.quarantine[c.residentRef.id];
-        return { ...c, resident };
-      });
-      break;
-    default:
-      console.warn(`Unknown dataset: ${profile.dataset}`);
-      return "";
-  }
+  const data = getDataForProfile(store, profile);
 
   // 2. Generate Header Row
   const headers = profile.columns.map(c => c.header).join(",");
@@ -90,4 +53,51 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
   });
 
   return [headers, ...rows].join("\n");
+};
+
+export const generatePDF = (profile: ExportProfile): void => {
+  // Since we are using window.print() on a separate route, we just navigate there.
+  // The data loading happens in the print view itself via loadDB().
+  const url = `/print/report-export?profileId=${profile.id}`;
+  window.open(url, '_blank');
+};
+
+export const getDataForProfile = (store: FacilityStore, profile: ExportProfile): any[] => {
+  let data: any[] = [];
+  switch (profile.dataset) {
+    case "residents":
+      data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
+      break;
+    case "abts":
+      data = Object.values(store.abts).map(abt => {
+        const resident = abt.residentRef.kind === 'mrn' 
+          ? store.residents[abt.residentRef.id] 
+          : store.quarantine[abt.residentRef.id];
+        return { ...abt, resident };
+      });
+      break;
+    case "infections":
+      data = Object.values(store.infections).map(inf => {
+        const resident = inf.residentRef.kind === 'mrn' 
+          ? store.residents[inf.residentRef.id] 
+          : store.quarantine[inf.residentRef.id];
+        return { ...inf, resident };
+      });
+      break;
+    case "outbreaks":
+      data = Object.values(store.outbreaks);
+      break;
+    case "outbreakCases":
+      data = Object.values(store.outbreakCases).map(c => {
+        const resident = c.residentRef.kind === 'mrn' 
+          ? store.residents[c.residentRef.id] 
+          : store.quarantine[c.residentRef.id];
+        return { ...c, resident };
+      });
+      break;
+    default:
+      console.warn(`Unknown dataset: ${profile.dataset}`);
+      return [];
+  }
+  return data;
 };

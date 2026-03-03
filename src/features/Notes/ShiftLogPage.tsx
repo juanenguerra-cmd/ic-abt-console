@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, X, Search, Send, Clock, AlertTriangle,
-  ExternalLink, Loader2, Zap, ClipboardList, RefreshCw
+  ExternalLink, Loader2, Zap, ClipboardList, RefreshCw, Printer
 } from "lucide-react";
 import { useOutbreakRiskMonitor } from "../../hooks/useOutbreakRiskMonitor";
 import { OutbreakRiskAlert } from "../Notifications/OutbreakRiskAlert";
@@ -336,8 +336,15 @@ export const ShiftLogPage: React.FC = () => {
                     SBAR
                   </span>
                 )}
-                <span className="ml-auto text-[10px] text-neutral-400">
+                <span className="ml-auto text-[10px] text-neutral-400 flex items-center gap-2">
                   {new Date(entry.createdAtISO).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  <button
+                    onClick={() => window.open(`/print/note?noteId=${entry.id}`, '_blank')}
+                    className="p-1 hover:bg-neutral-100 rounded text-neutral-400 hover:text-neutral-600"
+                    title="Print Note"
+                  >
+                    <Printer className="w-3 h-3" />
+                  </button>
                 </span>
               </div>
 

@@ -9,6 +9,7 @@ import { useRole } from '../../context/RoleContext';
 import { FloorMap } from '../Heatmap/FloorMap';
 import { Floorplan } from '../Floorplan';
 import { useFloorMapData } from './useFloorMapData';
+import { Printer } from 'lucide-react';
 
 type FloorMapTab = 'live' | 'edit';
 
@@ -45,32 +46,43 @@ export const FloorMapPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
-      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center gap-6 shrink-0">
-        <h1 className="text-xl font-bold text-neutral-900">Floor Map</h1>
-        <div className="flex items-center gap-1 border border-neutral-200 rounded-lg p-1">
-          <button
-            onClick={() => setTab('live')}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-              activeTab === 'live'
-                ? 'bg-indigo-600 text-white'
-                : 'text-neutral-600 hover:bg-neutral-100'
-            }`}
-          >
-            Live View
-          </button>
-          {canEdit && (
+      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-6">
+          <h1 className="text-xl font-bold text-neutral-900">Floor Map</h1>
+          <div className="flex items-center gap-1 border border-neutral-200 rounded-lg p-1">
             <button
-              onClick={() => setTab('edit')}
+              onClick={() => setTab('live')}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                activeTab === 'edit'
+                activeTab === 'live'
                   ? 'bg-indigo-600 text-white'
                   : 'text-neutral-600 hover:bg-neutral-100'
               }`}
             >
-              Edit Layout
+              Live View
             </button>
-          )}
+            {canEdit && (
+              <button
+                onClick={() => setTab('edit')}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'edit'
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-neutral-600 hover:bg-neutral-100'
+                }`}
+              >
+                Edit Layout
+              </button>
+            )}
+          </div>
         </div>
+        {activeTab === 'live' && (
+          <button
+            onClick={() => window.open('/print/floor-map', '_blank')}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
+          >
+            <Printer className="w-4 h-4" />
+            Print Map
+          </button>
+        )}
       </div>
 
       {activeTab === 'live' && (

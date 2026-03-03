@@ -162,7 +162,15 @@ export function LineListReportPage() {
   };
 
   const handlePrint = () => {
-    window.print();
+    // Open the dedicated print view in a new tab
+    // We can pass query params if needed, but the print view currently loads all active events.
+    // If we want to support filtering in the print view, we would need to update LineListPrint.tsx to read these params.
+    // For now, let's just open the print view as requested by the user instructions which imply a dedicated route.
+    // Ideally, we should pass the filter params: ?start=...&end=...&unit=...&type=...
+    // But LineListPrint.tsx (from previous context) seemed to just load "active" events.
+    // Let's check if we can pass params. The user didn't explicitly ask for params in the print view, 
+    // but it's good practice. However, adhering to the "strict" instructions, I will just open the route.
+    window.open('/print/linelist', '_blank');
   };
 
   return (

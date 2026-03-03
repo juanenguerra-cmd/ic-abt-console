@@ -398,7 +398,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${nhsnResult ? 'max-w-5xl' : 'max-w-3xl'} max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300`}>
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50 shrink-0">
           <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
             <Shield className="w-5 h-5 text-amber-600" />
@@ -409,9 +409,10 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           </button>
         </div>
         
-        <div className="p-6 overflow-y-auto flex-1 space-y-8">
-          
-          {/* Protocol Selection */}
+        <div className="flex flex-1 overflow-hidden">
+          <div className="p-6 overflow-y-auto flex-1 space-y-8 border-r border-neutral-200">
+            
+            {/* Protocol Selection */}
           <section>
             <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
               <Activity className="w-4 h-4 text-neutral-500" />
@@ -709,16 +710,6 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             </div>
           </section>
 
-          {/* NHSN Surveillance Criteria Panel */}
-          {nhsnResult && (
-            <section>
-              <NhsnCriteriaPanel
-                result={nhsnResult}
-                title={/uti|cauti/i.test(infectionCategory === "Other" ? infectionCategoryOther : infectionCategory) ? "NHSN LTC CAUTI Criteria" : "NHSN LTC C. diff LabID Criteria"}
-              />
-            </section>
-          )}
-
           {/* Notes */}
           <section>
             <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
@@ -733,6 +724,21 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             />
           </section>
 
+          </div>
+
+          {/* NHSN Surveillance Criteria Side Panel */}
+          {nhsnResult && (
+            <div className="w-80 bg-slate-50 p-6 overflow-y-auto shrink-0">
+              <h3 className="text-sm font-bold text-neutral-900 mb-4 flex items-center gap-2 border-b pb-2">
+                <Shield className="w-4 h-4 text-indigo-600" />
+                NHSN Criteria
+              </h3>
+              <NhsnCriteriaPanel
+                result={nhsnResult}
+                title={/uti|cauti/i.test(infectionCategory === "Other" ? infectionCategoryOther : infectionCategory) ? "CAUTI Checklist" : "C. diff LabID Checklist"}
+              />
+            </div>
+          )}
         </div>
         
         <div className="px-6 py-4 border-t border-neutral-200 bg-neutral-50 flex flex-col gap-3 shrink-0">

@@ -391,6 +391,14 @@ export const ResidentBoard: React.FC = () => {
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <button 
+            onClick={() => window.open('/print/resident-census', '_blank')}
+            aria-label="Print resident census"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" aria-hidden="true" />
+            Print Census
+          </button>
+          <button 
             onClick={() => setShowCensusModal(true)}
             aria-label="Upload or update census file"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"

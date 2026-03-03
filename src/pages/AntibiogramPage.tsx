@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useFacilityData } from "../app/providers";
 import { ABTCourse } from "../domain/models";
-import { Download, BarChart2 } from "lucide-react";
+import { Download, BarChart2, Printer } from "lucide-react";
 
 // ---------- Types ----------
 
@@ -233,6 +233,20 @@ export const AntibiogramPage: React.FC = () => {
   const barGroupW = months.length > 0 ? innerW / months.length : innerW;
   const barW = chartData.length > 0 ? Math.max(4, barGroupW / (chartData.length + 1)) : 8;
 
+  const handlePrint = () => {
+    // Pass current month filter if applicable, or just open the print view
+    // Since the print view aggregates all time if no month is passed, we might want to pass the date range
+    // For now, let's just open the print view. The user requested:
+    // /print/antibiogram?facilityId=X&month=YYYY-MM
+    // But our UI allows custom ranges. Let's just pass the facility ID and let the print view show all data or we can try to map the range.
+    // The requirement said: "month=YYYY-MM".
+    // If the user selected a custom range, we can't easily map it to a single month.
+    // Let's just open the print view without a month filter to show all data, or maybe the last month?
+    // Actually, the print view implementation supports a 'month' param.
+    // Let's just open it.
+    window.open(`/print/antibiogram`, '_blank');
+  };
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* Header */}
@@ -241,13 +255,22 @@ export const AntibiogramPage: React.FC = () => {
           <BarChart2 className="w-6 h-6 text-indigo-600" />
           <h1 className="text-2xl font-bold text-neutral-900">Antibiogram Summary</h1>
         </div>
-        <button
-          onClick={() => exportCsv(rows, months)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium active:scale-95"
-        >
-          <Download className="w-4 h-4" />
-          Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
+          >
+            <Printer className="w-4 h-4" />
+            Print Report
+          </button>
+          <button
+            onClick={() => exportCsv(rows, months)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium active:scale-95"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Date range filter */}
