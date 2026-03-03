@@ -20,6 +20,7 @@ import {
   isPneumococcal,
   isQualifyingEvent,
   isRsv,
+  normalizeVaxStatus,
 } from '../../lib/vaccineCoverage';
 
 
@@ -27,6 +28,16 @@ const residentLabel = (res: any) => {
   if (!res?.displayName) return '—';
   return (res.backOfficeOnly || res.isHistorical || res.status === 'Discharged') ? `${res.displayName} (Historical)` : res.displayName;
 };
+
+/** Normalize vaccine status for display: "declined" (any variant) → "Refused". */
+const normalizeVaxStatusDisplay = (status: string): string =>
+  normalizeVaxStatus(status) === 'declined' ? 'Refused' : status;
+
+/** Return the relevant date for a VaxEvent. Declined events are dated by their offer/declination date. */
+const getVaxDate = (vax: VaxEvent): string =>
+  normalizeVaxStatus(vax.status) === 'declined'
+    ? (vax.offerDate ?? vax.createdAt)
+    : (vax.administeredDate || vax.dateGiven || '—');
 
 const ReportsConsole: React.FC = () => {
   const location = useLocation();
@@ -648,8 +659,8 @@ const WeeklyReport: React.FC = () => {
                 <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{vax.vaccine}</td>
-                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${vax.status === 'given' ? 'bg-green-100 text-green-800' : vax.status === 'declined' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-800'}`}>{vax.status}</span></td>
-                <td className="px-4 py-2 text-neutral-500">{vax.administeredDate || vax.dateGiven || '—'}</td>
+                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${vax.status === 'given' ? 'bg-green-100 text-green-800' : normalizeVaxStatus(vax.status) === 'declined' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-800'}`}>{normalizeVaxStatusDisplay(vax.status)}</span></td>
+                <td className="px-4 py-2 text-neutral-500">{getVaxDate(vax)}</td>
                 <td className="px-4 py-2 text-neutral-500">{vax.declineReason || '—'}</td>
               </tr>
             ))}
@@ -791,8 +802,8 @@ const OnDemandReport: React.FC = () => {
             (res as any)?.currentUnit || '—',
             (res as any)?.currentRoom || '—',
             v.vaccine,
-            v.status,
-            v.administeredDate || v.dateGiven || '—',
+            normalizeVaxStatusDisplay(v.status),
+            getVaxDate(v),
             v.declineReason || '—',
             v.dueDate || '—',
           ];
