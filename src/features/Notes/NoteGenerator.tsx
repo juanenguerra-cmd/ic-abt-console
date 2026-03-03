@@ -43,6 +43,9 @@ export const NoteGenerator: React.FC = () => {
 
   const highlightedNote = useMemo(() => {
     if (!noteContent) return '';
+    // HTML-special chars are escaped before the regex runs, so no XSS is possible:
+    // any user-typed '<', '>', or '&' becomes '&lt;', '&gt;', '&amp;' and the
+    // [bracket] regex can never capture raw HTML.
     const escaped = noteContent
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -192,13 +195,15 @@ export const NoteGenerator: React.FC = () => {
                 aria-hidden="true"
                 className="absolute inset-0 p-3 text-sm font-mono whitespace-pre-wrap break-words pointer-events-none select-none overflow-hidden"
                 style={{ color: 'transparent' }}
+                // Trailing space ensures the backdrop height matches the textarea when
+                // content ends with a newline (prevents a 1-line height mismatch).
                 dangerouslySetInnerHTML={{ __html: highlightedNote + ' ' }}
               />
               <textarea
                 ref={textareaRef}
                 value={noteContent}
                 onChange={e => setNoteContent(e.target.value)}
-                className="relative w-full border-0 focus:ring-0 focus:outline-none rounded-md p-3 text-sm font-mono bg-transparent resize-none overflow-hidden min-h-48"
+                className="relative w-full border-0 focus:ring-0 focus:outline-none rounded-md p-3 text-sm font-mono bg-transparent resize-none overflow-y-auto min-h-48"
                 placeholder="Generated note will appear here..."
               />
             </div>
