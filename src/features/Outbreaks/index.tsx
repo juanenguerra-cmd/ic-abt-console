@@ -4,12 +4,13 @@ import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from ".
 import { Plus, Users, Activity, FileText, AlertCircle, Calendar, Printer } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { LineListReportTab } from "./components/LineListReportTab";
+import { startPrint } from "../../print/startPrint";
 import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
 import { AddOutbreakExposureModal } from "./AddOutbreakExposureModal";
 import { SitrepEditModal } from "./SitrepEditModal";
 
 export const OutbreakManager: React.FC = () => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
   const [activeOutbreakId, setActiveOutbreakId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"linelist" | "sitrep" | "report">("linelist");
@@ -40,9 +41,24 @@ export const OutbreakManager: React.FC = () => {
   };
 
   const handlePrint = () => {
-    if (currentOutbreak) {
-      window.open(`/print/outbreak?outbreakId=${currentOutbreak.id}`, '_blank');
-    }
+    if (!currentOutbreak) return;
+
+    const cases = (Object.values(store.outbreakCases) as OutbreakCase[])
+      .filter(c => c.outbreakId === currentOutbreak.id)
+      .map(c => ({
+        ...c,
+        residentName: c.residentRef.kind === 'mrn' ? store.residents[c.residentRef.id]?.displayName : store.quarantine[c.residentRef.id]?.displayName,
+      }));
+    const exposures = (Object.values(store.outbreakExposures) as OutbreakExposure[]).filter(e => e.outbreakId === currentOutbreak.id);
+    const dailyStatuses = (Object.values(store.outbreakDailyStatuses) as OutbreakDailyStatus[]).filter(s => s.outbreakId === currentOutbreak.id);
+
+    void startPrint('outbreak', `Outbreak Summary: ${currentOutbreak.title}`, () => ({
+      facility: db.data.facilities.byId[activeFacilityId],
+      outbreak: currentOutbreak,
+      cases,
+      exposures,
+      dailyStatuses,
+    }));
   };
 
   return (
@@ -176,7 +192,7 @@ export const OutbreakManager: React.FC = () => {
 };
 
 const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
   const [showAddCase, setShowAddCase] = useState(false);
   const [showAddExposure, setShowAddExposure] = useState(false);
   

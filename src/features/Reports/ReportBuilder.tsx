@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Save, X, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { generatePDF } from '../../reports/engine';
+import { generatePDF, getDataForProfile } from '../../reports/engine';
 import { ExportProfile } from '../../domain/models';
 
 interface ColumnDef {
@@ -47,8 +47,8 @@ const AVAILABLE_COLUMNS: ColumnDef[] = [
 ];
 
 export const ReportBuilder: React.FC = () => {
-  const { activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { activeFacilityId, store } = useFacilityData();
+  const { updateDB, db } = useDatabase();
   
   const [reportName, setReportName] = useState('');
   const [availableCols, setAvailableCols] = useState<ColumnDef[]>(AVAILABLE_COLUMNS);
@@ -187,8 +187,12 @@ export const ReportBuilder: React.FC = () => {
       localStorage.setItem('ltc_print_temp_profile', JSON.stringify(tempProfile));
     } catch {}
 
-    // Now open the print view
-    generatePDF(tempProfile);
+    // Open print tab immediately and hydrate it with the prepared payload.
+    generatePDF(tempProfile, async () => ({
+      profile: tempProfile,
+      data: getDataForProfile(store, tempProfile),
+      facility: db.data.facilities.byId[activeFacilityId],
+    }));
   };
 
   return (

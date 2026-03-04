@@ -1,4 +1,9 @@
 import { FacilityStore, ExportProfile, Resident } from "../domain/models";
+import { startPrint } from "../print/startPrint";
+
+interface PrintPayloadBuilder {
+  (): Promise<unknown>;
+}
 
 // Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
@@ -11,16 +16,10 @@ const PHI_FIELDS = ["displayName", "firstName", "lastName", "dob", "mrn", "resid
 
 export const generateCSV = (store: FacilityStore, profile: ExportProfile): string => {
   const data = getDataForProfile(store, profile);
-
-  // 2. Generate Header Row
   const headers = profile.columns.map(c => c.header).join(",");
-  
-  // 3. Generate Data Rows
   const rows = data.map(item => {
     return profile.columns.map(col => {
       let value = resolvePath(item, col.fieldPath);
-
-      // Redaction Logic
       if (!profile.includePHI) {
         const pathLower = col.fieldPath.toLowerCase();
         if (pathLower.includes("mrn") || pathLower.includes("residentref.id")) {
@@ -32,17 +31,10 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
           value = "REDACTED";
         }
       }
-
-      // Transforms
       if (col.transform) {
-        if (col.transform === "date" && value) {
-          value = new Date(value).toLocaleDateString();
-        } else if (col.transform === "boolean") {
-          value = value ? "Yes" : "No";
-        }
+        if (col.transform === "date" && value) value = new Date(value).toLocaleDateString();
+        else if (col.transform === "boolean") value = value ? "Yes" : "No";
       }
-
-      // CSV Escaping
       if (value === undefined || value === null) return "";
       const strVal = String(value);
       if (strVal.includes(",") || strVal.includes('"') || strVal.includes("\n")) {
@@ -55,11 +47,11 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
   return [headers, ...rows].join("\n");
 };
 
-export const generatePDF = (profile: ExportProfile): void => {
-  // Since we are using window.print() on a separate route, we just navigate there.
-  // The data loading happens in the print view itself via loadDB().
-  const url = `/print/report-export?profileId=${profile.id}`;
-  window.open(url, '_blank');
+export const generatePDF = (profile: ExportProfile, buildPayload?: PrintPayloadBuilder): void => {
+  void startPrint('report-export', `Report: ${profile.name}`, async () => {
+    if (buildPayload) return buildPayload();
+    return { profile, data: [] };
+  });
 };
 
 export const getDataForProfile = (store: FacilityStore, profile: ExportProfile): any[] => {
@@ -70,26 +62,20 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
       break;
     case "abts":
       data = Object.values(store.abts).map(abt => {
-        const resident = abt.residentRef.kind === 'mrn' 
-          ? store.residents[abt.residentRef.id] 
-          : store.quarantine[abt.residentRef.id];
+        const resident = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
         return { ...abt, resident };
       });
       break;
     case "vaxEvents":
     case "vax":
       data = Object.values(store.vaxEvents).map(vax => {
-        const resident = vax.residentRef.kind === 'mrn'
-          ? store.residents[vax.residentRef.id]
-          : store.quarantine[vax.residentRef.id];
+        const resident = vax.residentRef.kind === 'mrn' ? store.residents[vax.residentRef.id] : store.quarantine[vax.residentRef.id];
         return { ...vax, resident, vax };
       });
       break;
     case "infections":
       data = Object.values(store.infections).map(inf => {
-        const resident = inf.residentRef.kind === 'mrn' 
-          ? store.residents[inf.residentRef.id] 
-          : store.quarantine[inf.residentRef.id];
+        const resident = inf.residentRef.kind === 'mrn' ? store.residents[inf.residentRef.id] : store.quarantine[inf.residentRef.id];
         return { ...inf, resident };
       });
       break;
@@ -98,52 +84,31 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
       break;
     case "outbreakCases":
       data = Object.values(store.outbreakCases).map(c => {
-        const resident = c.residentRef.kind === 'mrn' 
-          ? store.residents[c.residentRef.id] 
-          : store.quarantine[c.residentRef.id];
+        const resident = c.residentRef.kind === 'mrn' ? store.residents[c.residentRef.id] : store.quarantine[c.residentRef.id];
         return { ...c, resident };
       });
       break;
     case "custom": {
-      // Auto-detect the primary entity from column fieldPaths so that nested
-      // paths (e.g. "abt.medication", "ip.infectionSite", "vax.vaccine",
-      // "resident.displayName") resolve correctly.
-      //
-      // Priority: ABT > IP > Vax > Resident-only.  If a report mixes ABT and
-      // IP columns, ABT is used as the primary entity (IP columns will be "—").
-      // Resident lookups may return undefined for orphaned records; resolvePath
-      // already returns undefined for missing nested paths, which the print view
-      // renders as "—".
       const hasAbtCols = profile.columns.some(c => c.fieldPath.startsWith('abt.'));
-      const hasIpCols  = profile.columns.some(c => c.fieldPath.startsWith('ip.'));
+      const hasIpCols = profile.columns.some(c => c.fieldPath.startsWith('ip.'));
       const hasVaxCols = profile.columns.some(c => c.fieldPath.startsWith('vax.'));
-
       if (hasAbtCols) {
         data = Object.values(store.abts).map(abt => {
-          const resident = abt.residentRef.kind === 'mrn'
-            ? store.residents[abt.residentRef.id]
-            : store.quarantine[abt.residentRef.id];
+          const resident = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
           return { resident, abt };
         });
       } else if (hasIpCols) {
         data = Object.values(store.infections).map(inf => {
-          const resident = inf.residentRef.kind === 'mrn'
-            ? store.residents[inf.residentRef.id]
-            : store.quarantine[inf.residentRef.id];
+          const resident = inf.residentRef.kind === 'mrn' ? store.residents[inf.residentRef.id] : store.quarantine[inf.residentRef.id];
           return { resident, ip: inf };
         });
       } else if (hasVaxCols) {
         data = Object.values(store.vaxEvents).map(vax => {
-          const resident = vax.residentRef.kind === 'mrn'
-            ? store.residents[vax.residentRef.id]
-            : store.quarantine[vax.residentRef.id];
+          const resident = vax.residentRef.kind === 'mrn' ? store.residents[vax.residentRef.id] : store.quarantine[vax.residentRef.id];
           return { resident, vax };
         });
       } else {
-        // Only resident-level columns selected
-        data = (Object.values(store.residents) as Resident[])
-          .filter(r => !r.isHistorical && !r.backOfficeOnly)
-          .map(r => ({ resident: r }));
+        data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).map(r => ({ resident: r }));
       }
       break;
     }

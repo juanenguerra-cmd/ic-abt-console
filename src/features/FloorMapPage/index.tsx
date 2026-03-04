@@ -10,6 +10,7 @@ import { FloorMap } from '../Heatmap/FloorMap';
 import { Floorplan } from '../Floorplan';
 import { useFloorMapData } from './useFloorMapData';
 import { Printer } from 'lucide-react';
+import { startPrint } from '../../print/startPrint';
 
 type FloorMapTab = 'live' | 'edit';
 
@@ -76,7 +77,7 @@ export const FloorMapPage: React.FC = () => {
         </div>
         {activeTab === 'live' && (
           <button
-            onClick={() => window.open('/print/floor-map', '_blank')}
+            onClick={() => void startPrint('floor-map', 'Floor Map', () => ({ facility, layout, roomStatuses, symptomIndicators }))}
             className="flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
           >
             <Printer className="w-4 h-4" />

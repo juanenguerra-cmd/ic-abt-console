@@ -1,0 +1,25 @@
+.print-freeze * {
+  animation: none !important;
+  transition: none !important;
+  caret-color: transparent !important;
+}
+
+@media print {
+  @page { margin: 12mm; }
+
+  html, body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff !important;
+  }
+
+  .print-root { overflow: visible !important; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  .no-break, tr, td, th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .no-print { display: none !important; }
+  .sticky, [style*='position: sticky'] { position: static !important; }
+}
