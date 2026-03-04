@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardCopy, FileDown, Printer, Trash2 } from "lucide-react";
+import React, { useMemo, useState, useRef } from "react";
+import { CheckCircle2, ClipboardCopy, FileDown, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../app/providers";
 import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession } from "../domain/models";
 import { AUDIT_CATEGORIES, infectionControlAuditTemplates, InfectionControlAuditCategory } from "../constants/infectionControlAuditTemplates";
+import { PrintButton } from "../components/PrintButton";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const RESPONSE_OPTIONS: InfectionControlAuditResponse[] = ["COMPLIANT", "NON_COMPLIANT", "NA"];
@@ -189,11 +190,6 @@ const InfectionControlAuditCenter: React.FC = () => {
     }, toastOnError);
   };
 
-  const openPrint = () => {
-    if (!selectedSessionId) return;
-    window.open(`/print/audit-report?sessionId=${encodeURIComponent(selectedSessionId)}`, "_blank", "noopener,noreferrer");
-  };
-
   const handleCopySummary = async () => {
     if (!selectedSession) return;
     const summary = [
@@ -241,9 +237,11 @@ const InfectionControlAuditCenter: React.FC = () => {
     }
   };
 
+  const printRef = useRef<HTMLDivElement>(null);
+
   return (
     <div className="p-6 space-y-6">
-      <div className="bg-white border border-neutral-200 rounded-xl p-4">
+      <div className="no-print bg-white border border-neutral-200 rounded-xl p-4">
         <h1 className="text-xl font-bold text-neutral-900 mb-4">Infection Control Audit Center</h1>
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <select
@@ -274,7 +272,7 @@ const InfectionControlAuditCenter: React.FC = () => {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-xl p-4">
-        <div className="flex flex-wrap gap-3 items-center justify-between mb-3">
+        <div className="no-print flex flex-wrap gap-3 items-center justify-between mb-3">
           <select
             value={selectedSessionId}
             onChange={e => setSelectedSessionId(e.target.value)}
@@ -296,9 +294,7 @@ const InfectionControlAuditCenter: React.FC = () => {
             <button onClick={handleCopyTable} disabled={!selectedSession} className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50 disabled:opacity-50">
               <FileDown className="w-4 h-4" /> Copy Table (TSV)
             </button>
-            <button onClick={openPrint} disabled={!selectedSession} className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-neutral-900 text-white text-sm hover:bg-neutral-800 disabled:opacity-50">
-              <Printer className="w-4 h-4" /> Print / Save PDF
-            </button>
+            <PrintButton contentRef={printRef} title="Audit Center Report" />
             <button onClick={finalizeAudit} disabled={!selectedSession || isReadOnly} className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50">
               <CheckCircle2 className="w-4 h-4" /> Finalize Audit
             </button>
@@ -319,94 +315,96 @@ const InfectionControlAuditCenter: React.FC = () => {
           <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</div>
         )}
 
-        {selectedSession && (
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Total Questions</p><p className="font-semibold">{sessionMetrics.total}</p></div>
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Answered</p><p className="font-semibold">{sessionMetrics.answered}</p></div>
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Compliant</p><p className="font-semibold">{sessionMetrics.compliant}</p></div>
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Non-compliant</p><p className="font-semibold">{sessionMetrics.nonCompliant}</p></div>
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Compliance %</p><p className="font-semibold">{sessionMetrics.compliancePct}%</p></div>
-            <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Open Corrective</p><p className="font-semibold">{sessionMetrics.openCorrective}</p></div>
-          </div>
-        )}
+        <div ref={printRef} className="space-y-4">
+          {selectedSession && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Total Questions</p><p className="font-semibold">{sessionMetrics.total}</p></div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Answered</p><p className="font-semibold">{sessionMetrics.answered}</p></div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Compliant</p><p className="font-semibold">{sessionMetrics.compliant}</p></div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Non-compliant</p><p className="font-semibold">{sessionMetrics.nonCompliant}</p></div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Compliance %</p><p className="font-semibold">{sessionMetrics.compliancePct}%</p></div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-md p-3"><p className="text-xs text-neutral-500">Open Corrective</p><p className="font-semibold">{sessionMetrics.openCorrective}</p></div>
+              </div>
 
-        {selectedSession && (
-          <div className="border border-neutral-200 rounded-lg overflow-hidden">
-            <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-              <p className="font-semibold text-neutral-900">{CATEGORY_LABEL[selectedSession.auditType]}</p>
-              <p className="text-xs text-neutral-500">{selectedSession.auditDateISO} • {selectedSession.unit} • {selectedSession.shift} • {selectedSession.auditorName}</p>
-            </div>
-            <div className="divide-y divide-neutral-100">
-              {selectedItems.map(item => (
-                <div key={item.id} className="p-4 space-y-3">
-                  <p className="text-sm font-medium text-neutral-800">{item.questionText}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {RESPONSE_OPTIONS.map(option => (
-                      <button
-                        key={option}
-                        disabled={isReadOnly}
-                        onClick={() => updateItem(item.id, { response: option })}
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
-                          item.response === option ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-neutral-300 text-neutral-700"
-                        } disabled:opacity-50`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-
-                  {showMore && (
-                    <textarea
-                      value={item.evidenceNote}
-                      onChange={e => updateItem(item.id, { evidenceNote: e.target.value })}
-                      disabled={isReadOnly}
-                      placeholder="Evidence / notes"
-                      className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm disabled:bg-neutral-100"
-                      rows={2}
-                    />
-                  )}
-
-                  {item.response === "NON_COMPLIANT" && (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 border border-amber-200 bg-amber-50 rounded-md">
-                      <select
-                        value={normalizeSeverity(item.severity)}
-                        onChange={e => updateItem(item.id, { severity: e.target.value as InfectionControlAuditItem["severity"] })}
-                        disabled={isReadOnly}
-                        className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
-                      >
-                        <option value="LOW">LOW</option>
-                        <option value="MED">MED</option>
-                        <option value="HIGH">HIGH</option>
-                      </select>
-                      <input
-                        type="date"
-                        value={item.dueDateISO}
-                        onChange={e => updateItem(item.id, { dueDateISO: e.target.value })}
-                        disabled={isReadOnly}
-                        className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
-                      />
-                      <input
-                        type="date"
-                        value={item.completedAt}
-                        onChange={e => updateItem(item.id, { completedAt: e.target.value })}
-                        disabled={isReadOnly}
-                        className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
-                      />
-                      <input
-                        type="text"
-                        value={item.correctiveAction}
-                        onChange={e => updateItem(item.id, { correctiveAction: e.target.value })}
-                        disabled={isReadOnly}
-                        placeholder="Corrective action"
-                        className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm md:col-span-4 disabled:bg-neutral-100"
-                      />
-                    </div>
-                  )}
+              <div className="border border-neutral-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
+                  <p className="font-semibold text-neutral-900">{CATEGORY_LABEL[selectedSession.auditType]}</p>
+                  <p className="text-xs text-neutral-500">{selectedSession.auditDateISO} • {selectedSession.unit} • {selectedSession.shift} • {selectedSession.auditorName}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+                <div className="divide-y divide-neutral-100">
+                  {selectedItems.map(item => (
+                    <div key={item.id} className="p-4 space-y-3">
+                      <p className="text-sm font-medium text-neutral-800">{item.questionText}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {RESPONSE_OPTIONS.map(option => (
+                          <button
+                            key={option}
+                            disabled={isReadOnly}
+                            onClick={() => updateItem(item.id, { response: option })}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium border ${
+                              item.response === option ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-neutral-300 text-neutral-700"
+                            } disabled:opacity-50`}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+
+                      {showMore && (
+                        <textarea
+                          value={item.evidenceNote}
+                          onChange={e => updateItem(item.id, { evidenceNote: e.target.value })}
+                          disabled={isReadOnly}
+                          placeholder="Evidence / notes"
+                          className="w-full border border-neutral-300 rounded-md px-3 py-2 text-sm disabled:bg-neutral-100"
+                          rows={2}
+                        />
+                      )}
+
+                      {item.response === "NON_COMPLIANT" && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 border border-amber-200 bg-amber-50 rounded-md">
+                          <select
+                            value={normalizeSeverity(item.severity)}
+                            onChange={e => updateItem(item.id, { severity: e.target.value as InfectionControlAuditItem["severity"] })}
+                            disabled={isReadOnly}
+                            className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
+                          >
+                            <option value="LOW">LOW</option>
+                            <option value="MED">MED</option>
+                            <option value="HIGH">HIGH</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={item.dueDateISO}
+                            onChange={e => updateItem(item.id, { dueDateISO: e.target.value })}
+                            disabled={isReadOnly}
+                            className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
+                          />
+                          <input
+                            type="date"
+                            value={item.completedAt}
+                            onChange={e => updateItem(item.id, { completedAt: e.target.value })}
+                            disabled={isReadOnly}
+                            className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm disabled:bg-neutral-100"
+                          />
+                          <input
+                            type="text"
+                            value={item.correctiveAction}
+                            onChange={e => updateItem(item.id, { correctiveAction: e.target.value })}
+                            disabled={isReadOnly}
+                            placeholder="Corrective action"
+                            className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm md:col-span-4 disabled:bg-neutral-100"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

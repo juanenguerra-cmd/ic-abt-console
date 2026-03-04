@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { Resident, VaxEvent, IPEvent, ABTCourse } from '../../../domain/models';
-import { usePrint } from '../../../print/usePrint';
+import { PrintButton } from '../../../components/PrintButton';
 
 interface Props {
   residentId: string;
@@ -26,23 +26,34 @@ const LinedText = ({ label, text, className = '' }: { label: string, text?: stri
 
 export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }) => {
   const { store } = useFacilityData();
-  const { requestPrint } = usePrint();
+  const printRef = useRef<HTMLDivElement>(null);
   const resident = store.residents[residentId];
 
-  useEffect(() => {
-    if (!resident) { onClose(); return; }
+  if (!resident) {
+    return null;
+  }
 
-    const vaxHistory = (Object.values(store.vaxEvents) as VaxEvent[]).filter(v => v.residentRef.id === residentId && v.status === 'given');
-    const ipHistory = (Object.values(store.infections) as IPEvent[]).filter(i => i.residentRef.id === residentId);
-    const abtHistory = (Object.values(store.abts) as ABTCourse[]).filter(a => a.residentRef.id === residentId);
+  const vaxHistory = (Object.values(store.vaxEvents) as VaxEvent[]).filter(v => v.residentRef.id === residentId && v.status === 'given');
+  const ipHistory = (Object.values(store.infections) as IPEvent[]).filter(i => i.residentRef.id === residentId);
+  const abtHistory = (Object.values(store.abts) as ABTCourse[]).filter(a => a.residentRef.id === residentId);
 
-    requestPrint(
-      <div className="bg-white text-black p-8 font-serif">
-        <style>{`
-          @page { size: letter; margin: 0.75in; }
-          .form-page { page-break-after: always; }
-          .form-page:last-child { page-break-after: avoid; }
-        `}</style>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-200 no-print">
+          <h2 className="text-lg font-bold">New Admission IP Screening</h2>
+          <div className="flex items-center gap-2">
+            <PrintButton contentRef={printRef} title="New Admission IP Screening" pageStyle="@page { size: letter; margin: 0.75in; }" />
+            <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-md">Close</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-8">
+          <div ref={printRef} className="bg-white text-black font-serif">
+            <style>{`
+              @page { size: letter; margin: 0.75in; }
+              .form-page { page-break-after: always; }
+              .form-page:last-child { page-break-after: avoid; }
+            `}</style>
 
         {/* Page 1 */}
         <div className="form-page flex flex-col">
@@ -177,12 +188,10 @@ export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }
           </div>
           <LinedText label="Additional device/treatment checklist notes" className="mt-4" />
         </div>
-      </div>,
-      { onAfterPrint: onClose }
-    );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 

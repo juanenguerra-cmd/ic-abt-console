@@ -6,6 +6,7 @@ import { useToast } from '../hooks/useToast';
 import { useFormTemplates } from '../hooks/useFormTemplates';
 import { FormTemplateManager } from './FormTemplateManager';
 import { useDatabase, useFacilityData } from '../app/providers';
+import { usePrint } from '../print/usePrint';
 
 export function FormsTab() {
   const { toast } = useToast();
@@ -41,6 +42,8 @@ export function FormsTab() {
     }
   };
 
+  const { requestPrint } = usePrint();
+
   const handleGenerate = () => {
     if (!residentInfo.name.trim()) {
       toast({
@@ -61,7 +64,11 @@ export function FormsTab() {
     }
 
     const facilityName = db.data.facilities.byId[activeFacilityId]?.name || '{{ Facility name }}';
-    generateResidentPDF(residentInfo, selectedForms, residentForms, facilityName);
+    const html = generateResidentPDF(residentInfo, selectedForms, residentForms, facilityName);
+    
+    requestPrint(
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    );
 
     toast({
       title: 'PDF Generated',

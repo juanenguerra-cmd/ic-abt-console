@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
@@ -10,6 +10,8 @@ import { FormsTab } from '../../components/FormsTab';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
+import { PrintButton } from '../../components/PrintButton';
+import { usePrint } from '../../print/usePrint';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -23,8 +25,6 @@ import {
   isRsv,
   normalizeVaxStatus,
 } from '../../lib/vaccineCoverage';
-import { usePrint } from '../../print/usePrint';
-import { triggerPrint, PrintStyles } from '../../lib/printUtils';
 
 
 const residentLabel = (res: any) => {
@@ -161,6 +161,7 @@ const ReportsConsole: React.FC = () => {
 
 const SurveyPacketsReport: React.FC = () => {
   const { store } = useFacilityData();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const activePrecautions = useMemo(() =>
     (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
@@ -233,7 +234,8 @@ const SurveyPacketsReport: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* E6: Line List Export */}
-      <div className="flex justify-end">
+      <div className="no-print flex justify-end gap-2">
+        <PrintButton contentRef={printRef} title="Active Precautions & ABT Line List" />
         <button
           onClick={handleExportLineList}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
@@ -243,7 +245,13 @@ const SurveyPacketsReport: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+          <h2 className="text-xl font-bold">Active Precautions & Antibiotic Courses</h2>
+          <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
+        </div>
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
           <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List</h3>
           <p className="text-xs text-red-700 mt-1">Survey-Ready: Isolation Roster</p>
@@ -313,12 +321,14 @@ const SurveyPacketsReport: React.FC = () => {
         </table>
       </div>
     </div>
+    </div>
   );
 };
 
 const DailyReport: React.FC = () => {
   const { store } = useFacilityData();
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const printRef = useRef<HTMLDivElement>(null);
   const reportDateObj = useMemo(() => new Date(reportDate + 'T00:00:00'), [reportDate]);
   const threeDaysBeforeReport = useMemo(() => { const d = new Date(reportDateObj); d.setDate(d.getDate() - 3); return d; }, [reportDateObj]);
 
@@ -358,7 +368,7 @@ const DailyReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
         <span className="font-bold text-indigo-900 text-sm">Daily Report</span>
         <input
           type="date"
@@ -367,9 +377,16 @@ const DailyReport: React.FC = () => {
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
         />
         <span className="text-indigo-700 text-sm">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        <PrintButton contentRef={printRef} title={`Daily Report - ${reportDate}`} className="ml-auto" />
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+          <h2 className="text-xl font-bold">Daily Infection Control Report</h2>
+          <p className="text-sm text-neutral-500">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        </div>
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
           <h3 className="text-base font-bold text-red-900">Active Precautions Line List ({activePrecautions.length})</h3>
           <p className="text-xs text-red-700 mt-0.5">Sortable by unit for floor nurses</p>
@@ -481,6 +498,7 @@ const DailyReport: React.FC = () => {
         </table>
       </div>
     </div>
+    </div>
   );
 };
 
@@ -554,11 +572,10 @@ const WeeklyReport: React.FC = () => {
   const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
   const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
 
+  const printRef = useRef<HTMLDivElement>(null);
+
   return (
     <>
-      {/* FIX: replaced visibility:hidden approach with printUtils pattern */}
-      <style>{PrintStyles}</style>
-
       {/* Controls — hidden when printing */}
       <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 mb-6">
         <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
@@ -575,25 +592,18 @@ const WeeklyReport: React.FC = () => {
           onChange={e => setEndDate(e.target.value)}
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
         />
-        <button
-          onClick={() => triggerPrint()}
-          className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-50"
-        >
-          Print / PDF
-        </button>
+        <PrintButton contentRef={printRef} title="Weekly Report" className="ml-auto" />
       </div>
 
-      {/* Printable content */}
-      <div className="print-root space-y-6">
-
-        {/* Print header — only visible when printing */}
+      {/* Screen content */}
+      <div ref={printRef} className="space-y-6">
         <div className="hidden print:block text-center mb-4">
           <div className="text-xl font-bold">Weekly Infection Control Report</div>
           <div className="text-sm text-neutral-600">{weekStart} to {weekEnd}</div>
         </div>
 
         {/* Summary counts */}
-        <div className="grid grid-cols-3 gap-4 print-avoid-break">
+        <div className="grid grid-cols-3 gap-4">
           <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
             <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
             <div className="text-xs text-neutral-500 mt-1">New Infections</div>
@@ -608,11 +618,8 @@ const WeeklyReport: React.FC = () => {
           </div>
         </div>
 
-        {/* Page break before each table */}
-        <div className="print-page-break" />
-
         {/* New Infections Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
             <h3 className="text-base font-bold text-red-900">
               New Infections — {weekStart} to {weekEnd} ({newInfections.length})
@@ -666,8 +673,7 @@ const WeeklyReport: React.FC = () => {
 
         <div className="print-page-break" />
 
-        {/* New ABT Courses Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
             <h3 className="text-base font-bold text-amber-900">
               New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})
@@ -725,8 +731,7 @@ const WeeklyReport: React.FC = () => {
 
         <div className="print-page-break" />
 
-        {/* Vaccination Activity Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-neutral-200 bg-blue-50">
             <h3 className="text-base font-bold text-blue-900">
               Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})
@@ -775,7 +780,7 @@ const WeeklyReport: React.FC = () => {
           </table>
         </div>
 
-      </div>{/* end print-root */}
+      </div>
     </>
   );
 };
@@ -822,6 +827,7 @@ const OnDemandReport: React.FC = () => {
   const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
   const [linkQuery, setLinkQuery] = useState('');
   const [selectedLinkMrn, setSelectedLinkMrn] = useState<string | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const savedTemplates = useMemo(() => {
     try {
@@ -1051,7 +1057,7 @@ const OnDemandReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow border border-neutral-200 p-6">
+      <div className="no-print bg-white rounded-lg shadow border border-neutral-200 p-6">
         <h3 className="text-base font-bold text-neutral-900 mb-4">On Demand Report Builder</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
@@ -1099,19 +1105,17 @@ const OnDemandReport: React.FC = () => {
         )}
         <div className="flex items-center justify-between">
           <span className="text-sm text-neutral-500">{rows.length} record{rows.length !== 1 ? 's' : ''} found</span>
-          <button onClick={handleExportCsv} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">
-            Export CSV
-          </button>
+          <PrintButton contentRef={printRef} title="On Demand Report" />
         </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div ref={printRef} className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead className="bg-neutral-50">
               <tr>
                 {(['infections', 'abts', 'vax'].includes(dataset)) && (
-                  <th className="px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">Edit</th>
+                  <th className="no-print px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">Edit</th>
                 )}
                 {currentHeaders.map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">{h}</th>
@@ -1127,7 +1131,7 @@ const OnDemandReport: React.FC = () => {
                 return (
                   <tr key={i}>
                     {meta && (['infections', 'abts', 'vax'].includes(dataset)) && (
-                      <td className="px-3 py-2 text-center">
+                      <td className="no-print px-3 py-2 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => {
@@ -1154,7 +1158,7 @@ const OnDemandReport: React.FC = () => {
                         </div>
                       </td>
                     )}
-                    {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="px-3 py-2" />}
+                    {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="no-print px-3 py-2" />}
                     {row.map((cell, j) => (
                       <td key={j} className="px-4 py-2 text-neutral-700 whitespace-nowrap">{cell}</td>
                     ))}
@@ -1244,6 +1248,7 @@ const MonthlyAnalytics: React.FC = () => {
   const { store } = useFacilityData();
   const [metrics, setMetrics] = useState<Record<string, number>>({});
   const [analytics, setAnalytics] = useState<any[]>([]);
+  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedMetrics = localStorage.getItem('ltc_facility_metrics');
@@ -1330,8 +1335,18 @@ const MonthlyAnalytics: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* DOT Trend Chart */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="no-print flex justify-end">
+        <PrintButton contentRef={printRef} title="Monthly Analytics Report" />
+      </div>
+
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+          <h2 className="text-xl font-bold">Monthly Infection Control Analytics</h2>
+          <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
+        </div>
+
+        {/* DOT Trend Chart */}
+        <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 border-b border-neutral-200">
           <h3 className="text-lg leading-6 font-medium text-neutral-900">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
           <p className="text-sm text-neutral-500 mt-1">Active antibiotic courses per calendar day over the past 30 days.</p>
@@ -1410,14 +1425,16 @@ const MonthlyAnalytics: React.FC = () => {
       </div>
     </div>
     </div>
-  )
-}
+    </div>
+  );
+};
 
 const QapiRollup: React.FC = () => {
   const { store } = useFacilityData();
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const [year, monthNum] = selectedMonth.split('-').map(Number);
   const monthStart = useMemo(() => new Date(year, monthNum - 1, 1), [year, monthNum]);
@@ -1516,7 +1533,7 @@ const QapiRollup: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
         <span className="font-bold text-indigo-900 text-sm">QAPI Rollup</span>
         <input
           type="month"
@@ -1524,15 +1541,24 @@ const QapiRollup: React.FC = () => {
           onChange={e => setSelectedMonth(e.target.value)}
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
         />
-        <button
-          onClick={handleExportCsv}
-          className="ml-auto px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-        >
-          Export CSV
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <PrintButton contentRef={printRef} title={`QAPI Rollup - ${selectedMonth}`} />
+          <button
+            onClick={handleExportCsv}
+            className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+          <h2 className="text-xl font-bold">QAPI Infection Control Rollup</h2>
+          <p className="text-sm text-neutral-500">Month: {selectedMonth}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Infections by Category */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
@@ -1653,6 +1679,7 @@ const QapiRollup: React.FC = () => {
         </table>
       </div>
     </div>
+    </div>
   );
 };
 
@@ -1664,72 +1691,9 @@ const VaccineCoverageReport: React.FC = () => {
   const [selectedVaccine, setSelectedVaccine] = useState<string | null>(null);
   const [showUnlinked, setShowUnlinked] = useState(false);
   const [editingVaxEvent, setEditingVaxEvent] = useState<VaxEvent | undefined>(undefined);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const result = useMemo(() => computeVaccineCoverage(store), [store]);
-  const { requestPrint } = usePrint();
-  const handlePrint = () => {
-    requestPrint(
-      <div className="bg-white text-black p-6 space-y-6" style={{ fontFamily: 'sans-serif' }}>
-        <style>{`@page { size: letter; margin: 0.5in; } tr { page-break-inside: avoid; }`}</style>
-        <div className="text-center mb-4">
-          <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>Vaccine Coverage Report</div>
-          <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Total Active Census: {result.totalActiveCensus}</div>
-        </div>
-        <div style={{ background: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#f0fdfa' }}>
-            <div style={{ fontWeight: 700, color: '#134e4a' }}>Coverage Summary</div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead style={{ background: '#f9fafb' }}>
-              <tr>{['Vaccine','Covered','Declined','Not Vaccinated','Coverage %'].map(h => (
-                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: h === 'Vaccine' ? 'left' : 'right', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody>
-              {coverageRows.map(row => (
-                <tr key={row.label} style={{ borderTop: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{row.label}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>{row.count}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#b45309' }}>{row.declined}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#6b7280' }}>{result.totalActiveCensus - row.count}</td>
-                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>{result.totalActiveCensus > 0 ? ((row.count / result.totalActiveCensus) * 100).toFixed(1) : '0.0'}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {selectedReOffer && (
-          <div style={{ pageBreakBefore: 'always', background: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#eef2ff' }}>
-              <div style={{ fontWeight: 700, color: '#312e81' }}>Re-Offer Drill Down — {selectedReOffer.label}</div>
-              <div style={{ fontSize: '0.75rem', color: '#4338ca', marginTop: '0.25rem' }}>
-                Not vaccinated active residents available for outreach: <strong>{selectedReOffer.count}</strong>
-              </div>
-            </div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-              <thead style={{ background: '#f9fafb' }}>
-                <tr>{['Resident','MRN','Unit','Room','Prior Decline'].map(h => (
-                  <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
-                ))}</tr>
-              </thead>
-              <tbody>
-                {selectedReOffer.residents.length === 0 && <tr><td colSpan={5} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No residents need re-offer for this vaccine.</td></tr>}
-                {selectedReOffer.residents.map(r => (
-                  <tr key={r.mrn} style={{ borderTop: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{r.displayName}</td>
-                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.mrn}</td>
-                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.unit}</td>
-                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.room}</td>
-                    <td style={{ padding: '0.5rem 1rem' }}>{r.previouslyDeclined ? 'Yes' : 'No'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const handleDeleteUnlinkedEvent = (id: string) => {
     if (!confirm('Are you sure you want to delete this VAX event?')) return;
@@ -1859,23 +1823,24 @@ const VaccineCoverageReport: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
         <div>
         <span className="font-bold text-indigo-900 text-sm">Vaccine Coverage — Active Census</span>
         <p className="text-xs text-indigo-700 mt-0.5">
           Counts active residents with at least one qualifying in-house or documented-historical vaccine event.
         </p>
         </div>
-        <button
-          onClick={handlePrint}
-          className="shrink-0 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-100"
-        >
-          Print / PDF
-        </button>
+        <PrintButton contentRef={printRef} title="Vaccine Coverage Report" />
       </div>
 
-      {/* Summary counts */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+          <h2 className="text-xl font-bold">Vaccine Coverage Report</h2>
+          <p className="text-sm text-neutral-500">Total Active Census: {result.totalActiveCensus}</p>
+        </div>
+
+        {/* Summary counts */}
+        <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-4 border-b border-neutral-200 bg-teal-50">
           <h3 className="text-base font-bold text-teal-900">Coverage Summary</h3>
           <p className="text-xs text-teal-700 mt-0.5">
@@ -1932,8 +1897,10 @@ const VaccineCoverageReport: React.FC = () => {
       </div>
 
       {selectedReOffer && (
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-4 border-b border-neutral-200 bg-indigo-50 flex items-center justify-between gap-3">
+        <>
+          <div className="print-page-break" />
+          <div className="bg-white shadow rounded-lg overflow-hidden">
+            <div className="px-4 py-4 border-b border-neutral-200 bg-indigo-50 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-indigo-900">Re-Offer Drill Down — {selectedReOffer.label}</h3>
               <p className="text-xs text-indigo-700 mt-0.5">
@@ -1977,6 +1944,7 @@ const VaccineCoverageReport: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </>
       )}
 
       {/* Unlinked events */}
@@ -2012,7 +1980,7 @@ const VaccineCoverageReport: React.FC = () => {
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Source</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Actions</th>
+                  <th className="no-print px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
@@ -2029,7 +1997,7 @@ const VaccineCoverageReport: React.FC = () => {
                       <td className="px-4 py-2 text-neutral-500">{eventDate ? new Date(eventDate).toLocaleDateString() : '—'}</td>
                       <td className="px-4 py-2 text-neutral-500">{event.status}</td>
                       <td className="px-4 py-2 text-neutral-500">{event.source || '—'}</td>
-                      <td className="px-4 py-2 text-right space-x-3">
+                      <td className="no-print px-4 py-2 text-right space-x-3">
                         <button
                           onClick={() => setEditingVaxEvent(event)}
                           className="text-indigo-600 hover:text-indigo-900"
@@ -2080,6 +2048,7 @@ const VaccineCoverageReport: React.FC = () => {
           </ul>
         </div>
       )}
+    </div>
     </div>
   );
 };

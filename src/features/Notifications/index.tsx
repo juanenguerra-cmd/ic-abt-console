@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer, ListPlus } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
 import { AddToLineListModal } from './AddToLineListModal';
+import { PrintButton } from '../../components/PrintButton';
 
 export const useNotifications = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -69,6 +70,7 @@ export const NotificationsPage: React.FC = () => {
   const [lineListModalNotif, setLineListModalNotif] = useState<AppNotification | null>(null);
   const [lineListSavedId, setLineListSavedId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const printRef = useRef<HTMLDivElement>(null);
 
   type GroupResident = {
     residentId?: string;
@@ -267,6 +269,8 @@ export const NotificationsPage: React.FC = () => {
       });
   }, [displayList, store]);
 
+  const selectedGroups = useMemo(() => groupedVaxNotifications.filter(group => selectedVaxGroups.has(group.id)), [groupedVaxNotifications, selectedVaxGroups]);
+
   const nonVaxDisplayList = displayList.filter(n => n.category !== 'VAX_GAP');
 
   const uniqueCategories = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.category)));
@@ -338,61 +342,6 @@ export const NotificationsPage: React.FC = () => {
 
   const handleClearVaxSelection = () => {
     setSelectedVaxGroups(new Set());
-  };
-
-  const handlePrintSelected = () => {
-    const selectedGroups = groupedVaxNotifications.filter(group => selectedVaxGroups.has(group.id));
-    if (selectedGroups.length === 0) return;
-
-    const printWindow = window.open('', '_blank', 'width=900,height=1100');
-    if (!printWindow) return;
-
-    const body = selectedGroups.map(group => `
-      <section class="group">
-        <h2>${group.title}</h2>
-        <div class="meta">Count: ${group.residents.length}</div>
-        <ul>
-          ${group.residents.map(resident => `<li>
-            <strong>${resident.name}</strong>
-            ${resident.mrn ? `<div class="sub">MRN: ${resident.mrn}</div>` : ''}
-            ${(resident.unit || resident.room) ? `<div class="sub">Location: ${resident.unit || 'Unknown'}${resident.room ? ` - ${resident.room}` : ''}</div>` : ''}
-          </li>`).join('')}
-        </ul>
-      </section>
-    `).join('');
-
-    const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Notifications & Recommendations</title>
-          <style>
-            @page { margin: 0.5in; }
-            body { font-family: Arial, sans-serif; color: #111827; margin: 0; font-size: 12px; }
-            h1 { margin: 0 0 4px; font-size: 22px; }
-            .printed-at { margin-bottom: 16px; color: #4b5563; font-size: 11px; }
-            .group { margin-bottom: 16px; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; }
-            h2 { margin: 0 0 6px; font-size: 16px; }
-            .meta { margin-bottom: 8px; font-size: 12px; color: #374151; }
-            ul { margin: 0; padding-left: 18px; }
-            li { margin-bottom: 8px; }
-            .sub { margin-left: 8px; color: #4b5563; font-size: 11px; }
-          </style>
-        </head>
-        <body>
-          <h1>Notifications & Recommendations</h1>
-          <div class="printed-at">Printed: ${new Date().toLocaleString()}</div>
-          ${body}
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
   };
 
   const markGroupedVaxAsRead = (group: GroupedVaxNotification) => {
@@ -499,14 +448,14 @@ export const NotificationsPage: React.FC = () => {
                     >
                       Clear
                     </button>
-                    <button
-                      onClick={handlePrintSelected}
+                    <PrintButton
+                      contentRef={printRef}
+                      title="Notifications Report"
+                      label="Print selected"
                       disabled={selectedVaxGroups.size === 0}
                       className="px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-50 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Printer className="w-4 h-4" />
-                      Print selected
-                    </button>
+                      pageStyle="@page { margin: 0.5in; }"
+                    />
                   </div>
                 </div>
               )}
@@ -731,6 +680,34 @@ export const NotificationsPage: React.FC = () => {
           Line list entry saved successfully.
         </div>
       )}
+
+      {/* Hidden Print View */}
+      <div className="hidden">
+        <div ref={printRef} style={{ fontFamily: 'Arial, sans-serif', color: '#111827', margin: 0, fontSize: '12px' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: '22px' }}>Notifications & Recommendations</h1>
+          <div style={{ marginBottom: '16px', color: '#4b5563', fontSize: '11px' }}>Printed: {new Date().toLocaleString()}</div>
+          
+          {selectedGroups.map(group => (
+            <section key={group.id} style={{ marginBottom: '16px', border: '1px solid #d1d5db', borderRadius: '8px', padding: '12px', pageBreakInside: 'avoid' }}>
+              <h2 style={{ margin: '0 0 6px', fontSize: '16px' }}>{group.title}</h2>
+              <div style={{ marginBottom: '8px', fontSize: '12px', color: '#374151' }}>Count: {group.residents.length}</div>
+              <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                {group.residents.map((resident, idx) => (
+                  <li key={idx} style={{ marginBottom: '8px' }}>
+                    <strong>{resident.name}</strong>
+                    {resident.mrn && <div style={{ marginLeft: '8px', color: '#4b5563', fontSize: '11px' }}>MRN: {resident.mrn}</div>}
+                    {(resident.unit || resident.room) && (
+                      <div style={{ marginLeft: '8px', color: '#4b5563', fontSize: '11px' }}>
+                        Location: {resident.unit || 'Unknown'}{resident.room ? ` - ${resident.room}` : ''}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
     </>
   );

@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { useFacilityData } from '../../app/providers';
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
 import { formatDate, computeAge } from './lineListUtils';
-import { usePrint } from '../../print/usePrint';
+import { PrintButton } from '../../components/PrintButton';
 
 interface Props {
   tab: SymptomClass;
@@ -454,7 +454,7 @@ export const LineListPrintForm: React.FC<Props> = ({
   onClose,
 }) => {
   const { store } = useFacilityData();
-  const { requestPrint } = usePrint();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const dateRange = `${formatDate(startDate)} – ${formatDate(endDate)}`;
 
@@ -573,24 +573,40 @@ export const LineListPrintForm: React.FC<Props> = ({
     return mapped;
   }, [store, tab, startDate, endDate, unit, facilityId]);
 
-  useEffect(() => {
-    requestPrint(
-      <div className="bg-white text-black font-serif">
-        <style>{`
-          @page { size: letter landscape; margin: 0.4in 0.35in; }
-          .form-page { page-break-after: always; }
-          .form-page:last-child { page-break-after: avoid; }
-        `}</style>
-        {tab === 'resp' ? (
-          <ILIPrintPages rows={iliRows} facilityName={facilityName} dateRange={dateRange} />
-        ) : (
-          <GIPrintPages rows={giRows} facilityName={facilityName} dateRange={dateRange} />
-        )}
-      </div>,
-      { onAfterPrint: onClose }
-    );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-200 no-print">
+          <h2 className="text-lg font-bold">Line List Print Preview</h2>
+          <div className="flex items-center gap-2">
+            <PrintButton
+              contentRef={printRef}
+              title={`${tab === 'resp' ? 'ILI' : 'GI'} Line List`}
+              pageStyle="@page { size: letter landscape; margin: 0.4in 0.35in; }"
+            />
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-md"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-8 bg-neutral-100">
+          <div ref={printRef} className="bg-white text-black font-serif p-8 shadow-sm mx-auto" style={{ width: '10.5in', minHeight: '8in' }}>
+            <style>{`
+              @page { size: letter landscape; margin: 0.4in 0.35in; }
+              .form-page { page-break-after: always; }
+              .form-page:last-child { page-break-after: avoid; }
+            `}</style>
+            {tab === 'resp' ? (
+              <ILIPrintPages rows={iliRows} facilityName={facilityName} dateRange={dateRange} />
+            ) : (
+              <GIPrintPages rows={giRows} facilityName={facilityName} dateRange={dateRange} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };

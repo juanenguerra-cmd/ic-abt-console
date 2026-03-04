@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Printer } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
+import { usePrint } from '../../print/usePrint';
 
 interface Props {
   onClose: () => void;
@@ -42,134 +43,104 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
 
   const printedDate = new Date().toLocaleDateString();
 
+  const { requestPrint } = usePrint();
+
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank', 'width=900,height=1100');
-    if (!printWindow) return;
-
     const now = new Date();
-    const rows = filteredPrecautions.map(ip => {
-      const resident = getResident(ip.residentRef);
-      const days = Math.floor((now.getTime() - new Date(ip.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-      const duration = `${days} days and ongoing`;
-      
-      let precautionDisplay = '';
-      if (ip.ebp) {
-        precautionDisplay = 'EBP';
-      } else {
-        precautionDisplay = `ISOLATION / ${ip.isolationType || ''}`;
-      }
-
-      return `
-        <tr style="height: 32px;">
-          <td style="border: 2px solid #000; padding: 4px 8px; text-align: left;">${resident?.currentRoom || 'N/A'}</td>
-          <td style="border: 2px solid #000; padding: 4px 8px; text-align: left;">${resident?.displayName || 'Unknown'} (${resident?.mrn || ''})</td>
-          <td style="border: 2px solid #000; padding: 4px 8px; text-align: left;">${precautionDisplay}</td>
-          <td style="border: 2px solid #000; padding: 4px 8px; text-align: left;">${ip.organism || ip.sourceOfInfection || 'N/A'}</td>
-          <td style="border: 2px solid #000; padding: 4px 8px; text-align: left;">${duration}</td>
-        </tr>
-      `;
-    }).join('');
-
-    // Add empty rows to fill the page if needed (like the template)
+    
+    // Calculate empty rows to fill the page
     const emptyRowsCount = Math.max(0, 12 - filteredPrecautions.length);
-    const emptyRows = Array(emptyRowsCount).fill(0).map(() => `
-      <tr style="height: 32px;">
-        <td style="border: 2px solid #000; padding: 4px 8px;">&nbsp;</td>
-        <td style="border: 2px solid #000; padding: 4px 8px;">&nbsp;</td>
-        <td style="border: 2px solid #000; padding: 4px 8px;">&nbsp;</td>
-        <td style="border: 2px solid #000; padding: 4px 8px;">&nbsp;</td>
-        <td style="border: 2px solid #000; padding: 4px 8px;">&nbsp;</td>
+    const emptyRows = Array(emptyRowsCount).fill(0).map((_, i) => (
+      <tr key={`empty-${i}`} style={{ height: '32px' }}>
+        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
+        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
+        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
+        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
+        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
       </tr>
-    `).join('');
+    ));
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Active Precaution List</title>
-          <style>
-            @page { size: landscape; margin: 0.5in; }
-            body { font-family: "Arial", sans-serif; color: #000; margin: 0; padding: 20px; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .facility-name { font-size: 20px; font-weight: bold; margin-bottom: 8px; }
-            .report-title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 16px; }
-            
-            .meta-row { display: flex; justify-content: center; gap: 40px; margin-bottom: 20px; font-weight: bold; font-size: 14px; }
-            .meta-item { display: flex; align-items: baseline; gap: 8px; }
-            .underline { border-bottom: 2px solid #000; min-width: 120px; text-align: center; padding: 0 10px; }
+    requestPrint(
+      <div style={{ fontFamily: '"Arial", sans-serif', color: '#000', margin: 0, padding: '20px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>{facilityName}</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '16px' }}>RESIDENTS ON PRECAUTIONS OR ISOLATION</div>
+        </div>
 
-            table { width: 100%; border-collapse: collapse; border: 2px solid #000; margin-bottom: 20px; }
-            th { border: 2px solid #000; padding: 8px; text-align: center; font-weight: bold; text-transform: uppercase; font-size: 13px; }
-            td { font-size: 12px; }
-
-            .footer { margin-top: 30px; }
-            .footer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 15px; }
-            .footer-item { display: flex; align-items: baseline; gap: 8px; font-weight: bold; font-size: 13px; }
-            .footer-underline { border-bottom: 2px solid #000; flex: 1; min-height: 1.2em; }
-            
-            .disclaimer { font-size: 10px; font-style: italic; margin-top: 20px; line-height: 1.4; }
-            
-            @media print {
-              body { padding: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="facility-name">${facilityName}</div>
-            <div class="report-title">RESIDENTS ON PRECAUTIONS OR ISOLATION</div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '40px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            UNIT: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>{selectedUnit === 'all' ? 'All Units' : selectedUnit}</span>
           </div>
-
-          <div class="meta-row">
-            <div class="meta-item">UNIT: <span class="underline">${selectedUnit === 'all' ? 'All Units' : selectedUnit}</span></div>
-            <div class="meta-item">DATE: <span class="underline">${printedDate}</span></div>
-            <div class="meta-item">SHIFT: <span class="underline">Day</span></div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            DATE: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>{printedDate}</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            SHIFT: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>Day</span>
+          </div>
+        </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 10%;">RM. #</th>
-                <th style="width: 25%;">RESIDENT'S NAME</th>
-                <th style="width: 25%;">PRECAUTION/ISOLATION</th>
-                <th style="width: 20%;">INFECTED SOURCE</th>
-                <th style="width: 20%;">DURATION</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-              ${emptyRows}
-            </tbody>
-          </table>
+        <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #000', marginBottom: '20px' }}>
+          <thead>
+            <tr>
+              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '10%' }}>RM. #</th>
+              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '25%' }}>RESIDENT'S NAME</th>
+              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '25%' }}>PRECAUTION/ISOLATION</th>
+              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '20%' }}>INFECTED SOURCE</th>
+              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '20%' }}>DURATION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPrecautions.map(ip => {
+              const resident = getResident(ip.residentRef);
+              const days = Math.floor((now.getTime() - new Date(ip.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+              const duration = `${days} days and ongoing`;
+              
+              let precautionDisplay = '';
+              if (ip.ebp) {
+                precautionDisplay = 'EBP';
+              } else {
+                precautionDisplay = `ISOLATION / ${ip.isolationType || ''}`;
+              }
 
-          <div class="footer">
-            <div class="footer-row">
-              <div class="footer-item">Prepared by: <span class="footer-underline">Juan Enguerra RN</span></div>
-              <div class="footer-item">Title: <span class="footer-underline"></span></div>
+              return (
+                <tr key={ip.id} style={{ height: '32px' }}>
+                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{resident?.currentRoom || 'N/A'}</td>
+                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{resident?.displayName || 'Unknown'} ({resident?.mrn || ''})</td>
+                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{precautionDisplay}</td>
+                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{ip.organism || ip.sourceOfInfection || 'N/A'}</td>
+                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{duration}</td>
+                </tr>
+              );
+            })}
+            {emptyRows}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: '30px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
+              Prepared by: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}>Juan Enguerra RN</span>
             </div>
-            <div class="footer-row">
-              <div class="footer-item">Signature: <span class="footer-underline"></span></div>
-              <div class="footer-item">Date/Time: <span class="footer-underline"></span></div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
+              Title: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
             </div>
           </div>
-
-          <div class="disclaimer">
-            * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
+              Signature: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
+              Date/Time: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
+            </div>
           </div>
+        </div>
 
-          <script>
-            window.onload = () => {
-              window.print();
-              setTimeout(() => window.close(), 500);
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+        <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '20px', lineHeight: 1.4 }}>
+          * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
+        </div>
+      </div>,
+      { extraCss: '@page { size: landscape; margin: 0.5in; }' }
+    );
   };
 
   return (

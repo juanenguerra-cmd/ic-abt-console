@@ -1,10 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { Printer } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useFacilityData, useDatabase } from '../../../app/providers';
 import { Outbreak, LineListEvent, ABTCourse, VaxEvent, Resident, SymptomTag } from '../../../domain/models';
 import { ILILineListTable } from './ILILineListTable';
 import { GILineListTable } from './GILineListTable';
-import './linelist-print.css';
+import { PrintButton } from '../../../components/PrintButton';
 
 // ─── RowModel ────────────────────────────────────────────────────────────────
 
@@ -223,9 +222,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
     });
   }, [store, outbreak.facilityId, symptomClass, startDate, endDate, selectedUnit]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const printRef = useRef<HTMLDivElement>(null);
 
   const title = symptomClass === 'resp'
     ? 'Respiratory / ILI Line List'
@@ -245,13 +242,11 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
               {title}
             </span>
           </h2>
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 shadow-sm"
-          >
-            <Printer className="w-4 h-4" />
-            Print Landscape
-          </button>
+          <PrintButton
+            contentRef={printRef}
+            title="Line List Report"
+            pageStyle="@page { size: landscape; margin: 0.5in; }"
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-6 bg-neutral-50 border border-neutral-200 rounded-lg p-4">
@@ -311,8 +306,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
         </p>
       </div>
 
-      {/* Print root — this div is targeted by @media print */}
-      <div id="linelist-print-root">
+      <div ref={printRef} id="linelist-print-root">
         {symptomClass === 'resp' ? (
           <ILILineListTable
             rows={rows}

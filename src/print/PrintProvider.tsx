@@ -2,11 +2,10 @@ import React, {
   createContext,
   ReactNode,
   useCallback,
-  useEffect,
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { useReactToPrint } from "react-to-print";
 
 export interface PrintOptions {
   /** Optional CSS to inject into the print zone (e.g. landscape overrides). */
@@ -26,89 +25,48 @@ export interface PrintContextValue {
 // eslint-disable-next-line react-refresh/only-export-components
 export const PrintContext = createContext<PrintContextValue | null>(null);
 
-/** Stable container appended once to document.body for the print portal. */
-function getOrCreatePrintRoot(): HTMLElement {
-  let el = document.getElementById("print-root");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "print-root";
-    document.body.appendChild(el);
-  }
-  return el;
-}
-
 export function PrintProvider({ children }: { children: ReactNode }) {
   const [printNode, setPrintNode] = useState<ReactNode>(null);
   const [extraCss, setExtraCss] = useState<string>("");
-  const printRootRef = useRef<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const onAfterPrintRef = useRef<(() => void) | undefined>(undefined);
 
-  // Create the portal container on mount.
-  useEffect(() => {
-    printRootRef.current = getOrCreatePrintRoot();
-  }, []);
-
-  // Tear down print content when the browser print dialog closes.
-  useEffect(() => {
-    const cleanup = () => {
+  const handlePrint = useReactToPrint({
+    contentRef,
+    pageStyle: extraCss,
+    onAfterPrint: () => {
       setPrintNode(null);
       setExtraCss("");
       const cb = onAfterPrintRef.current;
       onAfterPrintRef.current = undefined;
       cb?.();
-    };
-    window.addEventListener("afterprint", cleanup);
-    return () => window.removeEventListener("afterprint", cleanup);
-  }, []);
+    },
+  });
 
   const requestPrint = useCallback(
     (node: ReactNode, options?: PrintOptions) => {
       setPrintNode(node);
       setExtraCss(options?.extraCss ?? "");
       onAfterPrintRef.current = options?.onAfterPrint;
-      // Defer so React has time to render the portal before the dialog opens.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
+      
+      // Defer so React has time to render the node into contentRef before printing
+      setTimeout(() => {
+        handlePrint();
+      }, 50);
     },
-    []
+    [handlePrint]
   );
-
-  const printRoot = printRootRef.current;
 
   return (
     <PrintContext.Provider value={{ requestPrint }}>
-      {/* Global print styles: hide the app, show the print zone. */}
-      <style>{`
-        #print-root { display: none; }
-        @media print {
-          #root { display: none !important; }
-          #print-root {
-            display: block !important;
-            position: fixed;
-            inset: 0;
-            width: 100%;
-            height: auto;
-            background: white;
-            color: black;
-          }
-        }
-      `}</style>
-
       {children}
 
-      {/* Isolated print portal — only visible during window.print(). */}
-      {printRoot &&
-        printNode &&
-        createPortal(
-          <>
-            {extraCss && <style>{extraCss}</style>}
-            {printNode}
-          </>,
-          printRoot
-        )}
+      {/* Hidden print portal — only visible to react-to-print */}
+      <div style={{ display: "none" }}>
+        <div ref={contentRef}>
+          {printNode}
+        </div>
+      </div>
     </PrintContext.Provider>
   );
 }

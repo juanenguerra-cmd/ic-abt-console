@@ -148,6 +148,17 @@ const SidebarAccordion = ({
   );
 };
 
+const SidebarSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
+  <div className="pt-4 pb-1 first:pt-0">
+    <h3 className="px-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">
+      {title}
+    </h3>
+    <div className="space-y-0.5">
+      {children}
+    </div>
+  </div>
+);
+
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -294,15 +305,7 @@ const AppShell = () => {
             <span className="font-bold text-lg text-emerald-900 hidden sm:inline-block">ICN Console</span>
           </div>
 
-          {/* Header Navigation */}
-          <nav className="hidden lg:flex items-center gap-1 ml-6">
-            <NavLink to="/home" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Home</NavLink>
-            <NavLink to="/dashboard" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Dashboard</NavLink>
-            <NavLink to="/analytics" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Analytics</NavLink>
-            <NavLink to="/resident-board" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Resident Board</NavLink>
-            <NavLink to="/staff" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Staff</NavLink>
-            <NavLink to="/notifications" className={({isActive}) => `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-neutral-100 text-neutral-900' : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'}`}>Notifications</NavLink>
-          </nav>
+          {/* Header Navigation - Removed to rely on sidebar */}
         </div>
 
         <div className="flex items-center gap-3">
@@ -387,50 +390,50 @@ const AppShell = () => {
             ${isMobileMenuOpen ? "translate-x-0 mt-16" : "-translate-x-full lg:mt-0"}
           `}
         >
-          <nav className="p-4 space-y-1" aria-label="App sections">
-            <SidebarLink to="/home" icon={Home} label="Home" />
-            <SidebarAccordion icon={LayoutDashboard} title="Overview" defaultOpen={true}>
+          <nav className="p-4 space-y-4" aria-label="App sections">
+            <SidebarSection title="Overview">
+              <SidebarLink to="/home" icon={Home} label="Home" />
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
               <SidebarLink to="/analytics" icon={BarChart3} label="Analytics" />
+            </SidebarSection>
+            
+            <SidebarSection title="Residents">
               <SidebarLink to="/resident-board" icon={Users} label="Resident Board" />
               <SidebarLink to="/floor-map" icon={Map} label="Floor Map" />
-            </SidebarAccordion>
+            </SidebarSection>
 
-            {can('write:shiftlog') && (
-              <SidebarAccordion icon={Clock} title="Daily Ops">
-                <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />
-                <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />
-              </SidebarAccordion>
-            )}
-
-            <SidebarAccordion icon={Bell} title="Need Review" badge={(notifications?.length || 0) + (quarantineCount || 0)} defaultOpen={true}>
-              <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
-              {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
-            </SidebarAccordion>
-
-            {can('write:outbreaks') && (
-              <SidebarAccordion icon={AlertTriangle} title="Surveillance">
+            <SidebarSection title="Operations">
+              <SidebarAccordion icon={AlertTriangle} title="Surveillance" badge={quarantineCount} defaultOpen={true}>
                 <SidebarLink to="/outbreaks" icon={AlertCircle} label="Outbreaks" />
                 <SidebarLink to="/linelist-report" icon={FileText} label="Line List Report" />
+                {can('write:outbreaks') && <SidebarLink to="/quarantine" icon={Inbox} label="Quarantine Inbox" badge={quarantineCount} />}
               </SidebarAccordion>
-            )}
 
-            {(can('write:outbreaks') || can('write:audits')) && (
-              <SidebarAccordion icon={BarChart3} title="Reports">
-                {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
-                {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-                {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
-                {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+              <SidebarAccordion icon={Clock} title="Daily Ops" badge={notifications?.length || 0} defaultOpen={true}>
+                <SidebarLink to="/notifications" icon={Bell} label="Notifications" badge={notifications?.length || 0} alertBadge={(notifications?.length || 0) > 0} />
+                {can('write:shiftlog') && <SidebarLink to="/chat" icon={MessageSquare} label="Shift Log" />}
+                {can('write:shiftlog') && <SidebarLink to="/note-generator" icon={PenSquare} label="Note Generator" />}
               </SidebarAccordion>
-            )}
+            </SidebarSection>
 
-            <SidebarLink to="/staff" icon={Users2} label="Staff" />
+            <SidebarSection title="Management">
+              {(can('write:outbreaks') || can('write:audits')) && (
+                <SidebarAccordion icon={FileBarChart} title="Reports & Audits">
+                  {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
+                  {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
+                  {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
+                  {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+                </SidebarAccordion>
+              )}
 
-            <SidebarAccordion icon={Settings} title="Admin">
+              <SidebarLink to="/staff" icon={Users2} label="Staff" />
+            </SidebarSection>
+
+            <SidebarSection title="System">
               <SidebarLink to="/user-guide" icon={BookOpen} label="User Guide" />
               {role === 'Admin' && <SidebarLink to="/back-office" icon={Database} label="Back Office" />}
               {role === 'Admin' && <SidebarLink to="/settings" icon={Settings} label="Settings" />}
-            </SidebarAccordion>
+            </SidebarSection>
           </nav>
         </aside>
 

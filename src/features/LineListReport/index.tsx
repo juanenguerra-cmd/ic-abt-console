@@ -7,7 +7,6 @@ import { ManualAddLineListModal } from './ManualAddLineListModal';
 import { EditLineListEntryModal } from './EditLineListEntryModal';
 import { LineListPrintForm } from './LineListPrintForm';
 import { formatDate, computeAge } from './lineListUtils';
-import './linelist-print.css';
 
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
 

@@ -29,37 +29,6 @@
   outline: none;
 }
 
-/* On print: ALL cells look identical */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  .editable-cell,
-  .editable-cell.autofill,
-  .editable-cell.overridden {
-    color: #000 !important;
-    background: #fff !important;
-    font-weight: normal !important;
-    box-shadow: none !important;
-    font-size: 6.5pt !important;
-  }
-}
-
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  .printable-area, .printable-area * {
-    visibility: visible;
-  }
-  .printable-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-}
-
 @layer base {
   button:not(:disabled), a[href] {
     transition-property: all;
@@ -81,58 +50,5 @@
     outline: none;
     border-color: var(--color-indigo-500);
     box-shadow: 0 0 0 2px var(--color-indigo-100);
-  }
-}
-/* ─────────────────────────────────────────────────────────────────────────────
-   Global Print Styles — ic-abt-console
-   Works together with src/lib/printUtils.ts triggerPrint()
-   ───────────────────────────────────────────────────────────────────────────── */
-@media print {
-  body.app-printing #root > * {
-    display: none !important;
-  }
-
-  body.app-printing .print-root {
-    display: block !important;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 99999 !important;
-    background: white !important;
-    overflow: visible !important;
-    padding: 16px !important;
-  }
-
-  body.app-printing .print-root * {
-    visibility: visible !important;
-  }
-
-  html, body {
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  thead {
-    display: table-header-group !important;
-  }
-
-  tfoot {
-    display: table-footer-group !important;
-  }
-
-  .print-page-break {
-    break-after: page !important;
-    page-break-after: always !important;
-    display: block !important;
-    height: 0 !important;
-  }
-
-  .print-avoid-break {
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
-  }
-
-  .no-print {
-    display: none !important;
   }
 }
