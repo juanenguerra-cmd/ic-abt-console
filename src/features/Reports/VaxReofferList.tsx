@@ -9,6 +9,14 @@ import { computeVaxGaps } from '../../utils/vaxReofferUtils';
 const VACCINES = ['Influenza', 'Covid-19', 'Pneumococcal'] as const;
 type VaccineFilter = 'All' | (typeof VACCINES)[number];
 
+const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const VACCINE_KEYWORDS: Record<(typeof VACCINES)[number], string[]> = {
+  Influenza: ['influenza', 'flu'],
+  'Covid-19': ['covid19', 'covid', 'sarscov2'],
+  Pneumococcal: ['pneumococcal', 'pneumo'],
+};
+
 export const VaxReofferList: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
@@ -33,13 +41,32 @@ export const VaxReofferList: React.FC = () => {
     [gaps]
   );
 
-  const consentProfile = useMemo(
-    () =>
-      Object.values(store.exportProfiles).find((profile) => {
-        const lowered = profile.name.toLowerCase();
-        return lowered.includes('vaccine') && lowered.includes('consent');
-      }),
-    [store.exportProfiles]
+  const consentProfilesByVaccine = useMemo(() => {
+    const pdfProfiles = Object.values(store.exportProfiles).filter((profile) => profile.type === 'pdf');
+    const defaultConsentProfile = pdfProfiles.find((profile) => {
+      const normalizedName = normalize(profile.name);
+      return normalizedName.includes('vaccine') && normalizedName.includes('consent');
+    });
+
+    return VACCINES.reduce<Record<(typeof VACCINES)[number], (typeof pdfProfiles)[number] | undefined>>(
+      (acc, vaccine) => {
+        const matchingProfile = pdfProfiles.find((profile) => {
+          const normalizedName = normalize(profile.name);
+          const hasConsentKeyword = normalizedName.includes('consent');
+          const hasVaccineKeyword = VACCINE_KEYWORDS[vaccine].some((keyword) => normalizedName.includes(normalize(keyword)));
+          return hasConsentKeyword && hasVaccineKeyword;
+        });
+
+        acc[vaccine] = matchingProfile || defaultConsentProfile;
+        return acc;
+      },
+      { Influenza: undefined, 'Covid-19': undefined, Pneumococcal: undefined }
+    );
+  }, [store.exportProfiles]);
+
+  const hasAnyConsentTemplate = useMemo(
+    () => Object.values(consentProfilesByVaccine).some(Boolean),
+    [consentProfilesByVaccine]
   );
 
   const offerVaccine = (residentMrn: string, residentName: string, vaccineName: (typeof VACCINES)[number]) => {
@@ -73,12 +100,13 @@ export const VaxReofferList: React.FC = () => {
       };
     });
 
+    const consentProfile = consentProfilesByVaccine[vaccineName];
     if (consentProfile) {
       generatePDF(consentProfile);
     } else {
       toast({
         title: 'No vaccine consent form template found.',
-        description: 'Create one in Reports > Forms first.',
+        description: `Create a ${vaccineName} consent form in Reports > Forms first.`,
         variant: 'destructive',
       });
     }
@@ -109,7 +137,7 @@ export const VaxReofferList: React.FC = () => {
         <p className="mt-1 text-sm text-neutral-600">
           Influenza: {summary.Influenza} · Covid-19: {summary['Covid-19']} · Pneumococcal: {summary.Pneumococcal}
         </p>
-        {!consentProfile && (
+        {!hasAnyConsentTemplate && (
           <p className="mt-2 text-xs text-amber-700">No vaccine consent template detected in Reports &gt; Forms.</p>
         )}
       </div>
