@@ -5,6 +5,7 @@ import { ILILineListTable, ILIRowModel } from './ILILineListTable';
 import { GILineListTable, GIRowModel } from './GILineListTable';
 import { ManualAddLineListModal } from './ManualAddLineListModal';
 import { EditLineListEntryModal } from './EditLineListEntryModal';
+import { LineListPrintForm } from './LineListPrintForm';
 import { formatDate, computeAge } from './lineListUtils';
 import './linelist-print.css';
 
@@ -41,6 +42,7 @@ export function LineListReportPage() {
   const [reportTab, setReportTab] = React.useState<SymptomClass>('resp');
   const [showManualAdd, setShowManualAdd] = React.useState(false);
   const [editingEventId, setEditingEventId] = React.useState<string | null>(null);
+  const [showPrintForm, setShowPrintForm] = React.useState(false);
 
   const handleGenerate = () => {
     const startISO = startDate;
@@ -162,15 +164,7 @@ export function LineListReportPage() {
   };
 
   const handlePrint = () => {
-    // Open the dedicated print view in a new tab
-    // We can pass query params if needed, but the print view currently loads all active events.
-    // If we want to support filtering in the print view, we would need to update LineListPrint.tsx to read these params.
-    // For now, let's just open the print view as requested by the user instructions which imply a dedicated route.
-    // Ideally, we should pass the filter params: ?start=...&end=...&unit=...&type=...
-    // But LineListPrint.tsx (from previous context) seemed to just load "active" events.
-    // Let's check if we can pass params. The user didn't explicitly ask for params in the print view, 
-    // but it's good practice. However, adhering to the "strict" instructions, I will just open the route.
-    window.open('/print/linelist', '_blank');
+    setShowPrintForm(true);
   };
 
   return (
@@ -324,6 +318,18 @@ export function LineListReportPage() {
             setEditingEventId(null);
             handleGenerate();
           }}
+        />
+      )}
+
+      {showPrintForm && (
+        <LineListPrintForm
+          tab={tab}
+          startDate={startDate}
+          endDate={endDate}
+          unit={selectedUnit}
+          facilityName={facilityName}
+          facilityId={activeFacilityId}
+          onClose={() => setShowPrintForm(false)}
         />
       )}
     </div>
