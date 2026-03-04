@@ -1,6 +1,7 @@
 export const PRINT_JOB_KINDS = [
   'audit-report',
   'antibiogram',
+  'census-rounding',
   'linelist',
   'outbreak',
   'report-export',
@@ -12,10 +13,10 @@ export const PRINT_JOB_KINDS = [
 
 export type PrintJobKind = (typeof PRINT_JOB_KINDS)[number];
 
-export interface PrintJob {
+export interface PrintJob<TPayload = unknown> {
   id: string;
   kind: PrintJobKind;
   createdAt: number;
-  title: string;
-  payload: unknown;
+  title?: string;
+  payload: TPayload;
 }
