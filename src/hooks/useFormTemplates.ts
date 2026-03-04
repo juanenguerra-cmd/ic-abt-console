@@ -328,6 +328,27 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
   <p class="vax-footer">This authorization is in effect until revocation by the above signed party. This consent will be used annually during review of vaccinations and to administer influenza vaccine yearly.</p>
 </article>`,
   },
+  {
+    id: 'covid19-vaccine-consent',
+    name: 'Covid-19 Vaccine Consent Form',
+    description: 'Two-page, portrait consent template rendered from source pages for exact print fidelity.',
+    category: 'resident',
+    icon: 'syringe',
+    templateContent: `<article class="form-page covid-consent-template-page">
+  <img
+    class="covid-consent-image"
+    src="/forms/covid-consent-p1.png"
+    alt="Covid-19 Vaccine Consent Form - Page 1"
+  />
+</article>
+<article class="form-page covid-consent-template-page">
+  <img
+    class="covid-consent-image"
+    src="/forms/covid-consent-p2.png"
+    alt="Covid-19 Vaccine Consent Form - Page 2"
+  />
+</article>`,
+  },
 
 ];
 
