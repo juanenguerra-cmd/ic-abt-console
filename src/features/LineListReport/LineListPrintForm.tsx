@@ -586,9 +586,9 @@ export const LineListPrintForm: React.FC<Props> = ({
         ) : (
           <GIPrintPages rows={giRows} facilityName={facilityName} dateRange={dateRange} />
         )}
-      </div>
+      </div>,
+      { onAfterPrint: onClose }
     );
-    onClose();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

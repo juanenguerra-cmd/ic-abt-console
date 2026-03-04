@@ -124,9 +124,9 @@ export const DailyPrecautionList: React.FC<Props> = ({ date, onClose, facilityNa
             </p>
           </footer>
         </div>
-      </div>
+      </div>,
+      { onAfterPrint: onClose }
     );
-    onClose();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

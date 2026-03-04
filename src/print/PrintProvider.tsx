@@ -11,6 +11,8 @@ import { createPortal } from "react-dom";
 export interface PrintOptions {
   /** Optional CSS to inject into the print zone (e.g. landscape overrides). */
   extraCss?: string;
+  /** Called after the browser print dialog closes. Use this to run cleanup (e.g. close modals). */
+  onAfterPrint?: () => void;
 }
 
 export interface PrintContextValue {
@@ -39,6 +41,7 @@ export function PrintProvider({ children }: { children: ReactNode }) {
   const [printNode, setPrintNode] = useState<ReactNode>(null);
   const [extraCss, setExtraCss] = useState<string>("");
   const printRootRef = useRef<HTMLElement | null>(null);
+  const onAfterPrintRef = useRef<(() => void) | undefined>(undefined);
 
   // Create the portal container on mount.
   useEffect(() => {
@@ -50,6 +53,9 @@ export function PrintProvider({ children }: { children: ReactNode }) {
     const cleanup = () => {
       setPrintNode(null);
       setExtraCss("");
+      const cb = onAfterPrintRef.current;
+      onAfterPrintRef.current = undefined;
+      cb?.();
     };
     window.addEventListener("afterprint", cleanup);
     return () => window.removeEventListener("afterprint", cleanup);
@@ -59,6 +65,7 @@ export function PrintProvider({ children }: { children: ReactNode }) {
     (node: ReactNode, options?: PrintOptions) => {
       setPrintNode(node);
       setExtraCss(options?.extraCss ?? "");
+      onAfterPrintRef.current = options?.onAfterPrint;
       // Defer so React has time to render the portal before the dialog opens.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {

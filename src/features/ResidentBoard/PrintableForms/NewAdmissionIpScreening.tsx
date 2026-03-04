@@ -177,9 +177,9 @@ export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }
           </div>
           <LinedText label="Additional device/treatment checklist notes" className="mt-4" />
         </div>
-      </div>
+      </div>,
+      { onAfterPrint: onClose }
     );
-    onClose();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
