@@ -24,6 +24,7 @@ import {
   normalizeVaxStatus,
 } from '../../lib/vaccineCoverage';
 import { usePrint } from '../../print/usePrint';
+import { triggerPrint, PrintStyles } from '../../lib/printUtils';
 
 
 const residentLabel = (res: any) => {
@@ -486,7 +487,11 @@ const DailyReport: React.FC = () => {
 const WeeklyReport: React.FC = () => {
   const { store } = useFacilityData();
   const defaultEnd = new Date().toISOString().split('T')[0];
-  const defaultStart = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().split('T')[0]; })();
+  const defaultStart = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  })();
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
 
@@ -495,20 +500,32 @@ const WeeklyReport: React.FC = () => {
 
   const newInfections = useMemo(() =>
     (Object.values(store.infections) as IPEvent[])
-      .filter(ip => { const d = new Date(ip.onsetDate || ip.createdAt); return d >= startObj && d <= endObj; })
+      .filter(ip => {
+        const d = new Date(ip.onsetDate || ip.createdAt);
+        return d >= startObj && d <= endObj;
+      })
       .map(ip => {
-        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+        const res = ip.residentRef.kind === 'mrn'
+          ? store.residents[ip.residentRef.id]
+          : store.quarantine[ip.residentRef.id];
         return { ip, res };
       })
-      .sort((a, b) => (b.ip.onsetDate || b.ip.createdAt).localeCompare(a.ip.onsetDate || a.ip.createdAt)),
+      .sort((a, b) =>
+        (b.ip.onsetDate || b.ip.createdAt).localeCompare(a.ip.onsetDate || a.ip.createdAt)
+      ),
     [store.infections, store.residents, store.quarantine, startObj, endObj]
   );
 
   const newAbts = useMemo(() =>
     (Object.values(store.abts) as ABTCourse[])
-      .filter(a => { const d = new Date(a.startDate || a.createdAt); return d >= startObj && d <= endObj; })
+      .filter(a => {
+        const d = new Date(a.startDate || a.createdAt);
+        return d >= startObj && d <= endObj;
+      })
       .map(a => {
-        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
+        const res = a.residentRef.kind === 'mrn'
+          ? store.residents[a.residentRef.id]
+          : store.quarantine[a.residentRef.id];
         return { abt: a, res };
       })
       .sort((a, b) => (b.abt.startDate || '').localeCompare(a.abt.startDate || '')),
@@ -517,260 +534,251 @@ const WeeklyReport: React.FC = () => {
 
   const vaxActivity = useMemo(() =>
     (Object.values(store.vaxEvents) as VaxEvent[])
-      .filter(v => { const d = new Date(v.administeredDate || v.dateGiven || v.createdAt); return d >= startObj && d <= endObj; })
+      .filter(v => {
+        const d = new Date(v.administeredDate || v.dateGiven || v.createdAt);
+        return d >= startObj && d <= endObj;
+      })
       .map(v => {
-        const res = v.residentRef.kind === 'mrn' ? store.residents[v.residentRef.id] : store.quarantine[v.residentRef.id];
+        const res = v.residentRef.kind === 'mrn'
+          ? store.residents[v.residentRef.id]
+          : store.quarantine[v.residentRef.id];
         return { vax: v, res };
       })
-      .sort((a, b) => (b.vax.administeredDate || b.vax.dateGiven || b.vax.createdAt).localeCompare(a.vax.administeredDate || a.vax.dateGiven || a.vax.createdAt)),
+      .sort((a, b) =>
+        (b.vax.administeredDate || b.vax.dateGiven || b.vax.createdAt)
+          .localeCompare(a.vax.administeredDate || a.vax.dateGiven || a.vax.createdAt)
+      ),
     [store.vaxEvents, store.residents, store.quarantine, startObj, endObj]
   );
 
   const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
   const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
 
-  const { requestPrint } = usePrint();
-  const handlePrint = () => {
-    requestPrint(
-      <div className="bg-white text-black p-6 space-y-6" style={{ fontFamily: 'sans-serif' }}>
-        <style>{`@page { size: letter; margin: 0.5in; }`}</style>
-        <div className="text-center mb-4">
-          <div className="text-xl font-bold">Standard of Care Weekly Report</div>
-          <div className="text-sm" style={{ color: '#6b7280' }}>{weekStart} to {weekEnd}</div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b91c1c' }}>{newInfections.length}</div>
-            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>New Infections</div>
-          </div>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b45309' }}>{newAbts.length}</div>
-            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>New ABT Courses</div>
-          </div>
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1d4ed8' }}>{vaxActivity.length}</div>
-            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>Vax Events</div>
-          </div>
-        </div>
-        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#fef2f2' }}>
-            <div style={{ fontWeight: 700, color: '#7f1d1d' }}>New Infections — {weekStart} to {weekEnd} ({newInfections.length})</div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead style={{ background: '#f9fafb' }}>
-              <tr>{['Resident','MRN','Unit / Room','Category','Status','Isolation','Onset Date'].map(h => (
-                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody>
-              {newInfections.length === 0 && <tr><td colSpan={7} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No new infections in this date range</td></tr>}
-              {newInfections.map(({ ip, res }) => (
-                <tr key={ip.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.infectionCategory || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem' }}>{ip.status}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.isolationType || 'None'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ pageBreakBefore: 'always', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#fffbeb' }}>
-            <div style={{ fontWeight: 700, color: '#78350f' }}>New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})</div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead style={{ background: '#f9fafb' }}>
-              <tr>{['Resident','MRN','Unit / Room','Medication','Indication','Category','Start Date','Status'].map(h => (
-                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody>
-              {newAbts.length === 0 && <tr><td colSpan={8} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No new antibiotic courses in this date range</td></tr>}
-              {newAbts.map(({ abt, res }) => (
-                <tr key={abt.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.medication}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.indication || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.syndromeCategory || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.startDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem' }}>{abt.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ pageBreakBefore: 'always', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#eff6ff' }}>
-            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})</div>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-            <thead style={{ background: '#f9fafb' }}>
-              <tr>{['Resident','MRN','Vaccine','Status','Date Given','Decline Reason'].map(h => (
-                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
-              ))}</tr>
-            </thead>
-            <tbody>
-              {vaxActivity.length === 0 && <tr><td colSpan={6} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No vaccination activity in this date range</td></tr>}
-              {vaxActivity.map(({ vax, res }) => (
-                <tr key={vax.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{vax.vaccine}</td>
-                  <td style={{ padding: '0.5rem 1rem' }}>{normalizeVaxStatusDisplay(vax.status)}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{getVaxDate(vax)}</td>
-                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{vax.declineReason || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
-      <div className="weekly-report-print space-y-6">
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 no-print">
+      {/* FIX: replaced visibility:hidden approach with printUtils pattern */}
+      <style>{PrintStyles}</style>
+
+      {/* Controls — hidden when printing */}
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 mb-6">
         <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
-        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white" />
+        <input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
+          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
+        />
         <span className="text-indigo-500 text-sm">–</span>
-        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white" />
-        <button onClick={handlePrint} className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-50">
+        <input
+          type="date"
+          value={endDate}
+          onChange={e => setEndDate(e.target.value)}
+          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
+        />
+        <button
+          onClick={() => triggerPrint()}
+          className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-50"
+        >
           Print / PDF
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-          <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">New Infections</div>
-        </div>
-        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-          <div className="text-2xl font-bold text-amber-700">{newAbts.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">New ABT Courses</div>
-        </div>
-        <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700">{vaxActivity.length}</div>
-          <div className="text-xs text-neutral-500 mt-1">Vax Events</div>
-        </div>
-      </div>
+      {/* Printable content */}
+      <div className="print-root space-y-6">
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
-          <h3 className="text-base font-bold text-red-900">New Infections — {weekStart} to {weekEnd} ({newInfections.length})</h3>
+        {/* Print header — only visible when printing */}
+        <div className="hidden print:block text-center mb-4">
+          <div className="text-xl font-bold">Weekly Infection Control Report</div>
+          <div className="text-sm text-neutral-600">{weekStart} to {weekEnd}</div>
         </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Onset Date</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {newInfections.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-neutral-400">No new infections in this date range</td></tr>
-            )}
-            {newInfections.map(({ ip, res }) => (
-              <tr key={ip.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
-                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{ip.status}</span></td>
-                <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
-                <td className="px-4 py-2 text-neutral-500">{new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
-          <h3 className="text-base font-bold text-amber-900">New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})</h3>
+        {/* Summary counts */}
+        <div className="grid grid-cols-3 gap-4 print-avoid-break">
+          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+            <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
+            <div className="text-xs text-neutral-500 mt-1">New Infections</div>
+          </div>
+          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+            <div className="text-2xl font-bold text-amber-700">{newAbts.length}</div>
+            <div className="text-xs text-neutral-500 mt-1">New ABT Courses</div>
+          </div>
+          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
+            <div className="text-2xl font-bold text-blue-700">{vaxActivity.length}</div>
+            <div className="text-xs text-neutral-500 mt-1">Vax Events</div>
+          </div>
         </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {newAbts.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No new antibiotic courses in this date range</td></tr>
-            )}
-            {newAbts.map(({ abt, res }) => (
-              <tr key={abt.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.syndromeCategory || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
-                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${abt.status === 'active' ? 'bg-amber-100 text-amber-800' : abt.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-neutral-100 text-neutral-800'}`}>{abt.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-4 border-b border-neutral-200 bg-blue-50">
-          <h3 className="text-base font-bold text-blue-900">Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})</h3>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date Given</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Decline Reason</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {vaxActivity.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No vaccination activity in this date range</td></tr>
-            )}
-            {vaxActivity.map(({ vax, res }) => (
-              <tr key={vax.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{vax.vaccine}</td>
-                <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${vax.status === 'given' ? 'bg-green-100 text-green-800' : normalizeVaxStatus(vax.status) === 'declined' ? 'bg-red-100 text-red-800' : 'bg-neutral-100 text-neutral-800'}`}>{normalizeVaxStatusDisplay(vax.status)}</span></td>
-                <td className="px-4 py-2 text-neutral-500">{getVaxDate(vax)}</td>
-                <td className="px-4 py-2 text-neutral-500">{vax.declineReason || '—'}</td>
+        {/* Page break before each table */}
+        <div className="print-page-break" />
+
+        {/* New Infections Table */}
+        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-red-50">
+            <h3 className="text-base font-bold text-red-900">
+              New Infections — {weekStart} to {weekEnd} ({newInfections.length})
+            </h3>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Onset Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {newInfections.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
+                    No new infections in this date range
+                  </td>
+                </tr>
+              )}
+              {newInfections.map(({ ip, res }) => (
+                <tr key={ip.id}>
+                  <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                  <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">
+                    {ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
+                    {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
+                  </td>
+                  <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
+                  <td className="px-4 py-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                    }`}>
+                      {ip.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
+                  <td className="px-4 py-2 text-neutral-500">
+                    {new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="print-page-break" />
+
+        {/* New ABT Courses Table */}
+        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-amber-50">
+            <h3 className="text-base font-bold text-amber-900">
+              New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})
+            </h3>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {newAbts.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-neutral-400">
+                    No new antibiotic courses in this date range
+                  </td>
+                </tr>
+              )}
+              {newAbts.map(({ abt, res }) => (
+                <tr key={abt.id}>
+                  <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                  <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">
+                    {abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
+                    {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
+                  </td>
+                  <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
+                  <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">{abt.syndromeCategory || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
+                  <td className="px-4 py-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      abt.status === 'active'
+                        ? 'bg-amber-100 text-amber-800'
+                        : abt.status === 'completed'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-neutral-100 text-neutral-800'
+                    }`}>
+                      {abt.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="print-page-break" />
+
+        {/* Vaccination Activity Table */}
+        <div className="bg-white shadow rounded-lg overflow-hidden print-avoid-break">
+          <div className="px-4 py-4 border-b border-neutral-200 bg-blue-50">
+            <h3 className="text-base font-bold text-blue-900">
+              Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})
+            </h3>
+          </div>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Vaccine</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date Given</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Decline Reason</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-neutral-200">
+              {vaxActivity.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-neutral-400">
+                    No vaccination activity in this date range
+                  </td>
+                </tr>
+              )}
+              {vaxActivity.map(({ vax, res }) => (
+                <tr key={vax.id}>
+                  <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                  <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">{vax.vaccine}</td>
+                  <td className="px-4 py-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                      vax.status === 'given'
+                        ? 'bg-green-100 text-green-800'
+                        : normalizeVaxStatus(vax.status) === 'declined'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-neutral-100 text-neutral-800'
+                    }`}>
+                      {normalizeVaxStatusDisplay(vax.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-neutral-500">{getVaxDate(vax)}</td>
+                  <td className="px-4 py-2 text-neutral-500">{vax.declineReason || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+      </div>{/* end print-root */}
     </>
   );
 };
-
 const OnDemandReport: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
