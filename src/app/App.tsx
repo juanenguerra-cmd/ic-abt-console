@@ -28,9 +28,7 @@ import ReportExportPrint from "../pages/print/ReportExportPrint";
 import ResidentCensusPrint from "../pages/print/ResidentCensusPrint";
 import FloorMapPrint from "../pages/print/FloorMapPrint";
 import NotePrint from "../pages/print/NotePrint";
-import DomPrintPage from "../pages/print/DomPrintPage";
-import PrintLoadingPage from "../pages/print/PrintLoadingPage";
-import PrintErrorPage from "../pages/print/PrintErrorPage";
+import PrintCensusRounding from "../print/routes/PrintCensusRounding";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { PrintProvider } from "../print/PrintProvider";
@@ -260,9 +258,7 @@ const AppShell = () => {
         <Route path="/print/resident-census" element={<ResidentCensusPrint />} />
         <Route path="/print/floor-map" element={<FloorMapPrint />} />
         <Route path="/print/note" element={<NotePrint />} />
-        <Route path="/print/dom" element={<DomPrintPage />} />
-        <Route path="/print/loading" element={<PrintLoadingPage />} />
-        <Route path="/print/error" element={<PrintErrorPage />} />
+        <Route path="/print/census-rounding" element={<PrintCensusRounding />} />
       </Routes>
     );
   }

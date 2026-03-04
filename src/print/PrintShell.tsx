@@ -1,72 +1,72 @@
-import React from 'react';
-import { loadPrintJob, deletePrintJob } from './printJobStore';
-import { PrintJob, PrintJobKind } from './printJob';
-import './print.css';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { getPrintJobStorageKey, PrintJob, PrintJobKind } from "./startPrint";
 
-function nextFrame() {
-  return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+interface PrintShellProps<TPayload = unknown> {
+  kind: PrintJobKind;
+  render: (job: PrintJob<TPayload>) => React.ReactNode;
 }
 
-export const PrintShell: React.FC<{
-  kind: PrintJobKind;
-  children: (job: PrintJob) => React.ReactNode;
-}> = ({ kind, children }) => {
-  const [job, setJob] = React.useState<PrintJob | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+export function PrintShell<TPayload = unknown>({ kind, render }: PrintShellProps<TPayload>) {
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
+  const jobId = params.get("jobId");
+  const [job, setJob] = useState<PrintJob<TPayload> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const hasPrintedRef = useRef(false);
 
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const jobId = params.get('jobId') || '';
+  useEffect(() => {
     if (!jobId) {
-      setError('Missing print job. Please close this tab and print again.');
+      setError("Missing print job id.");
       return;
     }
 
-    const found = loadPrintJob(jobId);
-    if (!found) {
-      setError('Print payload expired or missing. Please print again.');
-      return;
-    }
+    let attempts = 0;
+    const maxAttempts = 30;
 
-    if (found.kind !== kind) {
-      setError(`Print type mismatch. Expected ${kind}, got ${found.kind}.`);
-      return;
-    }
-
-    setJob(found);
-    return () => {
-      deletePrintJob(jobId);
-    };
-  }, [kind]);
-
-  React.useEffect(() => {
-    if (!job) return;
-
-    let cancelled = false;
-    void (async () => {
-      document.documentElement.classList.add('print-freeze');
-      await nextFrame();
-      await nextFrame();
-      await nextFrame();
-
-      if (document.fonts?.ready) {
-        await document.fonts.ready.catch(() => undefined);
+    const hydrate = () => {
+      const raw = localStorage.getItem(getPrintJobStorageKey(jobId));
+      if (!raw) {
+        attempts += 1;
+        if (attempts >= maxAttempts) {
+          setError("Print job not found.");
+          return;
+        }
+        window.setTimeout(hydrate, 100);
+        return;
       }
 
-      await nextFrame();
-      if (!cancelled) {
-        window.print();
+      try {
+        const parsed = JSON.parse(raw) as PrintJob<TPayload>;
+        if (parsed.kind !== kind) {
+          setError("Print job kind does not match this page.");
+          return;
+        }
+        setJob(parsed);
+      } catch {
+        setError("Invalid print job payload.");
       }
-    })();
-
-    return () => {
-      cancelled = true;
-      document.documentElement.classList.remove('print-freeze');
     };
+
+    hydrate();
+  }, [jobId, kind]);
+
+  useEffect(() => {
+    if (!job || hasPrintedRef.current) return;
+    hasPrintedRef.current = true;
+
+    const timer = window.setTimeout(() => {
+      window.print();
+    }, 80);
+
+    return () => window.clearTimeout(timer);
   }, [job]);
 
-  if (error) return <div className="p-8 text-red-700">{error}</div>;
-  if (!job) return <div className="p-8 text-neutral-500">Preparing print job…</div>;
+  if (error) {
+    return <div className="p-8 text-red-700">{error}</div>;
+  }
 
-  return <div className="print-root">{children(job)}</div>;
-};
+  if (!job) {
+    return <div className="p-8 text-neutral-500">Preparing print job…</div>;
+  }
+
+  return <>{render(job)}</>;
+}

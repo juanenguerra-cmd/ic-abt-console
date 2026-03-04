@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Printer, Inbox, ArrowLeft, ExternalLink } from "lucide-react";
@@ -19,7 +19,7 @@ import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
-import { PrintButton } from "../../components/PrintButton";
+import { startPrint } from "../../print/startPrint";
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -74,8 +74,6 @@ export const ResidentBoard: React.FC = () => {
 
   const [showContactTraceModal, setShowContactTraceModal] = useState(false);
   const [contactTraceCaseId, setContactTraceCaseId] = useState<string | null>(null);
-
-  const printRef = useRef<HTMLDivElement>(null);
 
   // Sync filter state to URL search params
   const updateFilters = (updates: Record<string, string | null>) => {
@@ -233,6 +231,38 @@ export const ResidentBoard: React.FC = () => {
     return groups;
   }, [filteredResidents]);
 
+
+
+  const handlePrintCensus = () => {
+    const precautionsByMrn = activeInfections.reduce<Record<string, string[]>>((acc, infection: any) => {
+      if (infection.residentRef?.kind !== "mrn") return acc;
+      const label = [infection.isolationType, infection.ebp ? "EBP" : ""].filter(Boolean).join(" / ");
+      if (!label) return acc;
+      if (!acc[infection.residentRef.id]) acc[infection.residentRef.id] = [];
+      if (!acc[infection.residentRef.id].includes(label)) acc[infection.residentRef.id].push(label);
+      return acc;
+    }, {});
+
+    startPrint("census-rounding", () => {
+      const rows = filteredResidents
+        .slice()
+        .sort((a, b) => (a.currentUnit || "").localeCompare(b.currentUnit || "") || (a.currentRoom || "").localeCompare(b.currentRoom || ""))
+        .map((resident) => ({
+          unit: resident.currentUnit || "",
+          room: resident.currentRoom || "",
+          name: resident.displayName || `${resident.lastName || ""}, ${resident.firstName || ""}`.trim().replace(/^,\s*/, ""),
+          mrn: resident.mrn || "",
+          precautions: (precautionsByMrn[resident.mrn] || []).join(", "),
+        }));
+
+      return {
+        facility: db.data.facilities.byId[activeFacilityId]?.name || "Long Beach Nursing and Rehabilitation Center",
+        title: "Census Rounds Sheet",
+        meta: { unit: filterUnit || "All" },
+        rows,
+      };
+    });
+  };
 
   const handleClearQuarantine = () => {
     const snapshot = { ...store.quarantine };
@@ -395,11 +425,13 @@ export const ResidentBoard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
-          <PrintButton 
-            contentRef={printRef} 
-            title="Resident Census" 
-            label="Print Census" 
-          />
+          <button
+            onClick={handlePrintCensus}
+            className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-50 transition-colors"
+          >
+            <Printer className="w-4 h-4" aria-hidden="true" />
+            Print Census
+          </button>
           <button 
             onClick={() => setShowCensusModal(true)}
             aria-label="Upload or update census file"
@@ -449,7 +481,7 @@ export const ResidentBoard: React.FC = () => {
       )}
 
       {/* Main Layout */}
-      <div ref={printRef} className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex overflow-x-auto p-4 gap-4">
           {Object.keys(units).length === 0 && (
             <div className="flex-1 flex items-center justify-center">
