@@ -3,7 +3,7 @@ import { Syringe } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { useToast } from '../../hooks/useToast';
-import { generatePDF } from '../../reports/engine';
+import { generatePDF, getDataForProfile } from '../../reports/engine';
 import { computeVaxGaps } from '../../utils/vaxReofferUtils';
 import { PrintButton } from '../../components/PrintButton';
 
@@ -12,7 +12,7 @@ type VaccineFilter = 'All' | (typeof VACCINES)[number];
 
 export const VaxReofferList: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { updateDB, db } = useDatabase();
   const { toast } = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -76,7 +76,11 @@ export const VaxReofferList: React.FC = () => {
     });
 
     if (consentProfile) {
-      generatePDF(consentProfile);
+      generatePDF(consentProfile, async () => ({
+        profile: consentProfile,
+        data: getDataForProfile(store, consentProfile),
+        facility: db.data.facilities.byId[activeFacilityId],
+      }));
     } else {
       toast({
         title: 'No vaccine consent form template found.',

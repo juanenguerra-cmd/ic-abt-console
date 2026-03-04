@@ -1,6 +1,5 @@
 import React, { ReactNode, useRef } from "react";
 import { X, Printer } from "lucide-react";
-import { usePrint } from "../../print/usePrint";
 
 interface Props {
   title: string;
@@ -24,43 +23,7 @@ export const PrintLayout: React.FC<Props> = ({
   children,
 }) => {
   const printDate = new Date().toLocaleString();
-  const { requestPrint } = usePrint();
   const contentRef = useRef<HTMLDivElement>(null);
-
-  const handlePrint = () => {
-    requestPrint(
-      <div className="max-w-[8.5in] mx-auto p-8 font-sans bg-white text-black">
-        <header className="border-b-2 border-neutral-800 pb-4 mb-6 flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-neutral-900 uppercase tracking-tight">{facilityName}</h1>
-            {facilityAddress && <p className="text-sm text-neutral-600 mt-1">{facilityAddress}</p>}
-            {dohId && <p className="text-sm text-neutral-500 font-mono mt-0.5">Facility ID: {dohId}</p>}
-          </div>
-          <div className="text-right">
-            <h2 className="text-xl font-semibold text-neutral-800">{title}</h2>
-            <p className="text-sm text-neutral-500 mt-1">Generated: {printDate}</p>
-            {filtersSummary && <p className="text-sm text-neutral-500">Filters: {filtersSummary}</p>}
-            {auditorName && <p className="text-sm text-neutral-600 mt-0.5">Prepared by: {auditorName}</p>}
-          </div>
-        </header>
-
-        {printBlockedReason && (
-          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Printable content validation warning:</strong> {printBlockedReason}
-          </div>
-        )}
-
-        <main>
-          {children}
-        </main>
-
-        <footer className="border-t border-neutral-200 pt-2 mt-8 flex justify-between items-center text-[10px] text-neutral-400 uppercase tracking-wider">
-          <span>Confidential – PHI – Do Not Distribute</span>
-          <span className="page-footer"></span>
-        </footer>
-      </div>
-    );
-  };
 
   return (
     <div className="min-h-screen bg-white text-black font-sans">
@@ -133,7 +96,7 @@ export const PrintLayout: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => handlePrint()}
+            onClick={() => window.print()}
             disabled={Boolean(printBlockedReason)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md font-medium transition-colors flex items-center gap-2"
           >
