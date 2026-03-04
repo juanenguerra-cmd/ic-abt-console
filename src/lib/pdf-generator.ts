@@ -42,6 +42,9 @@ const BASE_TEMPLATE = `
     .form-header { text-align: center; font-weight: 700; font-size: 12pt; margin-bottom: 4px; }
     .form-title { font-size: 14pt; font-weight: 700; text-align: center; margin: 12px 0 8px; border-bottom: 2px solid #000; padding-bottom: 4px; }
     .form-footer { margin-top: auto; padding-top: 12px; font-size: 9.5pt; line-height: 1.4; }
+    .covid-consent-template-page { min-height: auto; padding: 0; }
+    .covid-consent-image { width: 100%; height: auto; display: block; }
+    img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   </style>
   <div class="form-container">
     {{content}}
