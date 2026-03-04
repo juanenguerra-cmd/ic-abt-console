@@ -44,6 +44,9 @@ const BASE_TEMPLATE = `
       .signature-caption-date { width: 14ch; text-align: right; }
       .asterisk-divider { margin: 15px 0; text-align: center; letter-spacing: 1px; font-size: 9pt; color: #666; }
       .vax-footer { margin-top: auto; padding-top: 12px; font-size: 9.5pt; font-style: italic; line-height: 1.4; }
+      .form-header { text-align: center; font-weight: 700; font-size: 12pt; margin-bottom: 4px; }
+      .form-title { font-size: 14pt; font-weight: 700; text-align: center; margin: 12px 0 8px; border-bottom: 2px solid #000; padding-bottom: 4px; }
+      .form-footer { margin-top: auto; padding-top: 12px; font-size: 9.5pt; line-height: 1.4; }
     </style>
   </head>
   <body>

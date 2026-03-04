@@ -7,7 +7,50 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
     description: 'General consent form for admission and treatment.',
     category: 'resident',
     icon: 'file-text',
-    templateContent: `<div><h1>Consent for Treatment</h1><p>Resident: {{residentName}}</p></div>`,
+    templateContent: `<article class="form-page consent-treatment-form">
+  <p class="form-header">{{facilityName}}</p>
+  <p class="form-header">CONSENT FOR ADMISSION AND TREATMENT</p>
+
+  <p class="resident-name-row">Resident's Name: {{residentName}}&nbsp;&nbsp; Room: {{room}}&nbsp;&nbsp; Unit: {{unit}}&nbsp;&nbsp; Date of Admission: {{date}}</p>
+
+  <h2 class="form-title">GENERAL CONSENT FOR TREATMENT</h2>
+
+  <h3 class="underlined-heading">Authorization for Treatment</h3>
+  <p class="consent-paragraph">I, the undersigned, hereby voluntarily consent to and authorize the physicians, nurses, and other healthcare staff of {{facilityName}} to administer such medical, nursing, and other health care services, treatments, and procedures as may be deemed necessary or advisable in the treatment and care of the above-named resident. This includes routine diagnostic procedures, therapeutic services, and nursing care.</p>
+
+  <h3 class="underlined-heading">Emergency Treatment</h3>
+  <p class="consent-paragraph">In the event of an emergency, I authorize the facility to take all necessary steps to protect the health and safety of the resident, including transfer to a hospital for emergency medical treatment, prior to obtaining additional consent.</p>
+
+  <h3 class="underlined-heading">Release of Information</h3>
+  <p class="consent-paragraph">I authorize {{facilityName}} to release medical information as required for treatment, payment, and healthcare operations, and to comply with applicable state and federal laws, including reporting obligations.</p>
+
+  <h3 class="underlined-heading">Resident/Representative Consent</h3>
+  <p class="consent-paragraph">By signing below, I confirm that I have read, or had read to me, the above statements. I understand and agree to the terms stated. I acknowledge that I have had the opportunity to ask questions and that they have been answered to my satisfaction.</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Resident or Authorized Representative</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
+
+  <h3 class="underlined-heading">Relationship to Resident (if signed by representative)</h3>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Relationship / Authority (e.g., Power of Attorney, Guardian)</span>
+      <span class="signature-caption-date">Print Name</span>
+    </div>
+  </div>
+
+  <p class="form-footer">Witnessed by: _________________________________ &nbsp;&nbsp; Title: _________________ &nbsp;&nbsp; Date: __________</p>
+</article>`,
   },
   {
     id: 'hipaa-ack',
@@ -15,7 +58,59 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
     description: 'Acknowledgement of receipt of privacy practices.',
     category: 'resident',
     icon: 'file-text',
-    templateContent: `<div><h1>HIPAA Notice Acknowledgement</h1><p>Resident: {{residentName}}</p></div>`,
+    templateContent: `<article class="form-page hipaa-ack-form">
+  <p class="form-header">{{facilityName}}</p>
+  <p class="form-header">ACKNOWLEDGEMENT OF RECEIPT OF NOTICE OF PRIVACY PRACTICES</p>
+
+  <p class="resident-name-row">Resident's Name: {{residentName}}&nbsp;&nbsp; Date: {{date}}</p>
+
+  <h2 class="form-title">HIPAA NOTICE ACKNOWLEDGEMENT</h2>
+
+  <h3 class="underlined-heading">Your Privacy Rights</h3>
+  <p class="consent-paragraph">{{facilityName}} is required by the Health Insurance Portability and Accountability Act (HIPAA) to maintain the privacy of your protected health information (PHI), to provide you with notice of our legal duties and privacy practices, and to abide by the terms of our Notice of Privacy Practices.</p>
+
+  <h3 class="underlined-heading">How We May Use and Disclose Your Health Information</h3>
+  <p class="consent-paragraph">We may use and disclose your protected health information for the following purposes without your written authorization:</p>
+  <ul class="list">
+    <li><strong>Treatment:</strong> To provide, coordinate, or manage your health care and related services.</li>
+    <li><strong>Payment:</strong> To bill and collect payment for services rendered, including submission to Medicare, Medicaid, or other insurers.</li>
+    <li><strong>Healthcare Operations:</strong> For quality assessment, staff training, compliance reviews, and other operational activities.</li>
+    <li><strong>As Required by Law:</strong> To comply with state and federal reporting requirements, public health activities, or court orders.</li>
+  </ul>
+
+  <h3 class="underlined-heading">Your Rights Regarding Your Health Information</h3>
+  <ul class="list">
+    <li>Request restrictions on certain uses and disclosures of your health information.</li>
+    <li>Request to receive communications by alternative means or at alternative locations.</li>
+    <li>Inspect and copy your health information as provided by law.</li>
+    <li>Request an amendment to your health information.</li>
+    <li>Receive an accounting of certain disclosures of your health information.</li>
+    <li>Receive a paper copy of our Notice of Privacy Practices upon request.</li>
+  </ul>
+
+  <h3 class="underlined-heading">Acknowledgement of Receipt</h3>
+  <p class="consent-paragraph">By signing below, I acknowledge that I have received a copy of {{facilityName}}'s Notice of Privacy Practices. I understand that this facility is required to abide by the terms of the Notice currently in effect. I also understand that the facility reserves the right to change its Notice and that I may obtain a revised copy upon request.</p>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Resident or Authorized Representative</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Print Name / Relationship (if signed by representative)</span>
+    </div>
+  </div>
+
+  <p class="form-footer">If the resident or representative refused to sign or was unable to sign, please document: _________________________________ </p>
+</article>`,
   },
   {
     id: 'financial-responsibility',
@@ -23,7 +118,55 @@ const DEFAULT_RESIDENT_FORMS: FormTemplate[] = [
     description: 'Resident and responsible party financial agreement.',
     category: 'resident',
     icon: 'file-text',
-    templateContent: `<div><h1>Financial Responsibility Agreement</h1><p>Resident: {{residentName}}</p></div>`,
+    templateContent: `<article class="form-page financial-responsibility-form">
+  <p class="form-header">{{facilityName}}</p>
+  <p class="form-header">FINANCIAL RESPONSIBILITY AGREEMENT</p>
+
+  <p class="resident-name-row">Resident's Name: {{residentName}}&nbsp;&nbsp; Room: {{room}}&nbsp;&nbsp; Date of Admission: {{date}}</p>
+
+  <h2 class="form-title">AGREEMENT FOR PAYMENT OF CHARGES</h2>
+
+  <h3 class="underlined-heading">Responsible Party Agreement</h3>
+  <p class="consent-paragraph">The undersigned ("Responsible Party") agrees to be responsible for payment of all charges for services rendered to the above-named resident by {{facilityName}}, in accordance with the rates and policies established by the facility. This includes, but is not limited to, room and board, nursing care, therapy services, medications, and ancillary services.</p>
+
+  <h3 class="underlined-heading">Insurance Assignment and Billing</h3>
+  <p class="consent-paragraph">The Responsible Party authorizes {{facilityName}} to bill Medicare, Medicaid, and any other insurance carriers on behalf of the resident. The Responsible Party assigns all benefits payable under the resident's insurance policies to the facility for services rendered. The Responsible Party agrees to promptly provide the facility with all information necessary for billing purposes.</p>
+
+  <h3 class="underlined-heading">Personal Funds</h3>
+  <p class="consent-paragraph">The Responsible Party acknowledges their obligation to ensure that the resident's monthly personal needs allowance (as required by applicable law) is available. The Responsible Party agrees to notify the facility promptly of any changes in the resident's financial status or insurance coverage.</p>
+
+  <h3 class="underlined-heading">Non-Covered Services</h3>
+  <p class="consent-paragraph">The Responsible Party understands and agrees to pay for services not covered by Medicare, Medicaid, or other third-party payers. The facility will provide written notice prior to providing non-covered services when possible.</p>
+
+  <h3 class="underlined-heading">Discharge Planning</h3>
+  <p class="consent-paragraph">In the event of discharge due to non-payment, the facility will provide reasonable notice and assist in arranging appropriate placement, in accordance with applicable law and facility policy.</p>
+
+  <h3 class="underlined-heading">Agreement and Signatures</h3>
+  <p class="consent-paragraph">By signing below, I acknowledge that I have read, understood, and agree to the terms of this Financial Responsibility Agreement. I understand that this agreement is a condition of admission and continued stay at {{facilityName}}.</p>
+
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Signature of Responsible Party</span>
+      <span class="signature-caption-date">Date</span>
+    </div>
+  </div>
+  <div class="signature-block">
+    <div class="signature-line-row">
+      <div class="signature-line"></div>
+      <div class="signature-date"></div>
+    </div>
+    <div class="signature-caption">
+      <span class="signature-caption-label">Print Name / Relationship to Resident</span>
+      <span class="signature-caption-date">Phone Number</span>
+    </div>
+  </div>
+
+  <p class="form-footer">Facility Representative: _________________________________ &nbsp;&nbsp; Title: _________________ &nbsp;&nbsp; Date: __________</p>
+</article>`,
   },
   {
     id: 'pain-medication-education',
