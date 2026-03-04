@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { Resident, VaxEvent, IPEvent, ABTCourse } from '../../../domain/models';
 import { PrintButton } from '../../../components/PrintButton';
+import { formatDateLikeForDisplay } from '../../../lib/dateUtils';
 
 interface Props {
   residentId: string;
@@ -127,7 +128,7 @@ export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }
             <div className="text-sm">
               <p className="font-bold">Vaccinations given prior to admission:</p>
               {vaxHistory.length > 0 ? vaxHistory.map(v => (
-                <p key={v.id} className="ml-4">• {v.vaccine} ({v.dateGiven ? new Date(v.dateGiven).toLocaleDateString() : 'N/A'})</p>
+                <p key={v.id} className="ml-4">• {v.vaccine} ({v.dateGiven ? formatDateLikeForDisplay(v.dateGiven) : 'N/A'})</p>
               )) : <p className="ml-4">• None documented</p>}
 
               <p className="font-bold mt-2">Infection/IP tracker history:</p>

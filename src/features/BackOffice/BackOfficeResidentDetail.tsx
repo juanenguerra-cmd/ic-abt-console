@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Resident, IPEvent, ABTCourse, VaxEvent } from '../../domain/models';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ArrowLeft, Plus, Edit, Trash2 } from 'lucide-react';
+import { dateLikeToEpochMs, formatDateLikeForDisplay } from '../../lib/dateUtils';
 
 interface Props {
   resident: Resident;
@@ -29,7 +30,7 @@ export const BackOfficeResidentDetail: React.FC<Props> = ({ resident, onBack, on
 
   const vaxEvents = Object.values(store.vaxEvents || {}).filter(
     vax => vax.residentRef.id === resident.mrn
-  ).sort((a, b) => new Date(b.administeredDate || b.dateGiven || b.createdAt).getTime() - new Date(a.administeredDate || a.dateGiven || a.createdAt).getTime());
+  ).sort((a, b) => dateLikeToEpochMs(b.administeredDate || b.dateGiven || b.createdAt) - dateLikeToEpochMs(a.administeredDate || a.dateGiven || a.createdAt));
 
   const handleDeleteIp = (id: string) => {
     if (confirm('Are you sure you want to delete this IP event?')) {
@@ -245,7 +246,7 @@ export const BackOfficeResidentDetail: React.FC<Props> = ({ resident, onBack, on
                     ) : (
                       vaxEvents.map(event => (
                         <tr key={event.id} className="hover:bg-neutral-50">
-                          <td className="px-4 py-3">{new Date(event.administeredDate || event.dateGiven || event.createdAt).toLocaleDateString()}</td>
+                          <td className="px-4 py-3">{formatDateLikeForDisplay(event.administeredDate || event.dateGiven || event.createdAt)}</td>
                           <td className="px-4 py-3">{event.vaccine || '-'}</td>
                           <td className="px-4 py-3">{event.dose || '-'}</td>
                           <td className="px-4 py-3">{event.status}</td>

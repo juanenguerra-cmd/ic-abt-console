@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2, GitBranch } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
+import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 
 interface Props {
   residentId: string;
@@ -418,7 +419,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         Vaccine: {vax.vaccine} <span className="uppercase text-[10px] ml-1 px-1.5 py-0.5 bg-white rounded border">{vax.status}</span>
                       </p>
                       <p className={`text-xs ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-700' : 'text-neutral-500'}`}>
-                        {vax.status === 'given' ? `Given: ${vax.dateGiven ? new Date(vax.dateGiven).toLocaleDateString() : 'Unknown'}` : `Due: ${vax.dueDate ? new Date(vax.dueDate).toLocaleDateString() : 'Unknown'}`}
+                        {vax.status === 'given' ? `Given: ${formatDateLikeForDisplay(vax.dateGiven)}` : `Due: ${formatDateLikeForDisplay(vax.dueDate)}`}
                       </p>
                     </div>
                     <button

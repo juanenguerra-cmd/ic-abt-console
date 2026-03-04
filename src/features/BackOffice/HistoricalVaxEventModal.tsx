@@ -3,6 +3,11 @@ import { X, Save } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, VaxEvent } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  normalizeForgivingDateInput,
+  toLocalDateInputValue,
+  todayLocalDateInputValue,
+} from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -23,7 +28,7 @@ export const HistoricalVaxEventModal: React.FC<Props> = ({ onClose, prefilledRes
   const [residentQuery, setResidentQuery] = useState('');
   const [vaccine, setVaccine] = useState(existingEvent?.vaccine || 'Influenza');
   const [administeredDate, setAdministeredDate] = useState(
-    (existingEvent?.administeredDate || existingEvent?.dateGiven)?.split('T')[0] || new Date().toISOString().split('T')[0],
+    toLocalDateInputValue(existingEvent?.administeredDate || existingEvent?.dateGiven) || todayLocalDateInputValue(),
   );
   const [dose, setDose] = useState<VaxEvent['dose']>(existingEvent?.dose || 'Single');
   const [lotNumber, setLotNumber] = useState(existingEvent?.lotNumber || '');
@@ -42,13 +47,14 @@ export const HistoricalVaxEventModal: React.FC<Props> = ({ onClose, prefilledRes
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!residentId) return alert('Please select a resident.');
-    if (!administeredDate) return alert('Administered date is required.');
+    const normalizedAdministeredDate = normalizeForgivingDateInput(administeredDate);
+    if (!normalizedAdministeredDate) return alert('Invalid administered date. Use YYYY-MM-DD or MM/DD/YYYY.');
 
     const duplicate = (Object.values(store.vaxEvents || {}) as VaxEvent[]).find(v =>
       v.id !== existingEvent?.id &&
       v.residentRef.id === residentId &&
       v.vaccine === vaccine &&
-      (v.administeredDate || v.dateGiven)?.split('T')[0] === administeredDate,
+      toLocalDateInputValue(v.administeredDate || v.dateGiven) === normalizedAdministeredDate,
     );
 
     if (duplicate && !window.confirm('A matching VAX event already exists for this resident/date/type. Create anyway?')) {
@@ -67,8 +73,8 @@ export const HistoricalVaxEventModal: React.FC<Props> = ({ onClose, prefilledRes
         residentRef: { kind: 'mrn', id: residentId },
         vaccine,
         status,
-        administeredDate: new Date(administeredDate).toISOString(),
-        dateGiven: new Date(administeredDate).toISOString(),
+        administeredDate: normalizedAdministeredDate,
+        dateGiven: normalizedAdministeredDate,
         dose: dose || undefined,
         lotNumber: lotNumber || undefined,
         administeredBy: administeredBy || undefined,
@@ -132,7 +138,14 @@ export const HistoricalVaxEventModal: React.FC<Props> = ({ onClose, prefilledRes
               </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Administered Date *</label>
-                <input type="date" required value={administeredDate} onChange={e => setAdministeredDate(e.target.value)} className="w-full border-neutral-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+                <input
+                  type="text"
+                  required
+                  value={administeredDate}
+                  onChange={e => setAdministeredDate(e.target.value)}
+                  placeholder="YYYY-MM-DD or MM/DD/YYYY"
+                  className="w-full border-neutral-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
               </div>
             </div>
 

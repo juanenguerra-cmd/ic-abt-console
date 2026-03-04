@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { VaxEvent } from '../../domain/models';
+import { dateLikeToEpochMs, formatDateLikeForDisplay } from '../../lib/dateUtils';
 import { Edit, Trash2, Search } from 'lucide-react';
 
 interface Props {
@@ -25,11 +26,11 @@ export const GlobalVaxHistory: React.FC<Props> = ({ onEditVaxEvent }) => {
     const matchesSearch = !searchTerm || resident?.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || resident?.mrn?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesVaccine = !vaccineType || v.vaccine === vaccineType;
     const matchesStatus = !status || v.status === status;
-    const eventDate = new Date(v.administeredDate || v.dateGiven || v.createdAt).getTime();
+    const eventDate = dateLikeToEpochMs(v.administeredDate || v.dateGiven || v.createdAt);
     const matchesStart = !startDate || eventDate >= new Date(startDate + 'T00:00:00').getTime();
     const matchesEnd = !endDate || eventDate <= new Date(endDate + 'T23:59:59').getTime();
     return matchesSearch && matchesVaccine && matchesStatus && matchesStart && matchesEnd;
-  }).sort((a, b) => new Date(b.administeredDate || b.dateGiven || b.createdAt).getTime() - new Date(a.administeredDate || a.dateGiven || a.createdAt).getTime());
+  }).sort((a, b) => dateLikeToEpochMs(b.administeredDate || b.dateGiven || b.createdAt) - dateLikeToEpochMs(a.administeredDate || a.dateGiven || a.createdAt));
 
   const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to delete this VAX event?')) return;
@@ -80,7 +81,7 @@ export const GlobalVaxHistory: React.FC<Props> = ({ onEditVaxEvent }) => {
                 return (
                   <tr key={event.id} className="hover:bg-neutral-50">
                     <td className="px-4 py-3 font-medium text-neutral-900">{resident?.displayName || 'Unknown'}<br /><span className="text-xs text-neutral-500 font-normal">{event.residentRef.id}</span></td>
-                    <td className="px-4 py-3">{new Date(event.administeredDate || event.dateGiven || event.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3">{formatDateLikeForDisplay(event.administeredDate || event.dateGiven || event.createdAt)}</td>
                     <td className="px-4 py-3">{event.vaccine || '-'}</td>
                     <td className="px-4 py-3">{event.dose || '-'}</td>
                     <td className="px-4 py-3">{event.status}</td>
