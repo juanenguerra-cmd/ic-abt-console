@@ -1,19 +1,18 @@
 import React, { useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Cell
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 import { TrendingUp, AlertTriangle, Activity, Pill, Users, ShieldAlert, CheckCircle, Stethoscope, ClipboardList } from 'lucide-react';
 
 export const AnalyticsDashboard: React.FC = () => {
   const { store } = useFacilityData();
 
-  // 1. Process Historical Data (Last 6 Months)
+  // ─── 1. Monthly Historical Data (Last 6 Months) ──────────────────────────
   const monthlyData = useMemo(() => {
     const data: Record<string, { month: string; infections: number; abts: number; sortKey: string }> = {};
-    
-    // Initialize last 6 months
+
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -22,88 +21,87 @@ export const AnalyticsDashboard: React.FC = () => {
       data[sortKey] = { month: monthStr, infections: 0, abts: 0, sortKey };
     }
 
-    // Process Infections
+    // FIX: use onsetDate || createdAt (IPEvent has no startDate field)
     Object.values(store.infections || {}).forEach((inf: any) => {
-      if (!inf || !inf.startDate) return;
-      const d = new Date(inf.startDate);
+      if (!inf) return;
+      const rawDate = inf.onsetDate || inf.createdAt;
+      if (!rawDate) return;
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+        ? new Date(rawDate + 'T00:00:00')
+        : new Date(rawDate);
       const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (data[sortKey]) {
-        data[sortKey].infections += 1;
-      }
+      if (data[sortKey]) data[sortKey].infections += 1;
     });
 
-    // Process ABTs
+    // ABTs correctly use startDate
     Object.values(store.abts || {}).forEach((abt: any) => {
       if (!abt || !abt.startDate) return;
-      const d = new Date(abt.startDate);
+      const d = /^\d{4}-\d{2}-\d{2}$/.test(abt.startDate)
+        ? new Date(abt.startDate + 'T00:00:00')
+        : new Date(abt.startDate);
       const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (data[sortKey]) {
-        data[sortKey].abts += 1;
-      }
+      if (data[sortKey]) data[sortKey].abts += 1;
     });
 
     return Object.values(data).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [store.infections, store.abts]);
 
-  // 2. Projections (Simple moving average of last 3 months for the next month)
+  // ─── 2. Projections (3-month moving average + trend factor) ──────────────
   const projections = useMemo(() => {
     if (monthlyData.length < 3) return { infections: 0, abts: 0 };
     const last3 = monthlyData.slice(-3);
-    const avgInfections = Math.round(last3.reduce((sum, d) => sum + d.infections, 0) / 3);
-    const avgAbts = Math.round(last3.reduce((sum, d) => sum + d.abts, 0) / 3);
-    
-    // Add a slight trend factor based on the last month vs the average
+    const avgInfections = last3.reduce((sum, d) => sum + d.infections, 0) / 3;
+    const avgAbts = last3.reduce((sum, d) => sum + d.abts, 0) / 3;
     const lastMonth = last3[2];
-    const trendInfections = lastMonth.infections > avgInfections ? 1.1 : 0.9;
-    const trendAbts = lastMonth.abts > avgAbts ? 1.1 : 0.9;
-
     return {
-      infections: Math.round(avgInfections * trendInfections),
-      abts: Math.round(avgAbts * trendAbts)
+      infections: Math.round(avgInfections * (lastMonth.infections > avgInfections ? 1.1 : 0.9)),
+      abts: Math.round(avgAbts * (lastMonth.abts > avgAbts ? 1.1 : 0.9)),
     };
   }, [monthlyData]);
 
-  // Add projection to chart data
+  // ─── 3. Chart data with projection appended ───────────────────────────────
   const chartDataWithProjection = useMemo(() => {
-    const data = [...monthlyData];
     const nextMonthDate = new Date();
     nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
-    data.push({
-      month: nextMonthDate.toLocaleString('default', { month: 'short' }) + ' (Proj)',
-      infections: projections.infections,
-      abts: projections.abts,
-      sortKey: 'projection'
-    });
-    return data;
+    return [
+      ...monthlyData,
+      {
+        month: nextMonthDate.toLocaleString('default', { month: 'short' }) + ' (Proj)',
+        infections: projections.infections,
+        abts: projections.abts,
+        sortKey: 'projection',
+      },
+    ];
   }, [monthlyData, projections]);
 
-  // 3. Highest Trending Numbers
+  // ─── 4. Top Trending Numbers ──────────────────────────────────────────────
   const topTrends = useMemo(() => {
     const infectionTypes: Record<string, number> = {};
     const abtTypes: Record<string, number> = {};
     const unitInfections: Record<string, number> = {};
 
-    // Calculate top infections
+    // FIX: use infectionCategory (not inf.type)
     Object.values(store.infections || {}).forEach((inf: any) => {
-      if (!inf || !inf.type) return;
-      infectionTypes[inf.type] = (infectionTypes[inf.type] || 0) + 1;
-      
-      // Try to find resident unit
+      if (!inf) return;
+      const cat = inf.infectionCategory;
+      if (cat) infectionTypes[cat] = (infectionTypes[cat] || 0) + 1;
+
       if (inf.residentRef?.id) {
-        const res = store.residents?.[inf.residentRef.id];
-        if (res && res.currentUnit) {
-          unitInfections[res.currentUnit] = (unitInfections[res.currentUnit] || 0) + 1;
-        }
+        const res =
+          inf.residentRef.kind === 'mrn'
+            ? store.residents?.[inf.residentRef.id]
+            : (store.quarantine as any)?.[inf.residentRef.id];
+        const unit = inf.locationSnapshot?.unit || (res as any)?.currentUnit;
+        if (unit) unitInfections[unit] = (unitInfections[unit] || 0) + 1;
       }
     });
 
-    // Calculate top ABTs
     Object.values(store.abts || {}).forEach((abt: any) => {
       if (!abt || !abt.medication) return;
       abtTypes[abt.medication] = (abtTypes[abt.medication] || 0) + 1;
     });
 
-    const getTop3 = (record: Record<string, number>) => 
+    const getTop3 = (record: Record<string, number>) =>
       Object.entries(record)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
@@ -112,35 +110,35 @@ export const AnalyticsDashboard: React.FC = () => {
     return {
       infections: getTop3(infectionTypes),
       abts: getTop3(abtTypes),
-      units: getTop3(unitInfections)
+      units: getTop3(unitInfections),
     };
-  }, [store.infections, store.abts, store.residents]);
+  }, [store.infections, store.abts, store.residents, store.quarantine]);
 
-  // 4. Quality & Stewardship Metrics
+  // ─── 5. Quality & Stewardship Metrics ────────────────────────────────────
+  const MDRO_CATEGORIES = ['mrsa', 'vre', 'c. diff', 'cre', 'esbl', 'mdr-acinetobacter', 'mdr-pseudomonas', 'cdiff', 'c.diff'];
+  const DEVICE_CATEGORIES = ['cauti', 'clabsi', 'vap', 'surgical site infection'];
+
   const qualityMetrics = useMemo(() => {
     const abts = Object.values(store.abts || {});
     const infections = Object.values(store.infections || {});
     const audits = Object.values(store.infectionControlAuditSessions || {});
 
-    // Timeout Compliance (ABTs with a review date)
     const totalAbts = abts.length;
     const reviewedAbts = abts.filter((a: any) => a && a.reviewDate).length;
     const timeoutCompliance = totalAbts > 0 ? Math.round((reviewedAbts / totalAbts) * 100) : 0;
 
-    // MDRO & Device Infections
     let mdroCount = 0;
     let deviceCount = 0;
+
+    // FIX: use infectionCategory (not inf.type / inf.mdro)
     infections.forEach((inf: any) => {
       if (!inf) return;
-      if (inf.mdro || inf.type?.toLowerCase().includes('mrsa') || inf.type?.toLowerCase().includes('c. diff')) {
-        mdroCount++;
-      }
-      if (inf.deviceRelated || inf.type?.toLowerCase().includes('cauti') || inf.type?.toLowerCase().includes('clabsi')) {
-        deviceCount++;
-      }
+      const cat = (inf.infectionCategory || '').toLowerCase();
+      const organism = (inf.organism || '').toLowerCase();
+      if (MDRO_CATEGORIES.some(m => cat.includes(m) || organism.includes(m))) mdroCount++;
+      if (DEVICE_CATEGORIES.some(d => cat.includes(d))) deviceCount++;
     });
 
-    // Average Audit Score
     let totalScore = 0;
     let auditCount = 0;
     audits.forEach((audit: any) => {
@@ -149,31 +147,38 @@ export const AnalyticsDashboard: React.FC = () => {
         auditCount++;
       }
     });
-    const avgAuditScore = auditCount > 0 ? Math.round(totalScore / auditCount) : 0;
 
     return {
       timeoutCompliance,
       mdroCount,
       deviceCount,
-      avgAuditScore,
-      totalInfections: infections.length
+      avgAuditScore: auditCount > 0 ? Math.round(totalScore / auditCount) : 0,
+      totalInfections: infections.length,
     };
   }, [store.abts, store.infections, store.infectionControlAuditSessions]);
 
   const mdroPieData = [
     { name: 'MDROs', value: qualityMetrics.mdroCount, color: '#ef4444' },
-    { name: 'Other Infections', value: Math.max(0, qualityMetrics.totalInfections - qualityMetrics.mdroCount), color: '#e5e7eb' }
+    {
+      name: 'Other Infections',
+      value: Math.max(0, qualityMetrics.totalInfections - qualityMetrics.mdroCount),
+      color: '#e5e7eb',
+    },
   ];
 
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
             <TrendingUp className="w-6 h-6 text-indigo-600" />
             Analytics & Projections
           </h1>
-          <p className="text-neutral-500 mt-1">Historical trends, predictive analytics, and quality stewardship matrices.</p>
+          <p className="text-neutral-500 mt-1">
+            Historical trends, predictive analytics, and quality stewardship matrices.
+          </p>
         </div>
       </div>
 
@@ -188,6 +193,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.timeoutCompliance}%</p>
           </div>
         </div>
+
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-red-50 rounded-lg">
             <ShieldAlert className="w-6 h-6 text-red-600" />
@@ -197,6 +203,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.mdroCount}</p>
           </div>
         </div>
+
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-amber-50 rounded-lg">
             <Stethoscope className="w-6 h-6 text-amber-600" />
@@ -206,13 +213,16 @@ export const AnalyticsDashboard: React.FC = () => {
             <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.deviceCount}</p>
           </div>
         </div>
+
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-indigo-50 rounded-lg">
             <ClipboardList className="w-6 h-6 text-indigo-600" />
           </div>
           <div>
             <p className="text-sm text-neutral-500 font-medium">Avg Audit Compliance</p>
-            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.avgAuditScore > 0 ? `${qualityMetrics.avgAuditScore}%` : 'N/A'}</p>
+            <p className="text-2xl font-bold text-neutral-900">
+              {qualityMetrics.avgAuditScore > 0 ? `${qualityMetrics.avgAuditScore}%` : 'N/A'}
+            </p>
           </div>
         </div>
       </div>
@@ -227,12 +237,18 @@ export const AnalyticsDashboard: React.FC = () => {
             <h3 className="font-semibold text-neutral-900">Top Infection Types</h3>
           </div>
           <div className="space-y-3">
-            {topTrends.infections.length > 0 ? topTrends.infections.map((item, i) => (
-              <div key={i} className="flex justify-between items-center">
-                <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
-                <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">{item.count}</span>
-              </div>
-            )) : <p className="text-sm text-neutral-400">No data available</p>}
+            {topTrends.infections.length > 0 ? (
+              topTrends.infections.map((item, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
+                  <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">
+                    {item.count}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-400">No data available</p>
+            )}
           </div>
         </div>
 
@@ -244,12 +260,18 @@ export const AnalyticsDashboard: React.FC = () => {
             <h3 className="font-semibold text-neutral-900">Top Antibiotics</h3>
           </div>
           <div className="space-y-3">
-            {topTrends.abts.length > 0 ? topTrends.abts.map((item, i) => (
-              <div key={i} className="flex justify-between items-center">
-                <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
-                <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">{item.count}</span>
-              </div>
-            )) : <p className="text-sm text-neutral-400">No data available</p>}
+            {topTrends.abts.length > 0 ? (
+              topTrends.abts.map((item, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
+                  <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">
+                    {item.count}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-400">No data available</p>
+            )}
           </div>
         </div>
 
@@ -261,18 +283,25 @@ export const AnalyticsDashboard: React.FC = () => {
             <h3 className="font-semibold text-neutral-900">Highest Risk Units</h3>
           </div>
           <div className="space-y-3">
-            {topTrends.units.length > 0 ? topTrends.units.map((item, i) => (
-              <div key={i} className="flex justify-between items-center">
-                <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
-                <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">{item.count} cases</span>
-              </div>
-            )) : <p className="text-sm text-neutral-400">No data available</p>}
+            {topTrends.units.length > 0 ? (
+              topTrends.units.map((item, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <span className="text-sm text-neutral-600 truncate pr-2">{item.name}</span>
+                  <span className="text-sm font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-full">
+                    {item.count} cases
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-400">No data available</p>
+            )}
           </div>
         </div>
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
         {/* Infections Trend & Projection */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm lg:col-span-2">
           <div className="mb-4">
@@ -280,47 +309,74 @@ export const AnalyticsDashboard: React.FC = () => {
               <Activity className="w-5 h-5 text-indigo-500" />
               Infections Trend & 1-Month Projection
             </h3>
-            <p className="text-xs text-neutral-500 mt-1">Historical IP events and next month's forecasted volume.</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              Historical IP events and next month's forecasted volume.
+            </p>
           </div>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartDataWithProjection} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorInfections" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="infections" 
-                  name="Infections" 
-                  stroke="#6366f1" 
-                  strokeWidth={3}
-                  fillOpacity={1} 
-                  fill="url(#colorInfections)" 
-                  activeDot={{ r: 6, strokeWidth: 0 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chartDataWithProjection.every(d => d.infections === 0) ? (
+              <div className="h-full flex items-center justify-center text-sm text-neutral-400">
+                No infection records found in the last 6 months.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartDataWithProjection}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorInfections" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                    cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="infections"
+                    name="Infections"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorInfections)"
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* MDRO Breakdown */}
+        {/* MDRO Prevalence Pie */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
           <div className="mb-4">
             <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-red-500" />
               MDRO Prevalence
             </h3>
-            <p className="text-xs text-neutral-500 mt-1">Proportion of infections identified as Multi-Drug Resistant Organisms.</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              Proportion of infections identified as Multi-Drug Resistant Organisms.
+            </p>
           </div>
           <div className="h-64 flex flex-col items-center justify-center relative">
             {qualityMetrics.totalInfections > 0 ? (
@@ -341,8 +397,12 @@ export const AnalyticsDashboard: React.FC = () => {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: 'none',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -366,50 +426,92 @@ export const AnalyticsDashboard: React.FC = () => {
               <Pill className="w-5 h-5 text-emerald-500" />
               Antibiotic Usage & 1-Month Projection
             </h3>
-            <p className="text-xs text-neutral-500 mt-1">Historical ABT courses and next month's forecasted volume.</p>
+            <p className="text-xs text-neutral-500 mt-1">
+              Historical ABT courses and next month's forecasted volume.
+            </p>
           </div>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartDataWithProjection} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ fill: '#f3f4f6' }}
-                />
-                <Bar 
-                  dataKey="abts" 
-                  name="ABT Courses" 
-                  fill="#10b981" 
-                  radius={[4, 4, 0, 0]}
-                  barSize={32}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {chartDataWithProjection.every(d => d.abts === 0) ? (
+              <div className="h-full flex items-center justify-center text-sm text-neutral-400">
+                No antibiotic records found in the last 6 months.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartDataWithProjection}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#6b7280' }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: '8px',
+                      border: 'none',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                    cursor={{ fill: '#f3f4f6' }}
+                  />
+                  <Bar
+                    dataKey="abts"
+                    name="ABT Courses"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    barSize={32}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
-      
-      {/* Summary Insights */}
+
+      {/* AI Analytics Summary */}
       <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
         <h3 className="font-semibold text-indigo-900 mb-2">AI Analytics Summary</h3>
         <ul className="space-y-2 text-sm text-indigo-800">
           <li className="flex items-start gap-2">
             <span className="mt-0.5">•</span>
-            <span>Based on the last 3 months, infection rates are projected to be <strong>{projections.infections}</strong> next month.</span>
+            <span>
+              Based on the last 3 months, infection rates are projected to be{' '}
+              <strong>{projections.infections}</strong> next month.
+            </span>
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5">•</span>
-            <span>Antibiotic stewardship efforts should focus on <strong>{topTrends.abts[0]?.name || 'the most common antibiotics'}</strong>, which is currently the highest prescribed medication.</span>
+            <span>
+              Antibiotic stewardship efforts should focus on{' '}
+              <strong>{topTrends.abts[0]?.name || 'the most common antibiotics'}</strong>, which is
+              currently the highest prescribed medication.
+            </span>
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5">•</span>
-            <span><strong>{topTrends.units[0]?.name || 'Certain units'}</strong> shows the highest concentration of recent infections and may require targeted rounding or environmental audits.</span>
+            <span>
+              <strong>{topTrends.units[0]?.name || 'Certain units'}</strong> shows the highest
+              concentration of recent infections and may require targeted rounding or environmental
+              audits.
+            </span>
           </li>
           <li className="flex items-start gap-2">
             <span className="mt-0.5">•</span>
-            <span>Your 72-hour antibiotic timeout compliance is currently at <strong>{qualityMetrics.timeoutCompliance}%</strong>. {qualityMetrics.timeoutCompliance < 80 ? 'Consider reviewing documentation practices to improve this metric.' : 'Great job maintaining high stewardship standards.'}</span>
+            <span>
+              Your 72-hour antibiotic timeout compliance is currently at{' '}
+              <strong>{qualityMetrics.timeoutCompliance}%</strong>.{' '}
+              {qualityMetrics.timeoutCompliance < 80
+                ? 'Consider reviewing documentation practices to improve this metric.'
+                : 'Great job maintaining high stewardship standards.'}
+            </span>
           </li>
         </ul>
       </div>
