@@ -96,12 +96,12 @@ export const PrintLayout: React.FC<Props> = ({
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.print()}
-            disabled={Boolean(printBlockedReason)}
+            onClick={() => window.alert("Printing is being rebuilt as Export to PDF.")}
+            disabled
             className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md font-medium transition-colors flex items-center gap-2"
           >
             <Printer className="w-4 h-4" />
-            {printBlockedReason ? "Print Blocked" : "Print Now"}
+            Printing is being rebuilt
           </button>
           <button
             onClick={() => window.close()}

@@ -235,7 +235,7 @@ const SurveyPacketsReport: React.FC = () => {
     <div className="space-y-6">
       {/* E6: Line List Export */}
       <div className="no-print flex justify-end gap-2">
-        <PrintButton contentRef={printRef} title="Active Precautions & ABT Line List" />
+        <PrintButton contentRef={printRef} title="Active Precautions & ABT Line List" feature="precautions" />
         <button
           onClick={handleExportLineList}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
