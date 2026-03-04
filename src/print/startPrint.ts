@@ -1,57 +1,48 @@
-export type PrintJobKind = "census-rounding";
+import { PrintJob, PrintJobKind } from './printJob';
+import { cleanupExpiredPrintJobs, savePrintJob } from './printJobStore';
 
-export interface PrintJob<TPayload = unknown> {
-  id: string;
-  kind: PrintJobKind;
-  createdAt: string;
-  payload: TPayload;
-}
-
-const PRINT_JOB_PREFIX = "ltc_print_job_";
-
-function createJobId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export function getPrintJobStorageKey(jobId: string) {
-  return `${PRINT_JOB_PREFIX}${jobId}`;
+function createJobId(): string {
+  return crypto.randomUUID();
 }
 
 export async function startPrint<TPayload>(
   kind: PrintJobKind,
-  buildPayload: () => Promise<TPayload> | TPayload,
-) {
-  const jobId = createJobId();
-  const tab = window.open("about:blank", "_blank");
+  titleOrBuildPayload: string | (() => Promise<TPayload> | TPayload),
+  maybeBuildPayload?: () => Promise<TPayload> | TPayload,
+): Promise<void> {
+  const buildPayload =
+    typeof titleOrBuildPayload === 'function'
+      ? titleOrBuildPayload
+      : maybeBuildPayload;
 
-  if (tab?.document) {
-    tab.document.title = "Preparing print…";
-    tab.document.body.innerHTML = "<p style=\"font-family:Arial,Helvetica,sans-serif;padding:24px\">Preparing print report…</p>";
+  if (!buildPayload) {
+    throw new Error('startPrint requires a payload builder function.');
+  }
+
+  const w = window.open('/print/loading', '_blank', 'noopener,noreferrer');
+  if (!w) {
+    window.alert('Popup blocked. Please allow popups for this site to print.');
+    return;
   }
 
   try {
     const payload = await buildPayload();
+    const jobId = createJobId();
+
     const job: PrintJob<TPayload> = {
       id: jobId,
       kind,
-      createdAt: new Date().toISOString(),
+      createdAt: Date.now(),
+      title: typeof titleOrBuildPayload === 'string' ? titleOrBuildPayload : undefined,
       payload,
     };
 
-    localStorage.setItem(getPrintJobStorageKey(jobId), JSON.stringify(job));
-    const targetUrl = `/print/${kind}?jobId=${encodeURIComponent(jobId)}`;
+    cleanupExpiredPrintJobs();
+    savePrintJob(job);
 
-    if (tab) {
-      tab.location.href = targetUrl;
-      tab.focus();
-    } else {
-      window.open(targetUrl, "_blank");
-    }
+    w.location.href = `/print/${encodeURIComponent(kind)}?jobId=${encodeURIComponent(jobId)}`;
+    w.focus();
   } catch (error) {
-    if (tab?.document) {
-      tab.document.body.innerHTML = `<p style=\"font-family:Arial,Helvetica,sans-serif;color:#b91c1c;padding:24px\">Unable to prepare print report.</p>`;
-    }
-    // eslint-disable-next-line no-console
-    console.error("Failed to start print job", error);
+    w.location.href = `/print/error?msg=${encodeURIComponent(String(error))}`;
   }
 }

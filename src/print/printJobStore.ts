@@ -1,43 +1,59 @@
 import { PrintJob } from './printJob';
 
 const KEY = 'PRINT_JOBS_V1';
+const TTL_MS = 10 * 60 * 1000;
 
-function readMap(): Record<string, PrintJob> {
+function readAll(): Record<string, PrintJob> {
   try {
-    const raw = sessionStorage.getItem(KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, PrintJob>;
+    const raw = localStorage.getItem(KEY);
+    return raw ? (JSON.parse(raw) as Record<string, PrintJob>) : {};
   } catch {
     return {};
   }
 }
 
-function writeMap(next: Record<string, PrintJob>) {
-  sessionStorage.setItem(KEY, JSON.stringify(next));
+function writeAll(map: Record<string, PrintJob>): void {
+  localStorage.setItem(KEY, JSON.stringify(map));
 }
 
 export function savePrintJob(job: PrintJob): void {
-  const map = readMap();
+  const map = readAll();
   map[job.id] = job;
-
-  // trim stale jobs (older than 30min) + cap map size
-  const now = Date.now();
-  const entries = Object.entries(map)
-    .filter(([, value]) => now - value.createdAt < 30 * 60 * 1000)
-    .sort((a, b) => b[1].createdAt - a[1].createdAt)
-    .slice(0, 100);
-
-  writeMap(Object.fromEntries(entries));
+  writeAll(map);
 }
 
 export function loadPrintJob(id: string): PrintJob | null {
-  const map = readMap();
-  return map[id] ?? null;
+  const map = readAll();
+  const job = map[id];
+  if (!job) return null;
+
+  if (Date.now() - job.createdAt > TTL_MS) {
+    delete map[id];
+    writeAll(map);
+    return null;
+  }
+
+  return job;
 }
 
 export function deletePrintJob(id: string): void {
-  const map = readMap();
-  if (!(id in map)) return;
-  delete map[id];
-  writeMap(map);
+  const map = readAll();
+  if (map[id]) {
+    delete map[id];
+    writeAll(map);
+  }
+}
+
+export function cleanupExpiredPrintJobs(): void {
+  const map = readAll();
+  let changed = false;
+
+  for (const [id, job] of Object.entries(map)) {
+    if (!job?.createdAt || Date.now() - job.createdAt > TTL_MS) {
+      delete map[id];
+      changed = true;
+    }
+  }
+
+  if (changed) writeAll(map);
 }
