@@ -5,6 +5,7 @@ import { useDatabase, useFacilityData } from '../../app/providers';
 import { useToast } from '../../hooks/useToast';
 import { generatePDF } from '../../reports/engine';
 import { computeVaxGaps } from '../../utils/vaxReofferUtils';
+import { PrintButton } from '../../components/PrintButton';
 
 const VACCINES = ['Influenza', 'Covid-19', 'Pneumococcal'] as const;
 type VaccineFilter = 'All' | (typeof VACCINES)[number];
@@ -17,6 +18,7 @@ export const VaxReofferList: React.FC = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filterVaccine, setFilterVaccine] = useState<VaccineFilter>('All');
   const [confirmedOffer, setConfirmedOffer] = useState<string | null>(null);
+  const printRef = React.useRef<HTMLDivElement>(null);
 
   const gaps = useMemo(() => computeVaxGaps(store.residents, store.vaxEvents), [store.residents, store.vaxEvents]);
   const filtered = useMemo(
@@ -104,17 +106,23 @@ export const VaxReofferList: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-neutral-200 bg-white p-4">
-        <h3 className="text-base font-bold text-neutral-900">Vaccine Re-offer List</h3>
-        <p className="mt-1 text-sm text-neutral-600">
-          Influenza: {summary.Influenza} · Covid-19: {summary['Covid-19']} · Pneumococcal: {summary.Pneumococcal}
-        </p>
-        {!consentProfile && (
-          <p className="mt-2 text-xs text-amber-700">No vaccine consent template detected in Reports &gt; Forms.</p>
-        )}
+      <div className="no-print rounded-lg border border-neutral-200 bg-white p-4 flex justify-between items-start">
+        <div>
+          <h3 className="text-base font-bold text-neutral-900">Vaccine Re-offer List</h3>
+          <p className="mt-1 text-sm text-neutral-600">
+            Influenza: {summary.Influenza} · Covid-19: {summary['Covid-19']} · Pneumococcal: {summary.Pneumococcal}
+          </p>
+          {!consentProfile && (
+            <p className="mt-2 text-xs text-amber-700">No vaccine consent template detected in Reports &gt; Forms.</p>
+          )}
+        </div>
+        <div className="flex gap-2">
+           <PrintButton contentRef={printRef} title="Vaccine Re-offer List" />
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-print flex flex-wrap gap-2 justify-between items-center">
+        <div className="flex gap-2">
         {(['All', ...VACCINES] as VaccineFilter[]).map((option) => (
           <button
             key={option}
@@ -126,23 +134,35 @@ export const VaxReofferList: React.FC = () => {
             {option}
           </button>
         ))}
+        </div>
+        {/* Print Button Placeholder - will fix in next step if import needed */}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+           <h2 className="text-xl font-bold">Vaccine Re-offer List</h2>
+           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow">
+        <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
+          <h3 className="text-lg leading-6 font-bold text-indigo-900">Re-offer Candidates</h3>
+          <p className="text-xs text-indigo-700 mt-1">Residents missing one or more recommended vaccines</p>
+        </div>
         <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead className="bg-neutral-50">
             <tr>
-              <th className="px-3 py-2" />
+              <th className="no-print px-3 py-2" />
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-neutral-500">Resident Name</th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-neutral-500">Unit/Room</th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase text-neutral-500">Missing Vaccines</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase text-neutral-500">Action</th>
+              <th className="no-print px-3 py-2 text-left text-xs font-medium uppercase text-neutral-500">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-200 bg-white">
             {filtered.map((gap) => (
               <tr key={gap.residentMrn}>
-                <td className="px-3 py-2">
+                <td className="no-print px-3 py-2">
                   <input type="checkbox" checked={selected.has(gap.residentMrn)} onChange={() => toggleResident(gap.residentMrn)} />
                 </td>
                 <td className="px-3 py-2 font-medium text-neutral-900">{gap.residentName}</td>
@@ -156,7 +176,7 @@ export const VaxReofferList: React.FC = () => {
                     ))}
                   </div>
                 </td>
-                <td className="px-3 py-2">
+                <td className="no-print px-3 py-2">
                   <div className="flex flex-wrap gap-1">
                     {gap.missingVaccines.map((vaccine) => (
                       <button
@@ -182,9 +202,10 @@ export const VaxReofferList: React.FC = () => {
           </tbody>
         </table>
       </div>
+      </div>
 
       {selected.size > 0 && (
-        <div className="flex justify-end">
+        <div className="no-print flex justify-end">
           <button
             onClick={offerSelected}
             className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
