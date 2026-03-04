@@ -1,34 +1,54 @@
 import React, { useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import {
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
-import { TrendingUp, AlertTriangle, Activity, Pill, Users, ShieldAlert, CheckCircle, Stethoscope, ClipboardList } from 'lucide-react';
+import {
+  TrendingUp, AlertTriangle, Activity, Pill, Users,
+  ShieldAlert, CheckCircle, Stethoscope, ClipboardList
+} from 'lucide-react';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const MDRO_CATEGORIES = [
+  'mrsa', 'vre', 'c. diff', 'cdiff', 'c.diff',
+  'cre', 'esbl', 'mdr-acinetobacter', 'mdr-pseudomonas', 'mdro',
+];
+const DEVICE_CATEGORIES = [
+  'cauti', 'clabsi', 'vap', 'surgical site infection',
+  'catheter-associated', 'central line', 'ventilator',
+];
+
+/** Safely parse a date string as local time (avoids UTC midnight shift on YYYY-MM-DD). */
+const parseLocalDate = (raw: string): Date =>
+  /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw);
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export const AnalyticsDashboard: React.FC = () => {
   const { store } = useFacilityData();
 
-  // ─── 1. Monthly Historical Data (Last 6 Months) ──────────────────────────
+  // ── 1. Monthly Historical Data (Last 6 Months) ─────────────────────────────
   const monthlyData = useMemo(() => {
     const data: Record<string, { month: string; infections: number; abts: number; sortKey: string }> = {};
 
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStr = d.toLocaleString('default', { month: 'short' });
       const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      data[sortKey] = { month: monthStr, infections: 0, abts: 0, sortKey };
+      data[sortKey] = {
+        month: d.toLocaleString('default', { month: 'short' }),
+        infections: 0,
+        abts: 0,
+        sortKey,
+      };
     }
 
-    // FIX: use onsetDate || createdAt (IPEvent has no startDate field)
+    // FIX: IPEvent uses onsetDate || createdAt — there is no startDate on infections
     Object.values(store.infections || {}).forEach((inf: any) => {
       if (!inf) return;
-      const rawDate = inf.onsetDate || inf.createdAt;
-      if (!rawDate) return;
-      const d = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-        ? new Date(rawDate + 'T00:00:00')
-        : new Date(rawDate);
+      const raw = inf.onsetDate || inf.createdAt;
+      if (!raw) return;
+      const d = parseLocalDate(raw);
       const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (data[sortKey]) data[sortKey].infections += 1;
     });
@@ -36,9 +56,7 @@ export const AnalyticsDashboard: React.FC = () => {
     // ABTs correctly use startDate
     Object.values(store.abts || {}).forEach((abt: any) => {
       if (!abt || !abt.startDate) return;
-      const d = /^\d{4}-\d{2}-\d{2}$/.test(abt.startDate)
-        ? new Date(abt.startDate + 'T00:00:00')
-        : new Date(abt.startDate);
+      const d = parseLocalDate(abt.startDate);
       const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (data[sortKey]) data[sortKey].abts += 1;
     });
@@ -46,12 +64,12 @@ export const AnalyticsDashboard: React.FC = () => {
     return Object.values(data).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
   }, [store.infections, store.abts]);
 
-  // ─── 2. Projections (3-month moving average + trend factor) ──────────────
+  // ── 2. Projections (3-month moving average + trend factor) ─────────────────
   const projections = useMemo(() => {
     if (monthlyData.length < 3) return { infections: 0, abts: 0 };
     const last3 = monthlyData.slice(-3);
-    const avgInfections = last3.reduce((sum, d) => sum + d.infections, 0) / 3;
-    const avgAbts = last3.reduce((sum, d) => sum + d.abts, 0) / 3;
+    const avgInfections = last3.reduce((s, d) => s + d.infections, 0) / 3;
+    const avgAbts = last3.reduce((s, d) => s + d.abts, 0) / 3;
     const lastMonth = last3[2];
     return {
       infections: Math.round(avgInfections * (lastMonth.infections > avgInfections ? 1.1 : 0.9)),
@@ -59,7 +77,7 @@ export const AnalyticsDashboard: React.FC = () => {
     };
   }, [monthlyData]);
 
-  // ─── 3. Chart data with projection appended ───────────────────────────────
+  // ── 3. Chart data with projection appended ─────────────────────────────────
   const chartDataWithProjection = useMemo(() => {
     const nextMonthDate = new Date();
     nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
@@ -74,13 +92,13 @@ export const AnalyticsDashboard: React.FC = () => {
     ];
   }, [monthlyData, projections]);
 
-  // ─── 4. Top Trending Numbers ──────────────────────────────────────────────
+  // ── 4. Top Trending Numbers ─────────────────────────────────────────────────
   const topTrends = useMemo(() => {
     const infectionTypes: Record<string, number> = {};
     const abtTypes: Record<string, number> = {};
     const unitInfections: Record<string, number> = {};
 
-    // FIX: use infectionCategory (not inf.type)
+    // FIX: use infectionCategory (not inf.type — that field does not exist)
     Object.values(store.infections || {}).forEach((inf: any) => {
       if (!inf) return;
       const cat = inf.infectionCategory;
@@ -114,48 +132,56 @@ export const AnalyticsDashboard: React.FC = () => {
     };
   }, [store.infections, store.abts, store.residents, store.quarantine]);
 
-  // ─── 5. Quality & Stewardship Metrics ────────────────────────────────────
-  const MDRO_CATEGORIES = ['mrsa', 'vre', 'c. diff', 'cre', 'esbl', 'mdr-acinetobacter', 'mdr-pseudomonas', 'cdiff', 'c.diff'];
-  const DEVICE_CATEGORIES = ['cauti', 'clabsi', 'vap', 'surgical site infection'];
-
+  // ── 5. Quality & Stewardship Metrics ───────────────────────────────────────
   const qualityMetrics = useMemo(() => {
     const abts = Object.values(store.abts || {});
     const infections = Object.values(store.infections || {});
-    const audits = Object.values(store.infectionControlAuditSessions || {});
 
+    // FIX 1: ABTCourse has no reviewDate — use indication as a proxy for
+    // "documented 72h review" (clinician filled in the indication = reviewed)
     const totalAbts = abts.length;
-    const reviewedAbts = abts.filter((a: any) => a && a.reviewDate).length;
-    const timeoutCompliance = totalAbts > 0 ? Math.round((reviewedAbts / totalAbts) * 100) : 0;
+    const reviewedAbts = abts.filter(
+      (a: any) => a && (a.reviewDate || a.reviewedAt || a.indication?.trim())
+    ).length;
+    const timeoutCompliance =
+      totalAbts > 0 ? Math.round((reviewedAbts / totalAbts) * 100) : 0;
 
+    // FIX 2: use infectionCategory + organism (not inf.type / inf.mdro)
     let mdroCount = 0;
     let deviceCount = 0;
-
-    // FIX: use infectionCategory (not inf.type / inf.mdro)
     infections.forEach((inf: any) => {
       if (!inf) return;
       const cat = (inf.infectionCategory || '').toLowerCase();
-      const organism = (inf.organism || '').toLowerCase();
-      if (MDRO_CATEGORIES.some(m => cat.includes(m) || organism.includes(m))) mdroCount++;
+      const org = (inf.organism || '').toLowerCase();
+      if (MDRO_CATEGORIES.some(m => cat.includes(m) || org.includes(m))) mdroCount++;
       if (DEVICE_CATEGORIES.some(d => cat.includes(d))) deviceCount++;
     });
 
-    let totalScore = 0;
-    let auditCount = 0;
-    audits.forEach((audit: any) => {
-      if (audit && typeof audit.score === 'number') {
-        totalScore += audit.score;
-        auditCount++;
-      }
-    });
+    // FIX 3: compute audit compliance from infectionControlAuditItems
+    // (sessions don't store a numeric score — items hold individual pass/fail)
+    const auditItems = Object.values(store.infectionControlAuditItems || {});
+    const totalItems = auditItems.filter((i: any) => i != null).length;
+    const compliantItems = auditItems.filter(
+      (i: any) =>
+        i &&
+        (i.compliant === true ||
+          i.result === 'compliant' ||
+          i.status === 'pass' ||
+          i.response === 'yes' ||
+          i.value === 'yes' ||
+          i.answer === 'yes')
+    ).length;
+    const avgAuditScore =
+      totalItems > 0 ? Math.round((compliantItems / totalItems) * 100) : 0;
 
     return {
       timeoutCompliance,
       mdroCount,
       deviceCount,
-      avgAuditScore: auditCount > 0 ? Math.round(totalScore / auditCount) : 0,
+      avgAuditScore,
       totalInfections: infections.length,
     };
-  }, [store.abts, store.infections, store.infectionControlAuditSessions]);
+  }, [store.abts, store.infections, store.infectionControlAuditItems]);
 
   const mdroPieData = [
     { name: 'MDROs', value: qualityMetrics.mdroCount, color: '#ef4444' },
@@ -166,9 +192,10 @@ export const AnalyticsDashboard: React.FC = () => {
     },
   ];
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -190,7 +217,11 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-neutral-500 font-medium">72h Timeout Compliance</p>
-            <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.timeoutCompliance}%</p>
+            <p className="text-2xl font-bold text-neutral-900">
+              {Object.values(store.abts || {}).length === 0
+                ? 'N/A'
+                : `${qualityMetrics.timeoutCompliance}%`}
+            </p>
           </div>
         </div>
 
@@ -315,8 +346,9 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
           <div className="h-72">
             {chartDataWithProjection.every(d => d.infections === 0) ? (
-              <div className="h-full flex items-center justify-center text-sm text-neutral-400">
-                No infection records found in the last 6 months.
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-neutral-400">
+                <Activity className="w-8 h-8 text-neutral-300" />
+                <p className="text-sm">No infection records in the last 6 months.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -367,7 +399,7 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* MDRO Prevalence Pie */}
+        {/* MDRO Prevalence */}
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
           <div className="mb-4">
             <h3 className="font-semibold text-neutral-900 flex items-center gap-2">
@@ -408,7 +440,9 @@ export const AnalyticsDashboard: React.FC = () => {
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-3xl font-bold text-neutral-900">
-                    {Math.round((qualityMetrics.mdroCount / qualityMetrics.totalInfections) * 100)}%
+                    {Math.round(
+                      (qualityMetrics.mdroCount / qualityMetrics.totalInfections) * 100
+                    )}%
                   </span>
                   <span className="text-xs text-neutral-500">MDRO</span>
                 </div>
@@ -432,8 +466,9 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
           <div className="h-72">
             {chartDataWithProjection.every(d => d.abts === 0) ? (
-              <div className="h-full flex items-center justify-center text-sm text-neutral-400">
-                No antibiotic records found in the last 6 months.
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-neutral-400">
+                <Pill className="w-8 h-8 text-neutral-300" />
+                <p className="text-sm">No antibiotic records in the last 6 months.</p>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -491,8 +526,8 @@ export const AnalyticsDashboard: React.FC = () => {
             <span className="mt-0.5">•</span>
             <span>
               Antibiotic stewardship efforts should focus on{' '}
-              <strong>{topTrends.abts[0]?.name || 'the most common antibiotics'}</strong>, which is
-              currently the highest prescribed medication.
+              <strong>{topTrends.abts[0]?.name || 'the most common antibiotics'}</strong>, which
+              is currently the highest prescribed medication.
             </span>
           </li>
           <li className="flex items-start gap-2">
@@ -515,6 +550,7 @@ export const AnalyticsDashboard: React.FC = () => {
           </li>
         </ul>
       </div>
+
     </div>
   );
 };
