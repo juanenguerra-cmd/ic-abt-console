@@ -1,101 +1,35 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { loadDBAsync } from "../../storage/engine";
+import React from "react";
 import { PrintLayout } from "./PrintLayout";
-import { UnifiedDB } from "../../domain/models";
 import { buildPrintModel, validatePrintableContent } from "./printModel";
+import { PrintShell } from "../../print/PrintShell";
 
-const NotePrint: React.FC = () => {
-  const [db, setDb] = useState<UnifiedDB | null>(null);
+const NotePrint: React.FC = () => (
+  <PrintShell kind="note">
+    {(job) => {
+      const payload = (job.payload || {}) as any;
+      const note = payload.note;
+      const facility = payload.facility || {};
+      if (!note) return <div className="p-8 text-red-600">Note payload not found</div>;
 
-  useEffect(() => {
-    loadDBAsync().then(setDb);
-  }, []);
+      const filtersSummary = `Note ID=${note.id ?? "N/A"}`;
+      const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: "Shift Log Entry", filtersSummary, sections: [{ key: "noteBody", label: "Note Body", count: note.body?.trim() ? 1 : 0 }], payload: { note } });
+      const validationWarnings = validatePrintableContent(printModel);
 
-  const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const noteId = params.get("noteId");
-  const facilityId = db?.data.facilities.activeFacilityId || Object.keys(db?.data.facilities.byId || {})[0] || "";
-  const facility = db?.data.facilities.byId[facilityId];
-  const store = db?.data.facilityData[facilityId];
-  
-  const note = useMemo(() => {
-    return store?.shiftLog?.[noteId || ""];
-  }, [store?.shiftLog, noteId]);
-
-  if (!db) return <div className="p-8 text-center text-neutral-500">Loading…</div>;
-  if (!note) return <div className="p-8 text-red-600">Note not found</div>;
-
-  const filtersSummary = `Note ID=${noteId ?? "N/A"}`;
-  const printModel = buildPrintModel({ facilityName: facility?.name ?? "", reportTitle: "Shift Log Entry", filtersSummary, sections: [{ key: "noteBody", label: "Note Body", count: note.body?.trim() ? 1 : 0 }], payload: { note } });
-  const validationWarnings = validatePrintableContent(printModel);
-
-  return (
-    <PrintLayout
-      title="Shift Log Entry"
-      facilityName={facility?.name ?? ""}
-      facilityAddress={facility?.address}
-      dohId={facility?.dohId}
-      filtersSummary={printModel.filtersSummary}
-      printBlockedReason={validationWarnings.join(" ") || undefined}
-    >
-      <div className="border border-neutral-200 rounded-lg p-6 bg-white">
-        <div className="flex justify-between items-start mb-4 border-b border-neutral-100 pb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-bold text-lg text-neutral-900">{note.shift} Shift</span>
-              {note.unit && (
-                <span className="px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded text-sm font-medium">
-                  {note.unit}
-                </span>
-              )}
+      return (
+        <PrintLayout title="Shift Log Entry" facilityName={facility?.name ?? ""} facilityAddress={facility?.address} dohId={facility?.dohId} filtersSummary={printModel.filtersSummary} printBlockedReason={validationWarnings.join(" ") || undefined}>
+          <div className="border border-neutral-200 rounded-lg p-6 bg-white">
+            <div className="flex justify-between items-start mb-4 border-b border-neutral-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1"><span className="font-bold text-lg text-neutral-900">{note.shift} Shift</span></div>
+                <div className="text-sm text-neutral-500">{new Date(note.createdAtISO).toLocaleString()}</div>
+              </div>
             </div>
-            <div className="text-sm text-neutral-500">
-              {new Date(note.createdAtISO).toLocaleString()}
-            </div>
+            <div className="text-base text-neutral-900 whitespace-pre-wrap leading-relaxed mb-6">{note.body}</div>
           </div>
-          <div className="flex flex-col items-end gap-1">
-             <span className={`px-2 py-1 rounded text-xs font-bold uppercase border ${
-                note.priority === 'Action Needed' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-neutral-50 text-neutral-600 border-neutral-200'
-             }`}>
-               {note.priority}
-             </span>
-             <div className="flex gap-1">
-               {note.tags.map(tag => (
-                 <span key={tag} className="px-1.5 py-0.5 bg-neutral-100 text-neutral-600 rounded text-[10px] border border-neutral-200">
-                   {tag}
-                 </span>
-               ))}
-             </div>
-          </div>
-        </div>
-
-        <div className="text-base text-neutral-900 whitespace-pre-wrap leading-relaxed mb-6">
-          {note.body}
-        </div>
-
-        {(note.residentRefs?.length ?? 0) > 0 && (
-          <div className="mb-4">
-            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Linked Residents</h4>
-            <div className="flex flex-wrap gap-2">
-              {note.residentRefs?.map(ref => (
-                <div key={ref.mrn} className="px-2 py-1 bg-indigo-50 text-indigo-800 border border-indigo-100 rounded text-sm">
-                  {ref.name} ({ref.mrn})
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {note.outbreakRef && (
-          <div>
-            <h4 className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Linked Outbreak</h4>
-            <div className="px-2 py-1 bg-red-50 text-red-800 border border-red-100 rounded text-sm inline-block">
-              {note.outbreakRef.name}
-            </div>
-          </div>
-        )}
-      </div>
-    </PrintLayout>
-  );
-};
+        </PrintLayout>
+      );
+    }}
+  </PrintShell>
+);
 
 export default NotePrint;
