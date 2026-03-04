@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { IPEvent } from '../../../domain/models';
+import { usePrint } from '../../../print/usePrint';
 
 interface Props {
   date: Date;
@@ -27,13 +28,7 @@ const formatDate = (d: Date) => {
 
 export const DailyPrecautionList: React.FC<Props> = ({ date, onClose, facilityName, unit, shift }) => {
   const { store } = useFacilityData();
-
-  useEffect(() => {
-    setTimeout(() => {
-      window.print();
-      onClose();
-    }, 100);
-  }, []);
+  const { requestPrint } = usePrint();
 
   const precautionList = useMemo(() => {
     const activePrecautions: PrecautionRow[] = [];
@@ -81,65 +76,59 @@ export const DailyPrecautionList: React.FC<Props> = ({ date, onClose, facilityNa
 
   }, [store.residents, store.infections, date, unit]);
 
-  return (
-    <div className="printable-form-container bg-white text-black p-8 font-serif">
-      <style>{`
-        @media print {
-          @page { size: letter; margin: 0.75in; }
-          body * { visibility: hidden; }
-          .printable-form-container, .printable-form-container * { visibility: visible; }
-          .printable-form-container { position: absolute; left: 0; top: 0; width: 100%; height: auto; margin: 0; padding: 0; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-      
-      <div className="form-page flex flex-col min-h-[100vh]">
-        <header className="text-center mb-4">
-          <h1 className="text-xl font-bold">{facilityName || 'Facility'}</h1>
-          <h2 className="text-lg font-bold uppercase">Residents on Precautions or Isolation</h2>
-        </header>
-
-        <div className="flex justify-between items-end mb-4 text-sm">
-          <div className="flex items-end gap-2"><label className="font-bold">UNIT:</label><span className="border-b border-black min-w-[100px] inline-block">{unit || 'All Units'}</span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">DATE:</label><span className="border-b border-black min-w-[100px] inline-block">{formatDate(date)}</span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">SHIFT:</label><span className="border-b border-black min-w-[100px] inline-block">{shift || ''}</span></div>
-        </div>
-
-        <table className="w-full border-collapse border-2 border-black mb-4 text-sm">
-          <thead>
-            <tr className="bg-gray-100 print:bg-transparent">
-              <th className="border border-black p-1 w-[10%] text-center">RM. #</th>
-              <th className="border border-black p-1 w-[25%] text-center">RESIDENT'S NAME</th>
-              <th className="border border-black p-1 w-[30%] text-center">PRECAUTION/ISOLATION</th>
-              <th className="border border-black p-1 w-[20%] text-center">INFECTED SOURCE</th>
-              <th className="border border-black p-1 w-[15%] text-center">DURATION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...precautionList, ...Array(Math.max(0, 10 - precautionList.length)).fill(null)].map((item, index) => (
-              <tr key={index} style={{ height: '40px' }}>
-                <td className="border border-black p-1 text-center">{item?.room}</td>
-                <td className="border border-black p-1">{item?.residentName}</td>
-                <td className="border border-black p-1">{item?.precautionType}</td>
-                <td className="border border-black p-1">{item?.infectedSource}</td>
-                <td className="border border-black p-1">{item?.duration}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <footer className="mt-auto">
-          <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm mb-4">
-            <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Prepared by:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold">Title:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold">Signature:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Date/Time:</label><span className="border-b border-black flex-1"></span></div>
+  useEffect(() => {
+    requestPrint(
+      <div className="bg-white text-black p-8 font-serif">
+        <style>{`@page { size: letter; margin: 0.75in; }`}</style>
+        <div className="flex flex-col min-h-[100vh]">
+          <header className="text-center mb-4">
+            <h1 className="text-xl font-bold">{facilityName || 'Facility'}</h1>
+            <h2 className="text-lg font-bold uppercase">Residents on Precautions or Isolation</h2>
+          </header>
+          <div className="flex justify-between items-end mb-4 text-sm">
+            <div className="flex items-end gap-2"><label className="font-bold">UNIT:</label><span className="border-b border-black min-w-[100px] inline-block">{unit || 'All Units'}</span></div>
+            <div className="flex items-end gap-2"><label className="font-bold">DATE:</label><span className="border-b border-black min-w-[100px] inline-block">{formatDate(date)}</span></div>
+            <div className="flex items-end gap-2"><label className="font-bold">SHIFT:</label><span className="border-b border-black min-w-[100px] inline-block">{shift || ''}</span></div>
           </div>
-          <p className="text-xs italic border-t border-black pt-2">
-            * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
-          </p>
-        </footer>
-      </div>
-    </div>
-  );
+          <table className="w-full border-collapse border-2 border-black mb-4 text-sm">
+            <thead>
+              <tr>
+                <th className="border border-black p-1 w-[10%] text-center">RM. #</th>
+                <th className="border border-black p-1 w-[25%] text-center">RESIDENT'S NAME</th>
+                <th className="border border-black p-1 w-[30%] text-center">PRECAUTION/ISOLATION</th>
+                <th className="border border-black p-1 w-[20%] text-center">INFECTED SOURCE</th>
+                <th className="border border-black p-1 w-[15%] text-center">DURATION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...precautionList, ...Array(Math.max(0, 10 - precautionList.length)).fill(null)].map((item, index) => (
+                <tr key={index} style={{ height: '40px' }}>
+                  <td className="border border-black p-1 text-center">{item?.room}</td>
+                  <td className="border border-black p-1">{item?.residentName}</td>
+                  <td className="border border-black p-1">{item?.precautionType}</td>
+                  <td className="border border-black p-1">{item?.infectedSource}</td>
+                  <td className="border border-black p-1">{item?.duration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <footer className="mt-auto">
+            <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm mb-4">
+              <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Prepared by:</label><span className="border-b border-black flex-1"></span></div>
+              <div className="flex items-end gap-2"><label className="font-bold">Title:</label><span className="border-b border-black flex-1"></span></div>
+              <div className="flex items-end gap-2"><label className="font-bold">Signature:</label><span className="border-b border-black flex-1"></span></div>
+              <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Date/Time:</label><span className="border-b border-black flex-1"></span></div>
+            </div>
+            <p className="text-xs italic border-t border-black pt-2">
+              * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
+            </p>
+          </footer>
+        </div>
+      </div>,
+      { onAfterPrint: onClose }
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return null;
 };

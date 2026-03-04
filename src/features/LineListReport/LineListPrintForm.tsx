@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
 import { formatDate, computeAge } from './lineListUtils';
+import { usePrint } from '../../print/usePrint';
 
 interface Props {
   tab: SymptomClass;
@@ -453,14 +454,7 @@ export const LineListPrintForm: React.FC<Props> = ({
   onClose,
 }) => {
   const { store } = useFacilityData();
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      window.print();
-      onClose();
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [onClose]);
+  const { requestPrint } = usePrint();
 
   const dateRange = `${formatDate(startDate)} – ${formatDate(endDate)}`;
 
@@ -579,34 +573,24 @@ export const LineListPrintForm: React.FC<Props> = ({
     return mapped;
   }, [store, tab, startDate, endDate, unit, facilityId]);
 
-  return (
-    <div className="printable-form-container bg-white text-black font-serif">
-      <style>{`
-        @media print {
+  useEffect(() => {
+    requestPrint(
+      <div className="bg-white text-black font-serif">
+        <style>{`
           @page { size: letter landscape; margin: 0.4in 0.35in; }
-          body * { visibility: hidden; }
-          .printable-form-container,
-          .printable-form-container * { visibility: visible; }
-          .printable-form-container {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: auto;
-            margin: 0;
-            padding: 0;
-          }
-          .no-print { display: none !important; }
           .form-page { page-break-after: always; }
           .form-page:last-child { page-break-after: avoid; }
-        }
-      `}</style>
+        `}</style>
+        {tab === 'resp' ? (
+          <ILIPrintPages rows={iliRows} facilityName={facilityName} dateRange={dateRange} />
+        ) : (
+          <GIPrintPages rows={giRows} facilityName={facilityName} dateRange={dateRange} />
+        )}
+      </div>,
+      { onAfterPrint: onClose }
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      {tab === 'resp' ? (
-        <ILIPrintPages rows={iliRows} facilityName={facilityName} dateRange={dateRange} />
-      ) : (
-        <GIPrintPages rows={giRows} facilityName={facilityName} dateRange={dateRange} />
-      )}
-    </div>
-  );
+  return null;
 };
