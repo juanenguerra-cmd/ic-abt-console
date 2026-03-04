@@ -534,13 +534,27 @@ const WeeklyReport: React.FC = () => {
     <>
       <style>{`
         @media print {
-          body * { visibility: hidden; }
-          .weekly-report-print, .weekly-report-print * { visibility: visible; }
-          .weekly-report-print { position: absolute; left: 0; top: 0; width: 100%; }
-          .no-print { display: none !important; }
+          html, body {
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          #root * {
+            display: none !important;
+          }
+          #root .print-root,
+          #root .print-root * {
+            display: block !important;
+          }
+          #root .print-root {
+            position: static !important;
+          }
+          .no-print {
+            display: none !important;
+          }
         }
       `}</style>
-      <div className="weekly-report-print space-y-6">
+      <div className="print-root space-y-6">
       <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 no-print">
         <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white" />
