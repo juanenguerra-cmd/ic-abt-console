@@ -11,7 +11,7 @@ import { SitrepEditModal } from "./SitrepEditModal";
 
 export const OutbreakManager: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { db, updateDB } = useDatabase();
   const [activeOutbreakId, setActiveOutbreakId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"linelist" | "sitrep" | "report">("linelist");
 
@@ -341,7 +341,7 @@ const LineListView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
 
 const SitrepView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { db, updateDB } = useDatabase();
   const [editingSitrep, setEditingSitrep] = useState<OutbreakDailyStatus | null>(null);
   
   const sitreps = (Object.values(store.outbreakDailyStatuses) as OutbreakDailyStatus[])

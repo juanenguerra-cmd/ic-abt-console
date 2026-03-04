@@ -139,7 +139,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
           * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
         </div>
       </div>,
-      { extraCss: '@page { size: landscape; margin: 0.5in; }' }
+      { extraCss: '@page { size: landscape; margin: 0.5in; }', feature: 'precautions' }
     );
   };
 

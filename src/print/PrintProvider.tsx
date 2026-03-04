@@ -1,10 +1,12 @@
 import React, { createContext, ReactNode, useCallback, useRef, useState } from "react";
 import { startPrint } from "./startPrint";
+import { PrintFeature } from "./printFlags";
 
 export interface PrintOptions {
   extraCss?: string;
   onAfterPrint?: () => void;
   title?: string;
+  feature?: PrintFeature;
 }
 
 export interface PrintContextValue {
@@ -29,7 +31,7 @@ export function PrintProvider({ children }: { children: ReactNode }) {
         title: nextOptions?.title ?? 'Print',
         html,
         pageStyle: nextOptions?.extraCss,
-      })).finally(() => {
+      }), { feature: nextOptions?.feature }).finally(() => {
         setPrintNode(null);
         setOptions(undefined);
         nextOptions?.onAfterPrint?.();

@@ -20,17 +20,8 @@ import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
-import AuditReportPrint from "../pages/print/AuditReportPrint";
-import AntibiogramPrint from "../pages/print/AntibiogramPrint";
-import LineListPrint from "../pages/print/LineListPrint";
-import OutbreakSummaryPrint from "../pages/print/OutbreakSummaryPrint";
-import ReportExportPrint from "../pages/print/ReportExportPrint";
-import ResidentCensusPrint from "../pages/print/ResidentCensusPrint";
-import FloorMapPrint from "../pages/print/FloorMapPrint";
-import NotePrint from "../pages/print/NotePrint";
-import PrintLoadingPage from "../pages/print/PrintLoadingPage";
-import PrintErrorPage from "../pages/print/PrintErrorPage";
-import PrintCensusRounding from "../print/routes/PrintCensusRounding";
+import DomPrintPage from "../pages/print/DomPrintPage";
+import PrintDisabled from "../pages/print/PrintDisabled";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { PrintProvider } from "../print/PrintProvider";
@@ -252,17 +243,8 @@ const AppShell = () => {
   if (isPrintRoute) {
     return (
       <Routes>
-        <Route path="/print/audit-report" element={<AuditReportPrint />} />
-        <Route path="/print/antibiogram" element={<AntibiogramPrint />} />
-        <Route path="/print/linelist" element={<LineListPrint />} />
-        <Route path="/print/outbreak" element={<OutbreakSummaryPrint />} />
-        <Route path="/print/report-export" element={<ReportExportPrint />} />
-        <Route path="/print/resident-census" element={<ResidentCensusPrint />} />
-        <Route path="/print/floor-map" element={<FloorMapPrint />} />
-        <Route path="/print/note" element={<NotePrint />} />
-        <Route path="/print/census-rounding" element={<PrintCensusRounding />} />
-        <Route path="/print/loading" element={<PrintLoadingPage />} />
-        <Route path="/print/error" element={<PrintErrorPage />} />
+        <Route path="/print/precautions" element={<DomPrintPage />} />
+        <Route path="/print/*" element={<PrintDisabled />} />
       </Routes>
     );
   }
