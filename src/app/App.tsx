@@ -30,6 +30,7 @@ import FloorMapPrint from "../pages/print/FloorMapPrint";
 import NotePrint from "../pages/print/NotePrint";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
+import { PrintProvider } from "../print/PrintProvider";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
@@ -502,7 +503,9 @@ export default function App() {
         <RoleProvider>
           <BrowserRouter>
             <UndoToastProvider>
-              <AppShell />
+              <PrintProvider>
+                <AppShell />
+              </PrintProvider>
             </UndoToastProvider>
           </BrowserRouter>
         </RoleProvider>

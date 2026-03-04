@@ -23,6 +23,7 @@ import {
   isRsv,
   normalizeVaxStatus,
 } from '../../lib/vaccineCoverage';
+import { usePrint } from '../../print/usePrint';
 
 
 const residentLabel = (res: any) => {
@@ -528,18 +529,113 @@ const WeeklyReport: React.FC = () => {
   const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
   const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
 
-  const handlePrint = () => window.print();
+  const { requestPrint } = usePrint();
+  const handlePrint = () => {
+    requestPrint(
+      <div className="bg-white text-black p-6 space-y-6" style={{ fontFamily: 'sans-serif' }}>
+        <style>{`@page { size: letter; margin: 0.5in; }`}</style>
+        <div className="text-center mb-4">
+          <div className="text-xl font-bold">Standard of Care Weekly Report</div>
+          <div className="text-sm" style={{ color: '#6b7280' }}>{weekStart} to {weekEnd}</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b91c1c' }}>{newInfections.length}</div>
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>New Infections</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#b45309' }}>{newAbts.length}</div>
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>New ABT Courses</div>
+          </div>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: '0.5rem', padding: '1rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1d4ed8' }}>{vaxActivity.length}</div>
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>Vax Events</div>
+          </div>
+        </div>
+        <div style={{ background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#fef2f2' }}>
+            <div style={{ fontWeight: 700, color: '#7f1d1d' }}>New Infections — {weekStart} to {weekEnd} ({newInfections.length})</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>{['Resident','MRN','Unit / Room','Category','Status','Isolation','Onset Date'].map(h => (
+                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {newInfections.length === 0 && <tr><td colSpan={7} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No new infections in this date range</td></tr>}
+              {newInfections.map(({ ip, res }) => (
+                <tr key={ip.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.infectionCategory || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem' }}>{ip.status}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{ip.isolationType || 'None'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ pageBreakBefore: 'always', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#fffbeb' }}>
+            <div style={{ fontWeight: 700, color: '#78350f' }}>New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>{['Resident','MRN','Unit / Room','Medication','Indication','Category','Start Date','Status'].map(h => (
+                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {newAbts.length === 0 && <tr><td colSpan={8} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No new antibiotic courses in this date range</td></tr>}
+              {newAbts.map(({ abt, res }) => (
+                <tr key={abt.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.medication}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.indication || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.syndromeCategory || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{abt.startDate || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem' }}>{abt.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ pageBreakBefore: 'always', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderRadius: '0.5rem', overflow: 'hidden' }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#eff6ff' }}>
+            <div style={{ fontWeight: 700, color: '#1e3a8a' }}>Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>{['Resident','MRN','Vaccine','Status','Date Given','Decline Reason'].map(h => (
+                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {vaxActivity.length === 0 && <tr><td colSpan={6} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No vaccination activity in this date range</td></tr>}
+              {vaxActivity.map(({ vax, res }) => (
+                <tr key={vax.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{residentLabel(res)}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{(res as any)?.mrn || '—'}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{vax.vaccine}</td>
+                  <td style={{ padding: '0.5rem 1rem' }}>{normalizeVaxStatusDisplay(vax.status)}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{getVaxDate(vax)}</td>
+                  <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{vax.declineReason || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .weekly-report-print, .weekly-report-print * { visibility: visible; }
-          .weekly-report-print { position: absolute; left: 0; top: 0; width: 100%; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
       <div className="weekly-report-print space-y-6">
       <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 no-print">
         <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
@@ -549,12 +645,6 @@ const WeeklyReport: React.FC = () => {
         <button onClick={handlePrint} className="ml-auto flex items-center gap-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-md text-sm font-medium hover:bg-indigo-50">
           Print / PDF
         </button>
-      </div>
-
-      {/* Print header (hidden on screen, visible when printing) */}
-      <div className="hidden print:block text-center mb-4">
-        <div className="text-xl font-bold">Standard of Care</div>
-        <div className="text-sm text-neutral-600">{weekStart} to {weekEnd}</div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -1568,7 +1658,70 @@ const VaccineCoverageReport: React.FC = () => {
   const [editingVaxEvent, setEditingVaxEvent] = useState<VaxEvent | undefined>(undefined);
 
   const result = useMemo(() => computeVaccineCoverage(store), [store]);
-  const handlePrint = () => window.print();
+  const { requestPrint } = usePrint();
+  const handlePrint = () => {
+    requestPrint(
+      <div className="bg-white text-black p-6 space-y-6" style={{ fontFamily: 'sans-serif' }}>
+        <style>{`@page { size: letter; margin: 0.5in; } tr { page-break-inside: avoid; }`}</style>
+        <div className="text-center mb-4">
+          <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>Vaccine Coverage Report</div>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>Total Active Census: {result.totalActiveCensus}</div>
+        </div>
+        <div style={{ background: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#f0fdfa' }}>
+            <div style={{ fontWeight: 700, color: '#134e4a' }}>Coverage Summary</div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead style={{ background: '#f9fafb' }}>
+              <tr>{['Vaccine','Covered','Declined','Not Vaccinated','Coverage %'].map(h => (
+                <th key={h} style={{ padding: '0.5rem 1rem', textAlign: h === 'Vaccine' ? 'left' : 'right', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {coverageRows.map(row => (
+                <tr key={row.label} style={{ borderTop: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{row.label}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>{row.count}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#b45309' }}>{row.declined}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#6b7280' }}>{result.totalActiveCensus - row.count}</td>
+                  <td style={{ padding: '0.5rem 1rem', textAlign: 'right' }}>{result.totalActiveCensus > 0 ? ((row.count / result.totalActiveCensus) * 100).toFixed(1) : '0.0'}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {selectedReOffer && (
+          <div style={{ pageBreakBefore: 'always', background: 'white', borderRadius: '0.5rem', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', background: '#eef2ff' }}>
+              <div style={{ fontWeight: 700, color: '#312e81' }}>Re-Offer Drill Down — {selectedReOffer.label}</div>
+              <div style={{ fontSize: '0.75rem', color: '#4338ca', marginTop: '0.25rem' }}>
+                Not vaccinated active residents available for outreach: <strong>{selectedReOffer.count}</strong>
+              </div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+              <thead style={{ background: '#f9fafb' }}>
+                <tr>{['Resident','MRN','Unit','Room','Prior Decline'].map(h => (
+                  <th key={h} style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: 500, color: '#6b7280', textTransform: 'uppercase' }}>{h}</th>
+                ))}</tr>
+              </thead>
+              <tbody>
+                {selectedReOffer.residents.length === 0 && <tr><td colSpan={5} style={{ padding: '1.5rem', textAlign: 'center', color: '#9ca3af' }}>No residents need re-offer for this vaccine.</td></tr>}
+                {selectedReOffer.residents.map(r => (
+                  <tr key={r.mrn} style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '0.5rem 1rem', fontWeight: 500 }}>{r.displayName}</td>
+                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.mrn}</td>
+                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.unit}</td>
+                    <td style={{ padding: '0.5rem 1rem', color: '#6b7280' }}>{r.room}</td>
+                    <td style={{ padding: '0.5rem 1rem' }}>{r.previouslyDeclined ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleDeleteUnlinkedEvent = (id: string) => {
     if (!confirm('Are you sure you want to delete this VAX event?')) return;
