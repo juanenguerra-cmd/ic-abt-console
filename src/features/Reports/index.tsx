@@ -1109,8 +1109,40 @@ const OnDemandReport: React.FC = () => {
         </div>
       </div>
 
-      <div ref={printRef} className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
+      <div ref={printRef} className="space-y-6">
+        <div className="hidden print:block text-center mb-6">
+           <h2 className="text-xl font-bold">On Demand Report — {dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}</h2>
+           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
+        </div>
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className={`px-4 py-4 border-b border-neutral-200 ${
+            dataset === 'infections' ? 'bg-red-50' :
+            dataset === 'abts' ? 'bg-amber-50' :
+            dataset === 'vax' ? 'bg-blue-50' :
+            'bg-indigo-50'
+          }`}>
+             <h3 className={`text-base font-bold ${
+                dataset === 'infections' ? 'text-red-900' :
+                dataset === 'abts' ? 'text-amber-900' :
+                dataset === 'vax' ? 'text-blue-900' :
+                'text-indigo-900'
+             }`}>
+               {dataset === 'infections' ? 'Infection Control Line List' :
+                dataset === 'abts' ? 'Antibiotic Course Line List' :
+                dataset === 'vax' ? 'Vaccination Line List' :
+                'Resident Census Line List'}
+             </h3>
+             <p className={`text-xs mt-0.5 ${
+                dataset === 'infections' ? 'text-red-700' :
+                dataset === 'abts' ? 'text-amber-700' :
+                dataset === 'vax' ? 'text-blue-700' :
+                'text-indigo-700'
+             }`}>
+               {rows.length} record{rows.length !== 1 ? 's' : ''} found
+             </p>
+          </div>
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead className="bg-neutral-50">
               <tr>
@@ -1169,6 +1201,7 @@ const OnDemandReport: React.FC = () => {
           </table>
         </div>
       </div>
+    </div>
 
       {/* Quick-edit modals */}
       {editModal?.type === 'ip' && (
@@ -1347,9 +1380,9 @@ const MonthlyAnalytics: React.FC = () => {
 
         {/* DOT Trend Chart */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 border-b border-neutral-200">
-          <h3 className="text-lg leading-6 font-medium text-neutral-900">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
-          <p className="text-sm text-neutral-500 mt-1">Active antibiotic courses per calendar day over the past 30 days.</p>
+        <div className="px-4 py-4 border-b border-neutral-200 bg-indigo-50">
+          <h3 className="text-base font-bold text-indigo-900">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
+          <p className="text-xs text-indigo-700 mt-0.5">Active antibiotic courses per calendar day over the past 30 days.</p>
         </div>
         <div className="px-4 py-5 sm:px-6 overflow-x-auto">
           {dotTrend.every(p => p.dot === 0) ? (
@@ -1392,10 +1425,10 @@ const MonthlyAnalytics: React.FC = () => {
       </div>
 
       <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-neutral-900">Monthly Analytics</h3>
+        <div className="px-4 py-4 border-b border-neutral-200 bg-indigo-50">
+          <h3 className="text-base font-bold text-indigo-900">Monthly Analytics</h3>
         </div>
-      <div className="border-t border-neutral-200">
+      <div>
         <table className="min-w-full divide-y divide-neutral-200">
           <thead className="bg-neutral-50">
             <tr>
