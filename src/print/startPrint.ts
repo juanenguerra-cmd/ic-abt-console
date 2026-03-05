@@ -1,4 +1,4 @@
-import { PrintJob, PrintJobKind } from './printJob';
+import { PrintJob } from './printJob';
 import { cleanupExpiredPrintJobs, savePrintJob } from './printJobStore';
 import { isPrintFeatureEnabled, PrintFeature } from './printFlags';
 
@@ -11,7 +11,6 @@ interface StartPrintOptions {
 }
 
 export async function startPrint<TPayload>(
-  kind: PrintJobKind,
   titleOrBuildPayload: string | (() => Promise<TPayload> | TPayload),
   maybeBuildPayload?: () => Promise<TPayload> | TPayload,
   options?: StartPrintOptions,
@@ -30,7 +29,6 @@ export async function startPrint<TPayload>(
     return;
   }
 
-  const targetPath = kind === 'dom' ? '/print/precautions' : `/print/${encodeURIComponent(kind)}`;
   const w = window.open('about:blank', '_blank', 'noopener,noreferrer');
   if (!w) {
     window.alert('Popup blocked. Please allow popups for this site to print.');
@@ -43,7 +41,7 @@ export async function startPrint<TPayload>(
 
     const job: PrintJob<TPayload> = {
       id: jobId,
-      kind,
+      kind: 'dom',
       createdAt: Date.now(),
       title: typeof titleOrBuildPayload === 'string' ? titleOrBuildPayload : undefined,
       payload,
@@ -52,7 +50,7 @@ export async function startPrint<TPayload>(
     cleanupExpiredPrintJobs();
     savePrintJob(job);
 
-    w.location.href = `${targetPath}?jobId=${encodeURIComponent(jobId)}`;
+    w.location.href = `/print/precautions?jobId=${encodeURIComponent(jobId)}`;
     w.focus();
   } catch (error) {
     w.close();

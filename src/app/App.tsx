@@ -21,7 +21,6 @@ import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
 import DomPrintPage from "../pages/print/DomPrintPage";
-import PrintDisabled from "../pages/print/PrintDisabled";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { PrintProvider } from "../print/PrintProvider";
@@ -244,7 +243,6 @@ const AppShell = () => {
     return (
       <Routes>
         <Route path="/print/precautions" element={<DomPrintPage />} />
-        <Route path="/print/*" element={<PrintDisabled />} />
       </Routes>
     );
   }

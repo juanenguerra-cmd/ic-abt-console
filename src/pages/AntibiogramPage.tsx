@@ -1,8 +1,7 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import { useFacilityData } from "../app/providers";
 import { ABTCourse } from "../domain/models";
 import { Download, BarChart2 } from "lucide-react";
-import { PrintButton } from "../components/PrintButton";
 
 // ---------- Types ----------
 
@@ -234,10 +233,8 @@ export const AntibiogramPage: React.FC = () => {
   const barGroupW = months.length > 0 ? innerW / months.length : innerW;
   const barW = chartData.length > 0 ? Math.max(4, barGroupW / (chartData.length + 1)) : 8;
 
-  const printRef = useRef<HTMLDivElement>(null);
-
   return (
-    <div ref={printRef} className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -245,7 +242,6 @@ export const AntibiogramPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-neutral-900">Antibiogram Summary</h1>
         </div>
         <div className="no-print flex items-center gap-2">
-          <PrintButton contentRef={printRef} title="Antibiogram Report" />
           <button
             onClick={() => exportCsv(rows, months)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium active:scale-95"

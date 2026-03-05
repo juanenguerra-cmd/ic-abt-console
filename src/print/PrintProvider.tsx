@@ -27,7 +27,7 @@ export function PrintProvider({ children }: { children: ReactNode }) {
 
     window.setTimeout(() => {
       const html = contentRef.current?.innerHTML || '';
-      void startPrint('dom', nextOptions?.title ?? 'Print', () => ({
+      void startPrint(nextOptions?.title ?? 'Print', () => ({
         title: nextOptions?.title ?? 'Print',
         html,
         pageStyle: nextOptions?.extraCss,

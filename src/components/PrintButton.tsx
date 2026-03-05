@@ -22,7 +22,7 @@ export const PrintButton: React.FC<Props> = ({ contentRef, title, className = ''
     const node = contentRef.current;
     if (!node) return;
     setIsPrinting(true);
-    await startPrint('dom', title, () => ({
+    await startPrint(title, () => ({
       title,
       html: node.innerHTML,
       pageStyle,

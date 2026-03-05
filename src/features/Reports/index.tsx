@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
@@ -10,8 +10,6 @@ import { FormsTab } from '../../components/FormsTab';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
-import { PrintButton } from '../../components/PrintButton';
-import { usePrint } from '../../print/usePrint';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -161,7 +159,6 @@ const ReportsConsole: React.FC = () => {
 
 const SurveyPacketsReport: React.FC = () => {
   const { store } = useFacilityData();
-  const printRef = useRef<HTMLDivElement>(null);
 
   const activePrecautions = useMemo(() =>
     (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
@@ -235,7 +232,6 @@ const SurveyPacketsReport: React.FC = () => {
     <div className="space-y-6">
       {/* E6: Line List Export */}
       <div className="no-print flex justify-end gap-2">
-        <PrintButton contentRef={printRef} title="Active Precautions & ABT Line List" feature="precautions" />
         <button
           onClick={handleExportLineList}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
@@ -245,7 +241,7 @@ const SurveyPacketsReport: React.FC = () => {
         </button>
       </div>
 
-      <div ref={printRef} className="space-y-6">
+      <div className="space-y-6">
         <div className="hidden print:block text-center mb-6">
           <h2 className="text-xl font-bold">Active Precautions & Antibiotic Courses</h2>
           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
@@ -328,7 +324,6 @@ const SurveyPacketsReport: React.FC = () => {
 const DailyReport: React.FC = () => {
   const { store } = useFacilityData();
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
-  const printRef = useRef<HTMLDivElement>(null);
   const reportDateObj = useMemo(() => new Date(reportDate + 'T00:00:00'), [reportDate]);
   const threeDaysBeforeReport = useMemo(() => { const d = new Date(reportDateObj); d.setDate(d.getDate() - 3); return d; }, [reportDateObj]);
 
@@ -377,10 +372,9 @@ const DailyReport: React.FC = () => {
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
         />
         <span className="text-indigo-700 text-sm">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        <PrintButton contentRef={printRef} title={`Daily Report - ${reportDate}`} className="ml-auto" />
       </div>
 
-      <div ref={printRef} className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
+      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
         <style>{`@page { size: letter; margin: 0.75in; }`}</style>
         
         <div className="hidden print:block text-center mb-6">
@@ -590,7 +584,6 @@ const WeeklyReport: React.FC = () => {
   const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
   const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
 
-  const printRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
@@ -610,11 +603,10 @@ const WeeklyReport: React.FC = () => {
           onChange={e => setEndDate(e.target.value)}
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
         />
-        <PrintButton contentRef={printRef} title="Weekly Report" className="ml-auto" />
       </div>
 
       {/* Screen content */}
-      <div ref={printRef} className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
+      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
         <style>{`@page { size: letter; margin: 0.75in; }`}</style>
         
         <div className="hidden print:block text-center mb-6">
@@ -862,7 +854,6 @@ const OnDemandReport: React.FC = () => {
   const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
   const [linkQuery, setLinkQuery] = useState('');
   const [selectedLinkMrn, setSelectedLinkMrn] = useState<string | null>(null);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const savedTemplates = useMemo(() => {
     try {
@@ -1140,11 +1131,10 @@ const OnDemandReport: React.FC = () => {
         )}
         <div className="flex items-center justify-between">
           <span className="text-sm text-neutral-500">{rows.length} record{rows.length !== 1 ? 's' : ''} found</span>
-          <PrintButton contentRef={printRef} title="On Demand Report" />
         </div>
       </div>
 
-      <div ref={printRef} className="space-y-6">
+      <div className="space-y-6">
         <div className="hidden print:block text-center mb-6">
            <h2 className="text-xl font-bold">On Demand Report — {dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}</h2>
            <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
@@ -1316,7 +1306,6 @@ const MonthlyAnalytics: React.FC = () => {
   const { store } = useFacilityData();
   const [metrics, setMetrics] = useState<Record<string, number>>({});
   const [analytics, setAnalytics] = useState<any[]>([]);
-  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedMetrics = localStorage.getItem('ltc_facility_metrics');
@@ -1404,10 +1393,9 @@ const MonthlyAnalytics: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="no-print flex justify-end">
-        <PrintButton contentRef={printRef} title="Monthly Analytics Report" />
       </div>
 
-      <div ref={printRef} className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
+      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
         <style>{`@page { size: letter; margin: 0.75in; }`}</style>
         
         <div className="hidden print:block text-center mb-6">
@@ -1521,7 +1509,6 @@ const QapiRollup: React.FC = () => {
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const [year, monthNum] = selectedMonth.split('-').map(Number);
   const monthStart = useMemo(() => new Date(year, monthNum - 1, 1), [year, monthNum]);
@@ -1629,7 +1616,6 @@ const QapiRollup: React.FC = () => {
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
         />
         <div className="ml-auto flex items-center gap-2">
-          <PrintButton contentRef={printRef} title={`QAPI Rollup - ${selectedMonth}`} />
           <button
             onClick={handleExportCsv}
             className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
@@ -1639,7 +1625,7 @@ const QapiRollup: React.FC = () => {
         </div>
       </div>
 
-      <div ref={printRef} className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
+      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
         <style>{`@page { size: letter; margin: 0.75in; }`}</style>
         
         <div className="hidden print:block text-center mb-6">
@@ -1793,7 +1779,6 @@ const VaccineCoverageReport: React.FC = () => {
   const [selectedVaccine, setSelectedVaccine] = useState<string | null>(null);
   const [showUnlinked, setShowUnlinked] = useState(false);
   const [editingVaxEvent, setEditingVaxEvent] = useState<VaxEvent | undefined>(undefined);
-  const printRef = useRef<HTMLDivElement>(null);
 
   const result = useMemo(() => computeVaccineCoverage(store), [store]);
 
@@ -1932,10 +1917,9 @@ const VaccineCoverageReport: React.FC = () => {
           Counts active residents with at least one qualifying in-house or documented-historical vaccine event.
         </p>
         </div>
-        <PrintButton contentRef={printRef} title="Vaccine Coverage Report" />
       </div>
 
-      <div ref={printRef} className="space-y-6">
+      <div className="space-y-6">
         <div className="hidden print:block text-center mb-6">
            <h2 className="text-xl font-bold">Vaccine Coverage Report</h2>
            <p className="text-sm text-neutral-500">Total Active Census: {result.totalActiveCensus}</p>
