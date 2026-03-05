@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { ChevronRight, ChevronLeft, ChevronsRight, ChevronsLeft, Save, X, Printer } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { generatePDF, getDataForProfile } from '../../reports/engine';
 import { ExportProfile } from '../../domain/models';
 
 interface ColumnDef {
@@ -48,7 +47,7 @@ const AVAILABLE_COLUMNS: ColumnDef[] = [
 
 export const ReportBuilder: React.FC = () => {
   const { activeFacilityId, store } = useFacilityData();
-  const { updateDB, db } = useDatabase();
+  const { updateDB } = useDatabase();
   
   const [reportName, setReportName] = useState('');
   const [availableCols, setAvailableCols] = useState<ColumnDef[]>(AVAILABLE_COLUMNS);
@@ -179,20 +178,6 @@ export const ReportBuilder: React.FC = () => {
       draft.data.facilityData[activeFacilityId].exportProfiles[tempId] = tempProfile;
     });
 
-    // Also persist the temp profile directly to localStorage so the print tab
-    // can access it immediately, regardless of whether the async IDB write has
-    // completed (avoids a race condition between saveDBAsync and the new tab
-    // calling loadDBAsync).
-    try {
-      localStorage.setItem('ltc_print_temp_profile', JSON.stringify(tempProfile));
-    } catch {}
-
-    // Open print tab immediately and hydrate it with the prepared payload.
-    generatePDF(tempProfile, async () => ({
-      profile: tempProfile,
-      data: getDataForProfile(store, tempProfile),
-      facility: db.data.facilities.byId[activeFacilityId],
-    }));
   };
 
   return (

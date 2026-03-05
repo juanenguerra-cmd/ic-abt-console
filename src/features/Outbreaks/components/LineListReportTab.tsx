@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../../app/providers';
 import { Outbreak, LineListEvent, ABTCourse, VaxEvent, Resident, SymptomTag } from '../../../domain/models';
 import { ILILineListTable } from './ILILineListTable';
 import { GILineListTable } from './GILineListTable';
-import { PrintButton } from '../../../components/PrintButton';
 
 // ─── RowModel ────────────────────────────────────────────────────────────────
 
@@ -222,7 +221,6 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
     });
   }, [store, outbreak.facilityId, symptomClass, startDate, endDate, selectedUnit]);
 
-  const printRef = useRef<HTMLDivElement>(null);
 
   const title = symptomClass === 'resp'
     ? 'Respiratory / ILI Line List'
@@ -242,11 +240,6 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
               {title}
             </span>
           </h2>
-          <PrintButton
-            contentRef={printRef}
-            title="Line List Report"
-            pageStyle="@page { size: landscape; margin: 0.5in; }"
-          />
         </div>
 
         <div className="flex flex-wrap items-center gap-6 bg-neutral-50 border border-neutral-200 rounded-lg p-4">
@@ -306,7 +299,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
         </p>
       </div>
 
-      <div ref={printRef} id="linelist-print-root">
+      <div id="linelist-print-root">
         {symptomClass === 'resp' ? (
           <ILILineListTable
             rows={rows}

@@ -1,13 +1,4 @@
 export const PRINT_JOB_KINDS = [
-  'audit-report',
-  'antibiogram',
-  'census-rounding',
-  'linelist',
-  'outbreak',
-  'report-export',
-  'resident-census',
-  'floor-map',
-  'note',
   'dom',
 ] as const;
 

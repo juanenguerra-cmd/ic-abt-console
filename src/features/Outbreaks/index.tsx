@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from "../../domain/models";
-import { Plus, Users, Activity, FileText, AlertCircle, Calendar, Printer } from "lucide-react";
+import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { LineListReportTab } from "./components/LineListReportTab";
-import { startPrint } from "../../print/startPrint";
 import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
 import { AddOutbreakExposureModal } from "./AddOutbreakExposureModal";
 import { SitrepEditModal } from "./SitrepEditModal";
@@ -38,27 +37,6 @@ export const OutbreakManager: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
     });
-  };
-
-  const handlePrint = () => {
-    if (!currentOutbreak) return;
-
-    const cases = (Object.values(store.outbreakCases) as OutbreakCase[])
-      .filter(c => c.outbreakId === currentOutbreak.id)
-      .map(c => ({
-        ...c,
-        residentName: c.residentRef.kind === 'mrn' ? store.residents[c.residentRef.id]?.displayName : store.quarantine[c.residentRef.id]?.displayName,
-      }));
-    const exposures = (Object.values(store.outbreakExposures) as OutbreakExposure[]).filter(e => e.outbreakId === currentOutbreak.id);
-    const dailyStatuses = (Object.values(store.outbreakDailyStatuses) as OutbreakDailyStatus[]).filter(s => s.outbreakId === currentOutbreak.id);
-
-    void startPrint('outbreak', `Outbreak Summary: ${currentOutbreak.title}`, () => ({
-      facility: db.data.facilities.byId[activeFacilityId],
-      outbreak: currentOutbreak,
-      cases,
-      exposures,
-      dailyStatuses,
-    }));
   };
 
   return (
@@ -127,13 +105,6 @@ export const OutbreakManager: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <button
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium active:scale-95"
-                >
-                  <Printer className="w-4 h-4" />
-                  Print Summary
-                </button>
                 <div className="flex space-x-1 bg-neutral-200 p-1 rounded-lg">
                   <button
                     onClick={() => setActiveTab("linelist")}

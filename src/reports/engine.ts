@@ -1,11 +1,5 @@
 import { FacilityStore, ExportProfile, Resident } from "../domain/models";
-import { startPrint } from "../print/startPrint";
 
-interface PrintPayloadBuilder {
-  (): Promise<unknown>;
-}
-
-// Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
   if (!obj) return undefined;
   return path.split('.').reduce((acc, part) => acc && acc[part], obj);
@@ -45,13 +39,6 @@ export const generateCSV = (store: FacilityStore, profile: ExportProfile): strin
   });
 
   return [headers, ...rows].join("\n");
-};
-
-export const generatePDF = (profile: ExportProfile, buildPayload?: PrintPayloadBuilder): void => {
-  void startPrint('report-export', `Report: ${profile.name}`, async () => {
-    if (buildPayload) return buildPayload();
-    return { profile, data: [] };
-  });
 };
 
 export const getDataForProfile = (store: FacilityStore, profile: ExportProfile): any[] => {

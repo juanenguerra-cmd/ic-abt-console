@@ -1,14 +1,12 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useFacilityData } from '../../app/providers';
 import { ResidentNote, ShiftLogEntry } from '../../domain/models';
 import { SYMPTOM_HASHTAG_LIBRARY } from '../../utils/symptomHashtagLibrary';
 import { getSymptomClassForHashtag } from '../../utils/symptomHashtagLibrary';
 import { Download, Search, Filter } from 'lucide-react';
-import { PrintButton } from '../../components/PrintButton';
 
 export const SymptomWatchReport: React.FC = () => {
   const { store } = useFacilityData();
-  const printRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'notes' | 'shiftlog'>('all');
   const [filterDays, setFilterDays] = useState<number>(7);
@@ -146,7 +144,6 @@ export const SymptomWatchReport: React.FC = () => {
             <p className="text-sm text-neutral-500">Review detected hashtags from clinical notes and shift logs.</p>
           </div>
           <div className="flex items-center gap-3">
-            <PrintButton contentRef={printRef} title="Symptom Watch Report" />
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-4 py-2 bg-white border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 font-medium text-sm transition-colors"
@@ -197,7 +194,7 @@ export const SymptomWatchReport: React.FC = () => {
         </div>
       </div>
 
-      <div ref={printRef} className="space-y-6">
+      <div className="space-y-6">
         <div className="hidden print:block text-center mb-6">
            <h2 className="text-xl font-bold">Symptom Watch Report</h2>
            <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
