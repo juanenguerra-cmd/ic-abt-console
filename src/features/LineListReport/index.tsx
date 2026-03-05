@@ -257,7 +257,7 @@ export function LineListReportPage() {
       </div>
 
       {/* Report output */}
-      <div id="linelist-print-root">
+      <div>
         {reportRows !== null && reportTab === 'resp' && (
           <ILILineListTable
             rows={reportRows as ILIRowModel[]}

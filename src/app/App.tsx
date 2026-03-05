@@ -444,7 +444,6 @@ const AppShell = () => {
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
-                <Route path="/reports/forms" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
                 <Route path="/reports/antibiogram" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AntibiogramPage /></RoleGuard></PageTransition>} />
                 <Route path="/linelist-report" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><LineListReportPage /></RoleGuard></PageTransition>} />
                 <Route path="/audit-center" element={<PageTransition><RoleGuard allowedRoles={['ICLead','Admin']}><InfectionControlAuditCenter /></RoleGuard></PageTransition>} />

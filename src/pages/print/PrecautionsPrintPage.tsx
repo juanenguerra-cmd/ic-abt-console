@@ -1,34 +1,79 @@
 import React from 'react';
-import { clearPrecautionsPrintPayload, loadPrecautionsPrintPayload } from '../../print/precautionsPrint';
+import { clearPrecautionsPrintPayload, loadPrecautionsPrintPayload, PrecautionsPrintPayload } from '../../print/precautionsPrint';
 import './precautions-print.css';
 
+const isValidPayload = (payload: PrecautionsPrintPayload | null): payload is PrecautionsPrintPayload => {
+  if (!payload) return false;
+  if (!payload.facilityName || !payload.unitLabel || !payload.printedDate) return false;
+  if (!Array.isArray(payload.rows)) return false;
+  return payload.rows.every((row) =>
+    typeof row.room === 'string' &&
+    typeof row.residentName === 'string' &&
+    typeof row.precautionType === 'string' &&
+    typeof row.indication === 'string' &&
+    typeof row.startDate === 'string' &&
+    typeof row.organism === 'string' &&
+    typeof row.status === 'string'
+  );
+};
+
 const PrecautionsPrintPage: React.FC = () => {
-  const payload = React.useMemo(() => loadPrecautionsPrintPayload(), []);
+  const rawPayload = React.useMemo(() => loadPrecautionsPrintPayload(), []);
+  const payload = React.useMemo(() => (isValidPayload(rawPayload) ? rawPayload : null), [rawPayload]);
 
   React.useEffect(() => {
     if (!payload) return;
 
+    const openedAsPopup = Boolean(window.opener && !window.opener.closed);
     let frameOne = 0;
     let frameTwo = 0;
+
+    const handleAfterPrint = () => {
+      clearPrecautionsPrintPayload();
+      if (openedAsPopup) {
+        window.close();
+      }
+    };
+
+    window.onafterprint = handleAfterPrint;
 
     frameOne = window.requestAnimationFrame(() => {
       frameTwo = window.requestAnimationFrame(() => {
         window.print();
-        clearPrecautionsPrintPayload();
       });
     });
 
     return () => {
       if (frameOne) window.cancelAnimationFrame(frameOne);
       if (frameTwo) window.cancelAnimationFrame(frameTwo);
+      if (window.onafterprint === handleAfterPrint) {
+        window.onafterprint = null;
+      }
     };
   }, [payload]);
 
   if (!payload) {
     return (
-      <div style={{ padding: 24, fontFamily: 'Arial, sans-serif' }}>
-        <h2 style={{ marginTop: 0 }}>Print Error</h2>
-        <p>Unable to load precautions print payload.</p>
+      <div style={{ padding: 24, fontFamily: 'Arial, sans-serif', maxWidth: 640 }}>
+        <h2 style={{ marginTop: 0 }}>Couldn&apos;t prepare print report</h2>
+        <p>
+          We couldn&apos;t find a valid precautions print payload. Please return to Active Precautions and click
+          <strong> Print Precaution List</strong> again.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          style={{
+            marginTop: 12,
+            padding: '8px 12px',
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            background: '#fff',
+            cursor: 'pointer',
+          }}
+        >
+          Back
+        </button>
       </div>
     );
   }

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useDatabase } from "../../app/providers";
 import { SurveyPacket, SurveyPacketSection } from "../../domain/models";
-import { Printer, Calendar, CheckSquare } from "lucide-react";
+import { FileText, Calendar, CheckSquare } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 export const PacketBuilder: React.FC = () => {
@@ -101,7 +101,7 @@ export const PacketBuilder: React.FC = () => {
     <div className="max-w-2xl mx-auto bg-white shadow-sm border border-neutral-200 rounded-xl overflow-hidden">
       <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50 flex items-center gap-3">
         <div className="bg-blue-100 p-2 rounded-lg">
-          <Printer className="w-6 h-6 text-blue-600" />
+          <FileText className="w-6 h-6 text-blue-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-neutral-900">Survey Packet Builder</h2>
@@ -206,7 +206,7 @@ export const PacketBuilder: React.FC = () => {
             onClick={handleGenerate}
             className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
-            <Printer className="w-5 h-5 mr-2" />
+            <FileText className="w-5 h-5 mr-2" />
             Generate Survey Packet
           </button>
         </div>

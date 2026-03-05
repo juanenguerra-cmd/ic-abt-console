@@ -298,7 +298,7 @@ export const LineListReportTab: React.FC<Props> = ({ outbreak }) => {
         </p>
       </div>
 
-      <div id="linelist-print-root">
+      <div>
         {symptomClass === 'resp' ? (
           <ILILineListTable
             rows={rows}
