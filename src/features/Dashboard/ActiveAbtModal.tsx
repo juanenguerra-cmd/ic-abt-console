@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { useFacilityData } from '../../app/providers';
 import { ABTCourse, Resident, ResidentNote } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
@@ -77,9 +78,52 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[90vh]">
         <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
           <h2 className="text-xl font-bold text-neutral-900">Antibiotic Stewardship</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
+          <div className="flex items-center gap-3">
+            <ExportPdfButton
+              filename="active-abts"
+              buildPdfSpec={() => ({
+                title: 'Active ABTs',
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [`Filters Applied: Active Courses: ${activeAbts.length}`],
+                sections: [
+                  {
+                    type: 'table',
+                    title: 'Active Antibiotic Courses',
+                    columns: ['Resident', 'Medication', 'Start Date', 'Indication', 'Flags'],
+                    rows: activeAbts.map((abt) => {
+                      const resident = getResident(abt.residentRef);
+                      const dueReview = isDueStewardshipReview(abt);
+                      const newAbt = isNewAbt(abt);
+                      return [
+                        resident?.displayName || 'Unknown',
+                        abt.medication,
+                        abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'N/A',
+                        abt.indication || 'N/A',
+                        [dueReview ? 'Due ABT Stewardship Review' : '', newAbt ? 'New ABT (last 48 hours)' : ''].filter(Boolean).join('; ') || '—',
+                      ];
+                    }),
+                    pageBreakAfter: true,
+                  },
+                  {
+                    type: 'table',
+                    title: 'Post-ABT Review',
+                    columns: ['Resident', 'Medication', 'End Date', 'Days Since End'],
+                    rows: postAbtReview.map((abt) => {
+                      const resident = getResident(abt.residentRef);
+                      const endDate = new Date(abt.endDate!);
+                      const diffTime = today.getTime() - endDate.getTime();
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      return [resident?.displayName || 'Unknown', abt.medication, endDate.toLocaleDateString(), diffDays];
+                    }),
+                  },
+                ],
+              })}
+            />
+                    <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
             <X className="w-6 h-6" />
           </button>
+          </div>
         </div>
         <div className="p-6 overflow-y-auto flex-1">
           <div>
