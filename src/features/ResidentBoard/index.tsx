@@ -608,9 +608,10 @@ export const ResidentBoard: React.FC = () => {
                                 key={`${indicator.label}-${idx}`}
                                 title={indicator.label}
                                 aria-label={indicator.label}
-                                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/95 border border-neutral-200 text-xs shadow-sm"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/95 border border-neutral-200 text-[11px] font-medium text-neutral-700 shadow-sm"
                               >
-                                {indicator.icon}
+                                <span>{indicator.icon}</span>
+                                <span>{indicator.label}</span>
                               </span>
                             ))}
                           </div>
