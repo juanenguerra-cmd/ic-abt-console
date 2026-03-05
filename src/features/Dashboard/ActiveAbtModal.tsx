@@ -84,7 +84,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
             right={
               <ExportPdfButton
               filename="active-abts"
-              buildPdfSpec={() => ({
+              buildSpec={() => ({
                 title: 'Active ABTs',
                 orientation: 'landscape',
                 template: 'LANDSCAPE_TEMPLATE_V1',
