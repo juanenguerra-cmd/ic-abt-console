@@ -25,6 +25,27 @@ import { v4 as uuidv4 } from "uuid";
  * blue   = EBP only (Enhanced Barrier Precautions / MDRO)
  * green  = Active ABT course
  */
+
+const getClinicalDeviceIndicators = (resident: Resident): Array<{ icon: string; label: string }> => {
+  const devices = resident.clinicalDevices;
+  if (!devices) return [];
+
+  const indicators: Array<{ icon: string; label: string }> = [];
+  if (devices.oxygen.enabled) {
+    indicators.push({
+      icon: '🫁',
+      label: devices.oxygen.mode === 'Continuous' ? 'O2 Continuous' : 'O2 PRN',
+    });
+  }
+  if (devices.urinaryCatheter) indicators.push({ icon: '💧', label: 'Foley' });
+  if (devices.indwellingCatheter) indicators.push({ icon: '💧', label: 'Indwelling' });
+  if (devices.midline) indicators.push({ icon: '🧬', label: 'Midline' });
+  if (devices.picc) indicators.push({ icon: '💉', label: 'PICC' });
+  if (devices.piv) indicators.push({ icon: '🩸', label: 'Peripheral IV (PIV)' });
+
+  return indicators;
+};
+
 const TILE_COLORS: Record<string, { strip: string; bg: string }> = {
   yellow: { strip: '#eab308', bg: 'rgba(234,179,8,0.05)' },
   blue:   { strip: '#3b82f6', bg: 'rgba(59,130,246,0.05)' },
@@ -491,6 +512,7 @@ export const ResidentBoard: React.FC = () => {
                   const sigs = signalMap[resident.mrn] || { hasActivePrecaution: false, hasEbp: false, hasActiveAbt: false, hasDueVax: false, hasRecentSymptoms96h: false, strip: 'none' as const };
                   const tileColor = TILE_COLORS[sigs.strip] ?? TILE_COLORS.none;
                   const isSelected = selectedResidentId === resident.mrn;
+                  const clinicalDeviceIndicators = getClinicalDeviceIndicators(resident);
 
                   return (
                     <div 
@@ -560,6 +582,20 @@ export const ResidentBoard: React.FC = () => {
                           <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
                           <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
                         </div>
+                        {clinicalDeviceIndicators.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {clinicalDeviceIndicators.map((indicator, idx) => (
+                              <span
+                                key={`${indicator.label}-${idx}`}
+                                title={indicator.label}
+                                aria-label={indicator.label}
+                                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/95 border border-neutral-200 text-xs shadow-sm"
+                              >
+                                {indicator.icon}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Chip Row */}
                         <div className="flex flex-wrap gap-1.5 mt-1">
