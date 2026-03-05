@@ -58,8 +58,9 @@ export function FormsTab() {
     }
 
     toast({
-      title: 'Forms Ready',
-      description: `Prepared ${selectedForms.length} form(s) for ${residentInfo.name}`,
+      title: 'Print unavailable',
+      description: 'Form printing is currently unavailable.',
+      variant: 'destructive',
     });
   };
 

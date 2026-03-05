@@ -75,7 +75,7 @@ export const VaxReofferList: React.FC = () => {
     if (consentProfile) {
       toast({
         title: 'Vaccine offer recorded.',
-        description: `${residentName} was offered ${vaccineName}. No PDF generation available.`,
+        description: `${residentName} was offered ${vaccineName} today.`,
       });
     } else {
       toast({
