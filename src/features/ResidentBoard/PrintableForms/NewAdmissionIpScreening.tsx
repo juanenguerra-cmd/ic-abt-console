@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { Resident, VaxEvent, IPEvent, ABTCourse } from '../../../domain/models';
 import { formatDateLikeForDisplay } from '../../../lib/dateUtils';
