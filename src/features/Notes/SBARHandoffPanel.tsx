@@ -1,8 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { ClipboardList, X, Loader2, Zap, AlertTriangle, Printer, Copy } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { ClipboardList, X, Loader2, Zap, AlertTriangle, Copy } from 'lucide-react';
 import { useSBARHandoff } from '../../hooks/useSBARHandoff';
 import { useDatabase } from '../../app/providers';
-import { PrintButton } from '../../components/PrintButton';
 import type { ShiftLogEntry } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -30,7 +29,6 @@ export const SBARHandoffPanel: React.FC<SBARHandoffPanelProps> = ({
 }) => {
   const { generate, sbar, isGenerating, error, reset } = useSBARHandoff();
   const { updateDB } = useDatabase();
-  const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -137,7 +135,7 @@ export const SBARHandoffPanel: React.FC<SBARHandoffPanelProps> = ({
 
           {/* Result screen */}
           {sbar && !isGenerating && (
-            <div ref={printRef} className="space-y-4">
+            <div className="space-y-4">
               {/* Source notice */}
               <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg text-xs text-neutral-600 no-print">
                 <Zap className="w-3.5 h-3.5 shrink-0" />
@@ -166,8 +164,7 @@ export const SBARHandoffPanel: React.FC<SBARHandoffPanelProps> = ({
             >
               <Copy className="w-3.5 h-3.5" /> Copy
             </button>
-            <PrintButton contentRef={printRef} title="SBAR Handoff" />
-            <button
+              <button
               onClick={handleSaveToLog}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
             >

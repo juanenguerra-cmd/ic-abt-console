@@ -1,18 +1,13 @@
 import { useState } from 'react';
 import { FileText, Download, Settings, Pill, Syringe } from 'lucide-react';
 import { ResidentInfo } from '../types/forms';
-import { generateResidentPDF } from '../lib/pdf-generator';
 import { useToast } from '../hooks/useToast';
 import { useFormTemplates } from '../hooks/useFormTemplates';
 import { FormTemplateManager } from './FormTemplateManager';
-import { useDatabase, useFacilityData } from '../app/providers';
-import { usePrint } from '../print/usePrint';
 
 export function FormsTab() {
   const { toast } = useToast();
   const { residentForms } = useFormTemplates();
-  const { db } = useDatabase();
-  const { activeFacilityId } = useFacilityData();
   const [residentInfo, setResidentInfo] = useState<ResidentInfo>({
     name: '',
     roomNumber: '',
@@ -42,8 +37,6 @@ export function FormsTab() {
     }
   };
 
-  const { requestPrint } = usePrint();
-
   const handleGenerate = () => {
     if (!residentInfo.name.trim()) {
       toast({
@@ -62,13 +55,6 @@ export function FormsTab() {
       });
       return;
     }
-
-    const facilityName = db.data.facilities.byId[activeFacilityId]?.name || '{{ Facility name }}';
-    const html = generateResidentPDF(residentInfo, selectedForms, residentForms, facilityName);
-    
-    requestPrint(
-      <div dangerouslySetInnerHTML={{ __html: html }} />
-    );
 
     toast({
       title: 'PDF Generated',

@@ -1,10 +1,9 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import { CheckCircle2, ClipboardCopy, FileDown, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../app/providers";
 import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession } from "../domain/models";
 import { AUDIT_CATEGORIES, infectionControlAuditTemplates, InfectionControlAuditCategory } from "../constants/infectionControlAuditTemplates";
-import { PrintButton } from "../components/PrintButton";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const RESPONSE_OPTIONS: InfectionControlAuditResponse[] = ["COMPLIANT", "NON_COMPLIANT", "NA"];
@@ -237,8 +236,6 @@ const InfectionControlAuditCenter: React.FC = () => {
     }
   };
 
-  const printRef = useRef<HTMLDivElement>(null);
-
   return (
     <div className="p-6 space-y-6">
       <div className="no-print bg-white border border-neutral-200 rounded-xl p-4">
@@ -294,7 +291,6 @@ const InfectionControlAuditCenter: React.FC = () => {
             <button onClick={handleCopyTable} disabled={!selectedSession} className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50 disabled:opacity-50">
               <FileDown className="w-4 h-4" /> Copy Table (TSV)
             </button>
-            <PrintButton contentRef={printRef} title="Audit Center Report" />
             <button onClick={finalizeAudit} disabled={!selectedSession || isReadOnly} className="inline-flex items-center gap-1 px-3 py-2 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50">
               <CheckCircle2 className="w-4 h-4" /> Finalize Audit
             </button>
@@ -315,7 +311,7 @@ const InfectionControlAuditCenter: React.FC = () => {
           <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{errorMessage}</div>
         )}
 
-        <div ref={printRef} className="space-y-4">
+        <div className="space-y-4">
           {selectedSession && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">

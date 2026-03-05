@@ -30,7 +30,6 @@ export async function startPrint<TPayload>(
     return;
   }
 
-  const targetPath = kind === 'dom' ? '/print/precautions' : `/print/${encodeURIComponent(kind)}`;
   const w = window.open('about:blank', '_blank', 'noopener,noreferrer');
   if (!w) {
     window.alert('Popup blocked. Please allow popups for this site to print.');
@@ -52,7 +51,7 @@ export async function startPrint<TPayload>(
     cleanupExpiredPrintJobs();
     savePrintJob(job);
 
-    w.location.href = `${targetPath}?jobId=${encodeURIComponent(jobId)}`;
+    w.location.href = `/print/precautions?jobId=${encodeURIComponent(jobId)}`;
     w.focus();
   } catch (error) {
     w.close();
