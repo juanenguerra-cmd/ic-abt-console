@@ -186,11 +186,12 @@ export function FormsTab() {
         <button
           type="button"
           onClick={handleGenerate}
-          disabled={!isFormValid}
-          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+          disabled
+          className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white cursor-not-allowed opacity-50"
+          title="PDF generation is unavailable"
         >
           <Download className="h-5 w-5" />
-          Generate {selectedForms.length > 0 ? `${selectedForms.length} Form(s)` : 'PDF'}
+          PDF Generation Unavailable
         </button>
       </div>
     </div>

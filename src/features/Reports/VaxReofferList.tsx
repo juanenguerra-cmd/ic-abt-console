@@ -67,7 +67,7 @@ export const VaxReofferList: React.FC = () => {
         status: 'unread',
         category: 'VAX_REOFFER',
         residentId: residentMrn,
-        message: `${residentName} was offered ${vaccineName} today. Consent form generated — pending administration.`,
+        message: `${residentName} was offered ${vaccineName} today. Consent pending administration.`,
         ruleId: 'vax_reoffer_manual',
       };
     });
