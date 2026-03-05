@@ -1,7 +1,6 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { Resident, VaxEvent, IPEvent, ABTCourse } from '../../../domain/models';
-import { PrintButton } from '../../../components/PrintButton';
 import { formatDateLikeForDisplay } from '../../../lib/dateUtils';
 
 interface Props {
@@ -27,7 +26,6 @@ const LinedText = ({ label, text, className = '' }: { label: string, text?: stri
 
 export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }) => {
   const { store } = useFacilityData();
-  const printRef = useRef<HTMLDivElement>(null);
   const resident = store.residents[residentId];
 
   if (!resident) {
@@ -44,12 +42,11 @@ export const NewAdmissionIpScreening: React.FC<Props> = ({ residentId, onClose }
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 no-print">
           <h2 className="text-lg font-bold">New Admission IP Screening</h2>
           <div className="flex items-center gap-2">
-            <PrintButton contentRef={printRef} title="New Admission IP Screening" pageStyle="@page { size: letter; margin: 0.75in; }" />
             <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-md">Close</button>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-8">
-          <div ref={printRef} className="bg-white text-black font-serif">
+          <div className="bg-white text-black font-serif">
             <style>{`
               @page { size: letter; margin: 0.75in; }
               .form-page { page-break-after: always; }

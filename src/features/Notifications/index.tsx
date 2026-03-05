@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { Bell, AlertTriangle, Info, CheckCircle2, X, Download, ChevronDown, ChevronRight, Printer, ListPlus } from 'lucide-react';
 import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
 import { AddToLineListModal } from './AddToLineListModal';
-import { PrintButton } from '../../components/PrintButton';
 
 export const useNotifications = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -70,7 +69,6 @@ export const NotificationsPage: React.FC = () => {
   const [lineListModalNotif, setLineListModalNotif] = useState<AppNotification | null>(null);
   const [lineListSavedId, setLineListSavedId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const printRef = useRef<HTMLDivElement>(null);
 
   type GroupResident = {
     residentId?: string;
@@ -448,14 +446,6 @@ export const NotificationsPage: React.FC = () => {
                     >
                       Clear
                     </button>
-                    <PrintButton
-                      contentRef={printRef}
-                      title="Notifications Report"
-                      label="Print selected"
-                      disabled={selectedVaxGroups.size === 0}
-                      className="px-3 py-1.5 text-xs font-medium text-neutral-700 bg-white border border-neutral-300 hover:bg-neutral-50 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      pageStyle="@page { margin: 0.5in; }"
-                    />
                   </div>
                 </div>
               )}
@@ -683,7 +673,7 @@ export const NotificationsPage: React.FC = () => {
 
       {/* Hidden Print View */}
       <div className="hidden">
-        <div ref={printRef} style={{ fontFamily: 'Arial, sans-serif', color: '#111827', margin: 0, fontSize: '12px' }}>
+        <div style={{ fontFamily: 'Arial, sans-serif', color: '#111827', margin: 0, fontSize: '12px' }}>
           <h1 style={{ margin: '0 0 4px', fontSize: '22px' }}>Notifications & Recommendations</h1>
           <div style={{ marginBottom: '16px', color: '#4b5563', fontSize: '11px' }}>Printed: {new Date().toLocaleString()}</div>
           

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Printer, Inbox, ArrowLeft, ExternalLink } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
@@ -11,7 +11,6 @@ import { ResidentProfileModal } from "./ResidentProfileModal";
 import { SettingsModal } from "./SettingsModal";
 import { ShiftReport } from "./ShiftReport";
 import { QuarantineLinkModal } from "./QuarantineLinkModal";
-import { NewAdmissionIpScreening } from "./PrintableForms/NewAdmissionIpScreening";
 import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
@@ -19,7 +18,6 @@ import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
-import { startPrint } from "../../print/startPrint";
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -60,7 +58,6 @@ export const ResidentBoard: React.FC = () => {
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const [printingResidentId, setPrintingResidentId] = useState<string | null>(null);
   const [linkingQuarantineId, setLinkingQuarantineId] = useState<string | null>(null);
 
   const [showAbtModal, setShowAbtModal] = useState(false);
@@ -233,36 +230,6 @@ export const ResidentBoard: React.FC = () => {
 
 
 
-  const handlePrintCensus = () => {
-    const precautionsByMrn = activeInfections.reduce<Record<string, string[]>>((acc, infection: any) => {
-      if (infection.residentRef?.kind !== "mrn") return acc;
-      const label = [infection.isolationType, infection.ebp ? "EBP" : ""].filter(Boolean).join(" / ");
-      if (!label) return acc;
-      if (!acc[infection.residentRef.id]) acc[infection.residentRef.id] = [];
-      if (!acc[infection.residentRef.id].includes(label)) acc[infection.residentRef.id].push(label);
-      return acc;
-    }, {});
-
-    startPrint("census-rounding", () => {
-      const rows = filteredResidents
-        .slice()
-        .sort((a, b) => (a.currentUnit || "").localeCompare(b.currentUnit || "") || (a.currentRoom || "").localeCompare(b.currentRoom || ""))
-        .map((resident) => ({
-          unit: resident.currentUnit || "",
-          room: resident.currentRoom || "",
-          name: resident.displayName || `${resident.lastName || ""}, ${resident.firstName || ""}`.trim().replace(/^,\s*/, ""),
-          mrn: resident.mrn || "",
-          precautions: (precautionsByMrn[resident.mrn] || []).join(", "),
-        }));
-
-      return {
-        facility: db.data.facilities.byId[activeFacilityId]?.name || "Long Beach Nursing and Rehabilitation Center",
-        title: "Census Rounds Sheet",
-        meta: { unit: filterUnit || "All" },
-        rows,
-      };
-    });
-  };
 
   const handleClearQuarantine = () => {
     const snapshot = { ...store.quarantine };
@@ -425,13 +392,6 @@ export const ResidentBoard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
-          <button
-            onClick={handlePrintCensus}
-            className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-50 transition-colors"
-          >
-            <Printer className="w-4 h-4" aria-hidden="true" />
-            Print Census
-          </button>
           <button 
             onClick={() => setShowCensusModal(true)}
             aria-label="Upload or update census file"
@@ -590,16 +550,6 @@ export const ResidentBoard: React.FC = () => {
                             >
                               <Syringe className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPrintingResidentId(resident.mrn);
-                              }}
-                              className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
-                              title="Print New Admission IP Screening Form"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>
                             <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
                               {resident.currentRoom || "N/A"}
                             </span>
@@ -721,13 +671,6 @@ export const ResidentBoard: React.FC = () => {
         <ContactTraceCaseModal
           caseId={contactTraceCaseId}
           onClose={() => { setShowContactTraceModal(false); setContactTraceCaseId(null); }}
-        />
-      )}
-
-      {printingResidentId && (
-        <NewAdmissionIpScreening 
-          residentId={printingResidentId} 
-          onClose={() => setPrintingResidentId(null)} 
         />
       )}
 

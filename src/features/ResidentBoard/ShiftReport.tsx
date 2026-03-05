@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ResidentNote } from '../../domain/models';
 import { ArrowLeft, Tag, Printer } from 'lucide-react';
@@ -7,8 +7,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
 import { ReportBuilderModal } from './ReportBuilderModal';
-import { DailyPrecautionList } from './PrintableForms/DailyPrecautionList';
-import { PrintButton } from '../../components/PrintButton';
 
 interface Props {
   onBack: () => void;
@@ -24,12 +22,10 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [filterType, setFilterType] = useState<'initiated' | 'active'>('initiated');
   const [showReportBuilder, setShowReportBuilder] = useState(false);
-  const [showPrecautionList, setShowPrecautionList] = useState(false);
   const [selectedShift, setSelectedShift] = useState<string>('');
 
   const [customReports, setCustomReports] = useState<any[]>([]);
 
-  const printRef = useRef<HTMLDivElement>(null);
 
   const categorizedNotes: Record<string, (ResidentNote & { residentName: string })[]> = {};
 
@@ -104,16 +100,11 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
             <option value="Evening">Evening</option>
             <option value="Night">Night</option>
           </select>
-          <PrintButton 
-            contentRef={printRef} 
-            title="Shift Report" 
-            label="Print Shift Report" 
-          />
           {/* Saved Build Report template persistence currently uses facility.customReports via ReportBuilderModal; no separate template store exists yet. */}
         </div>
       </div>
 
-      <div ref={printRef} className="flex-1 overflow-y-auto p-6 space-y-8">
+      <div className="flex-1 overflow-y-auto p-6 space-y-8">
         {Object.keys(categorizedNotes).length > 0 ? (
           Object.entries(categorizedNotes).map(([category, notes]) => (
             <section key={category}>
@@ -150,15 +141,6 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
           </div>
         )}
       </div>
-
-      {showPrecautionList && startDate && (
-        <DailyPrecautionList
-          date={startDate}
-          onClose={() => setShowPrecautionList(false)}
-          facilityName={facility?.name}
-          shift={selectedShift || undefined}
-        />
-      )}
 
       {showReportBuilder && (
         <ReportBuilderModal 

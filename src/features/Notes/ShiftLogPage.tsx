@@ -5,13 +5,12 @@ import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import {
   Plus, X, Search, Send, Clock, AlertTriangle,
-  ExternalLink, Loader2, Zap, ClipboardList, RefreshCw, Printer
+  ExternalLink, Loader2, Zap, ClipboardList, RefreshCw
 } from "lucide-react";
 import { useOutbreakRiskMonitor } from "../../hooks/useOutbreakRiskMonitor";
 import { OutbreakRiskAlert } from "../Notifications/OutbreakRiskAlert";
 import { SBARHandoffPanel } from "./SBARHandoffPanel";
 import { shouldSuggestLineList, getHashtagSymptomClass } from "../ResidentBoard/hashtagToShiftLog";
-import { startPrint } from '../../print/startPrint';
 
 const SHIFT_OPTIONS: ShiftLogEntry['shift'][] = ['Day', 'Night'];
 const TAG_OPTIONS: Array<ShiftLogEntry['tags'][number]> = ['Outbreak', 'Isolation', 'Lab', 'ABT', 'Supply', 'Education'];
@@ -346,13 +345,6 @@ export const ShiftLogPage: React.FC = () => {
                 )}
                 <span className="ml-auto text-[10px] text-neutral-400 flex items-center gap-2">
                   {new Date(entry.createdAtISO).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  <button
-                    onClick={() => void startPrint('note', 'Shift Log Entry', () => ({ facility: db.data.facilities.byId[activeFacilityId], note: entry }))}
-                    className="p-1 hover:bg-neutral-100 rounded text-neutral-400 hover:text-neutral-600"
-                    title="Print Note"
-                  >
-                    <Printer className="w-3 h-3" />
-                  </button>
                 </span>
               </div>
 

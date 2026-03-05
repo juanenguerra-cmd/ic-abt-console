@@ -3,22 +3,19 @@ import { Syringe } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { useToast } from '../../hooks/useToast';
-import { generatePDF, getDataForProfile } from '../../reports/engine';
 import { computeVaxGaps } from '../../utils/vaxReofferUtils';
-import { PrintButton } from '../../components/PrintButton';
 
 const VACCINES = ['Influenza', 'Covid-19', 'Pneumococcal'] as const;
 type VaccineFilter = 'All' | (typeof VACCINES)[number];
 
 export const VaxReofferList: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
-  const { updateDB, db } = useDatabase();
+  const { updateDB } = useDatabase();
   const { toast } = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filterVaccine, setFilterVaccine] = useState<VaccineFilter>('All');
   const [confirmedOffer, setConfirmedOffer] = useState<string | null>(null);
-  const printRef = React.useRef<HTMLDivElement>(null);
 
   const gaps = useMemo(() => computeVaxGaps(store.residents, store.vaxEvents), [store.residents, store.vaxEvents]);
   const filtered = useMemo(
@@ -75,13 +72,7 @@ export const VaxReofferList: React.FC = () => {
       };
     });
 
-    if (consentProfile) {
-      generatePDF(consentProfile, async () => ({
-        profile: consentProfile,
-        data: getDataForProfile(store, consentProfile),
-        facility: db.data.facilities.byId[activeFacilityId],
-      }));
-    } else {
+    if (!consentProfile) {
       toast({
         title: 'No vaccine consent form template found.',
         description: 'Create one in Reports > Forms first.',
@@ -120,9 +111,6 @@ export const VaxReofferList: React.FC = () => {
             <p className="mt-2 text-xs text-amber-700">No vaccine consent template detected in Reports &gt; Forms.</p>
           )}
         </div>
-        <div className="flex gap-2">
-           <PrintButton contentRef={printRef} title="Vaccine Re-offer List" />
-        </div>
       </div>
 
       <div className="no-print flex flex-wrap gap-2 justify-between items-center">
@@ -139,15 +127,9 @@ export const VaxReofferList: React.FC = () => {
           </button>
         ))}
         </div>
-        {/* Print Button Placeholder - will fix in next step if import needed */}
       </div>
 
-      <div ref={printRef} className="space-y-6">
-        <div className="hidden print:block text-center mb-6">
-           <h2 className="text-xl font-bold">Vaccine Re-offer List</h2>
-           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-
+      <div className="space-y-6">
         <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white shadow">
         <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
           <h3 className="text-lg leading-6 font-bold text-indigo-900">Re-offer Candidates</h3>

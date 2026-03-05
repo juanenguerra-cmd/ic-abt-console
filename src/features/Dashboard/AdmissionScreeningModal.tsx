@@ -1,8 +1,7 @@
 import React from 'react';
-import { Printer, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useFacilityData } from '../../app/providers';
 import { Resident, ResidentNote } from '../../domain/models';
-import { NewAdmissionIpScreening } from '../ResidentBoard/PrintableForms/NewAdmissionIpScreening';
 
 interface Props {
   onClose: () => void;
@@ -10,7 +9,6 @@ interface Props {
 
 export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
-  const [printingResidentId, setPrintingResidentId] = React.useState<string | null>(null);
 
   const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const notes = Object.values(store.notes) as ResidentNote[];
@@ -28,10 +26,6 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
     );
     return !hasScreeningNote;
   });
-
-  if (printingResidentId) {
-    return <NewAdmissionIpScreening residentId={printingResidentId} onClose={() => setPrintingResidentId(null)} />;
-  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -55,13 +49,6 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-red-600 font-semibold">Screening Due</span>
-                  <button
-                    onClick={() => setPrintingResidentId(r.mrn)}
-                    title="Print Admission Screening"
-                    className="text-neutral-500 hover:text-indigo-600"
-                  >
-                    <Printer className="w-4 h-4" />
-                  </button>
                 </div>
               </li>
             ))}

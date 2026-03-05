@@ -1,8 +1,7 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
 import { formatDate, computeAge } from './lineListUtils';
-import { PrintButton } from '../../components/PrintButton';
 
 interface Props {
   tab: SymptomClass;
@@ -454,7 +453,6 @@ export const LineListPrintForm: React.FC<Props> = ({
   onClose,
 }) => {
   const { store } = useFacilityData();
-  const printRef = useRef<HTMLDivElement>(null);
 
   const dateRange = `${formatDate(startDate)} – ${formatDate(endDate)}`;
 
@@ -579,11 +577,6 @@ export const LineListPrintForm: React.FC<Props> = ({
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 no-print">
           <h2 className="text-lg font-bold">Line List Print Preview</h2>
           <div className="flex items-center gap-2">
-            <PrintButton
-              contentRef={printRef}
-              title={`${tab === 'resp' ? 'ILI' : 'GI'} Line List`}
-              pageStyle="@page { size: letter landscape; margin: 0.4in 0.35in; }"
-            />
             <button
               onClick={onClose}
               className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-md"
@@ -593,7 +586,7 @@ export const LineListPrintForm: React.FC<Props> = ({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-8 bg-neutral-100">
-          <div ref={printRef} className="bg-white text-black font-serif p-8 shadow-sm mx-auto" style={{ width: '10.5in', minHeight: '8in' }}>
+          <div className="bg-white text-black font-serif p-8 shadow-sm mx-auto" style={{ width: '10.5in', minHeight: '8in' }}>
             <style>{`
               @page { size: letter landscape; margin: 0.4in 0.35in; }
               .form-page { page-break-after: always; }
