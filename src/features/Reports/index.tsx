@@ -159,58 +159,10 @@ const SurveyPacketsReport: React.FC = () => {
     [store.abts, store.residents, store.quarantine]
   );
 
-  const handleExportLineList = () => {
-    const columns = ['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes'];
-    const rows: string[][] = [];
-
-    activePrecautions.forEach(({ ip, res }) => {
-      rows.push([
-        'IP Event',
-        residentLabel(res),
-        (res as any)?.mrn || '',
-        ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-        ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
-        ip.infectionCategory || '',
-        ip.isolationType || '',
-        ip.organism || '',
-        ip.onsetDate || ip.createdAt?.split('T')[0] || '',
-        ip.status,
-        ip.notes || '',
-      ]);
-    });
-
-    activeAbts.forEach(({ abt, res }) => {
-      rows.push([
-        'ABT Course',
-        residentLabel(res),
-        (res as any)?.mrn || '',
-        abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-        abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
-        abt.syndromeCategory || abt.indication || '',
-        '',
-        abt.organismIdentified || '',
-        abt.startDate || '',
-        abt.status,
-        abt.notes || '',
-      ]);
-    });
-
-    exportPDF({
-      title: 'Line Listing',
-      orientation: 'landscape',
-      columns,
-      rows,
-      filters: {
-        Precautions: activePrecautions.length,
-        ActiveABT: activeAbts.length,
-      },
-    });
-  };
-
   return (
     <div className="space-y-6">
       {/* E6: Line List Export */}
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
         <DrilldownHeader
           title="Line Listing"
           subtitle="Survey-ready active precautions and ABT courses"
@@ -267,11 +219,6 @@ const SurveyPacketsReport: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="hidden print:block text-center mb-6">
-          <h2 className="text-xl font-bold">Active Precautions & Antibiotic Courses</h2>
-          <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-
         <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
           <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List</h3>
@@ -388,7 +335,7 @@ const DailyReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-3">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-3">
         <DrilldownHeader
           title="Daily Report"
           subtitle="Standard of care daily infection-control snapshot"
@@ -425,124 +372,110 @@ const DailyReport: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
-        <style>{`@page { size: letter; margin: 0.75in; }`}</style>
-        
-        <div className="hidden print:block text-center mb-6">
-          <h1 className="text-xl font-bold uppercase mb-1">Daily Infection Control Report</h1>
-          <div className="flex justify-center gap-8 text-sm">
-            <div className="flex items-end gap-2">
-              <label className="font-bold">DATE:</label>
-              <span className="border-b border-black min-w-[150px] inline-block">
-                {new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </span>
-            </div>
-          </div>
+      <div className="space-y-6">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
+          <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List ({activePrecautions.length})</h3>
+          <p className="text-xs text-red-700 mt-1">Sortable by unit for floor nurses</p>
         </div>
-
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-        <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200 print:bg-neutral-100 print:border-black print:py-2">
-          <h3 className="text-lg leading-6 font-bold text-red-900 print:text-black print:text-base print:uppercase">Active Precautions Line List ({activePrecautions.length})</h3>
-          <p className="text-xs text-red-700 mt-1 print:hidden">Sortable by unit for floor nurses</p>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-          <thead className="bg-neutral-50 print:bg-neutral-100">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Category</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Isolation</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Organism</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">EBP</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">EBP</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+          <tbody className="bg-white divide-y divide-neutral-200">
             {activePrecautions.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">No active precautions today</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active precautions today</td></tr>
             )}
             {activePrecautions.map(({ ip, res }) => (
               <tr key={ip.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.infectionCategory || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.isolationType || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.organism || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.ebp ? 'Yes' : 'No'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.isolationType || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.organism || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{ip.ebp ? 'Yes' : 'No'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-        <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200 print:bg-neutral-100 print:border-black print:py-2">
-          <h3 className="text-lg leading-6 font-bold text-amber-900 print:text-black print:text-base print:uppercase">Active Antibiotic Courses ({activeAbts.length})</h3>
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
+          <h3 className="text-lg leading-6 font-bold text-amber-900">Active Antibiotic Courses ({activeAbts.length})</h3>
         </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-          <thead className="bg-neutral-50 print:bg-neutral-100">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Medication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Start Date</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Indication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Culture</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Culture</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+          <tbody className="bg-white divide-y divide-neutral-200">
             {activeAbts.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">No active antibiotic courses</td></tr>
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active antibiotic courses</td></tr>
             )}
             {activeAbts.map(({ abt, res }) => (
               <tr key={abt.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.medication}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.startDate || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.indication || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.cultureCollected ? 'Yes' : 'No'}</td>
+                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{abt.cultureCollected ? 'Yes' : 'No'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-        <div className="px-4 py-5 sm:px-6 bg-emerald-50 border-b border-emerald-200 print:bg-neutral-100 print:border-black print:py-2">
-          <h3 className="text-lg leading-6 font-bold text-emerald-900 print:text-black print:text-base print:uppercase">Admission Screening Due (&lt;72h) ({recentAdmissions.filter(r => !r.hasScreening).length})</h3>
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-emerald-50 border-b border-emerald-200">
+          <h3 className="text-lg leading-6 font-bold text-emerald-900">Admission Screening Due (&lt;72h) ({recentAdmissions.filter(r => !r.hasScreening).length})</h3>
         </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-          <thead className="bg-neutral-50 print:bg-neutral-100">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Admission Date</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Screening</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Admission Date</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Screening</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+          <tbody className="bg-white divide-y divide-neutral-200">
             {recentAdmissions.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">No recent admissions in the last 72 hours</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No recent admissions in the last 72 hours</td></tr>
             )}
             {recentAdmissions.map(({ res, hasScreening }) => (
               <tr key={res.mrn}>
-                <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{res.displayName}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{res.mrn}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{res.admissionDate || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{res.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{res.currentRoom || '—'}</td>
-                <td className="px-4 py-2 print:border print:border-black print:p-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${hasScreening ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} print:bg-transparent print:text-black print:p-0`}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{res.displayName}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.mrn}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.admissionDate || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.currentUnit || '—'}</td>
+                <td className="px-4 py-2 text-neutral-500">{res.currentRoom || '—'}</td>
+                <td className="px-4 py-2">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${hasScreening ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {hasScreening ? 'Done' : 'Pending'}
                   </span>
                 </td>
@@ -551,15 +484,6 @@ const DailyReport: React.FC = () => {
           </tbody>
         </table>
       </div>
-
-      <footer className="mt-auto pt-12 hidden print:block">
-        <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
-          <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Prepared by:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">Title:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">Signature:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Date/Time:</label><span className="border-b border-black flex-1"></span></div>
-        </div>
-      </footer>
     </div>
     </div>
   );
@@ -638,8 +562,8 @@ const WeeklyReport: React.FC = () => {
 
   return (
     <>
-      {/* Controls — hidden when printing */}
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 space-y-3">
+      {/* Controls */}
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 space-y-3">
         <DrilldownHeader
           title="Weekly Report (Standard of Care Report)"
           subtitle="Weekly infections, ABT starts, and vaccination activity"
@@ -684,23 +608,9 @@ const WeeklyReport: React.FC = () => {
       </div>
 
       {/* Screen content */}
-      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
-        <style>{`@page { size: letter; margin: 0.75in; }`}</style>
-        
-        <div className="hidden print:block text-center mb-6">
-          <h1 className="text-xl font-bold uppercase mb-1">Weekly Infection Control Report</h1>
-          <div className="flex justify-center gap-8 text-sm">
-            <div className="flex items-end gap-2">
-              <label className="font-bold">PERIOD:</label>
-              <span className="border-b border-black min-w-[200px] inline-block">
-                {weekStart} to {weekEnd}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Summary counts — hidden when printing or styled differently */}
-        <div className="grid grid-cols-3 gap-4 print:hidden">
+      <div className="space-y-6">
+        {/* Summary counts */}
+        <div className="grid grid-cols-3 gap-4">
           <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
             <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
             <div className="text-xs text-neutral-500 mt-1">New Infections</div>
@@ -716,50 +626,50 @@ const WeeklyReport: React.FC = () => {
         </div>
 
         {/* New Infections Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-          <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200 print:bg-neutral-100 print:border-black print:py-2">
-            <h3 className="text-lg leading-6 font-bold text-red-900 print:text-black print:text-base print:uppercase">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
+            <h3 className="text-lg leading-6 font-bold text-red-900">
               New Infections — {weekStart} to {weekEnd} ({newInfections.length})
             </h3>
           </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-            <thead className="bg-neutral-50 print:bg-neutral-100">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit / Room</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Category</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Status</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Isolation</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Onset Date</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Onset Date</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+            <tbody className="bg-white divide-y divide-neutral-200">
               {newInfections.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">
+                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
                     No new infections in this date range
                   </td>
                 </tr>
               )}
               {newInfections.map(({ ip, res }) => (
                 <tr key={ip.id}>
-                  <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{residentLabel(res)}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{(res as any)?.mrn || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">
+                  <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
+                  <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
+                  <td className="px-4 py-2 text-neutral-500">
                     {ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
                     {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
                   </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.infectionCategory || '—'}</td>
-                  <td className="px-4 py-2 print:border print:border-black print:p-1">
+                  <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
+                  <td className="px-4 py-2">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                       ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                    } print:bg-transparent print:text-black print:p-0`}>
+                    }`}>
                       {ip.status}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{ip.isolationType || 'None'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">
+                  <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
+                  <td className="px-4 py-2 text-neutral-500">
                     {new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}
                   </td>
                 </tr>
@@ -768,31 +678,29 @@ const WeeklyReport: React.FC = () => {
           </table>
         </div>
 
-        <div className="print-page-break" />
-
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-          <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200 print:bg-neutral-100 print:border-black print:py-2">
-            <h3 className="text-lg leading-6 font-bold text-amber-900 print:text-black print:text-base print:uppercase">
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
+            <h3 className="text-lg leading-6 font-bold text-amber-900">
               New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})
             </h3>
           </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-            <thead className="bg-neutral-50 print:bg-neutral-100">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit / Room</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Medication</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Indication</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Category</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Start Date</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+            <tbody className="bg-white divide-y divide-neutral-200">
               {newAbts.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">
+                  <td colSpan={8} className="px-4 py-6 text-center text-neutral-400">
                     No new antibiotic courses in this date range
                   </td>
                 </tr>
@@ -1187,7 +1095,7 @@ const OnDemandReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="no-print bg-white rounded-lg shadow border border-neutral-200 p-6">
+      <div className="bg-white rounded-lg shadow border border-neutral-200 p-6">
         <h3 className="text-base font-bold text-neutral-900 mb-4">On Demand Report Builder</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
@@ -1265,11 +1173,6 @@ const OnDemandReport: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="hidden print:block text-center mb-6">
-           <h2 className="text-xl font-bold">On Demand Report — {dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}</h2>
-           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className={`px-4 py-5 sm:px-6 border-b ${
             dataset === 'infections' ? 'bg-red-50 border-red-200' :
@@ -1302,7 +1205,7 @@ const OnDemandReport: React.FC = () => {
             <thead className="bg-neutral-50">
               <tr>
                 {(['infections', 'abts', 'vax'].includes(dataset)) && (
-                  <th className="no-print px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">Edit</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">Edit</th>
                 )}
                 {currentHeaders.map(h => (
                   <th key={h} className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase whitespace-nowrap">{h}</th>
@@ -1318,7 +1221,7 @@ const OnDemandReport: React.FC = () => {
                 return (
                   <tr key={i}>
                     {meta && (['infections', 'abts', 'vax'].includes(dataset)) && (
-                      <td className="no-print px-3 py-2 text-center">
+                      <td className="px-3 py-2 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             onClick={() => {
@@ -1345,7 +1248,7 @@ const OnDemandReport: React.FC = () => {
                         </div>
                       </td>
                     )}
-                    {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="no-print px-3 py-2" />}
+                    {!meta && (['infections', 'abts', 'vax'].includes(dataset)) && <td className="px-3 py-2" />}
                     {row.map((cell, j) => (
                       <td key={j} className="px-4 py-2 text-neutral-700 whitespace-nowrap">{cell}</td>
                     ))}
@@ -1522,33 +1425,19 @@ const MonthlyAnalytics: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="no-print flex justify-end">
+      <div className="flex justify-end">
       </div>
 
-      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
-        <style>{`@page { size: letter; margin: 0.75in; }`}</style>
-        
-        <div className="hidden print:block text-center mb-6">
-          <h1 className="text-xl font-bold uppercase mb-1">Monthly Infection Control Analytics</h1>
-          <div className="flex justify-center gap-8 text-sm">
-            <div className="flex items-end gap-2">
-              <label className="font-bold">GENERATED:</label>
-              <span className="border-b border-black min-w-[150px] inline-block">
-                {new Date().toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
+      <div className="space-y-6">
         {/* DOT Trend Chart */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-        <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200 print:bg-neutral-100 print:border-black print:py-2">
-          <h3 className="text-lg leading-6 font-bold text-indigo-900 print:text-black print:text-base print:uppercase">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
-          <p className="text-xs text-indigo-700 mt-1 print:hidden">Active antibiotic courses per calendar day over the past 30 days.</p>
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
+          <h3 className="text-lg leading-6 font-bold text-indigo-900">Days-of-Therapy (DOT) — Rolling 30 Days</h3>
+          <p className="text-xs text-indigo-700 mt-1">Active antibiotic courses per calendar day over the past 30 days.</p>
         </div>
-        <div className="px-4 py-5 sm:px-6 overflow-x-auto print:p-4">
+        <div className="px-4 py-5 sm:px-6 overflow-x-auto">
           {dotTrend.every(p => p.dot === 0) ? (
-            <p className="text-sm text-neutral-400 text-center py-6 print:text-black">No active antibiotic courses recorded in the last 30 days.</p>
+            <p className="text-sm text-neutral-400 text-center py-6">No active antibiotic courses recorded in the last 30 days.</p>
           ) : (
             <svg viewBox={`0 0 ${dotTrend.length * 22} 120`} className="w-full" style={{ minWidth: '500px', height: '140px' }} aria-label="DOT trend bar chart">
               {dotTrend.map((p, i) => {
@@ -1565,70 +1454,60 @@ const MonthlyAnalytics: React.FC = () => {
                       height={barH}
                       rx={2}
                       fill={isToday ? '#4f46e5' : '#a5b4fc'}
-                      className="print:fill-neutral-400 print:stroke-black print:stroke-1"
                       aria-label={`${p.label}: ${p.dot} ABT${p.dot !== 1 ? 's' : ''}`}
                     />
                     {p.dot > 0 && (
-                      <text x={x + 9} y={y - 3} textAnchor="middle" fontSize={8} fill="#374151" className="print:fill-black print:font-bold">{p.dot}</text>
+                      <text x={x + 9} y={y - 3} textAnchor="middle" fontSize={8} fill="#374151">{p.dot}</text>
                     )}
                     {(i === 0 || i === 9 || i === 19 || i === 29) && (
-                      <text x={x + 9} y={108} textAnchor="middle" fontSize={7} fill="#6b7280" className="print:fill-black">{p.label}</text>
+                      <text x={x + 9} y={108} textAnchor="middle" fontSize={7} fill="#6b7280">{p.label}</text>
                     )}
                   </g>
                 );
               })}
-              <line x1={0} y1={91} x2={dotTrend.length * 22} y2={91} stroke="#e5e7eb" strokeWidth={1} className="print:stroke-black" />
+              <line x1={0} y1={91} x2={dotTrend.length * 22} y2={91} stroke="#e5e7eb" strokeWidth={1} />
             </svg>
           )}
-          <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500 print:hidden">
+          <div className="flex items-center gap-4 mt-2 text-xs text-neutral-500">
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-indigo-500" /> Today</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-indigo-300" /> Previous days</span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-        <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200 print:bg-neutral-100 print:border-black print:py-2">
-          <h3 className="text-lg leading-6 font-bold text-indigo-900 print:text-black print:text-base print:uppercase">Monthly Analytics</h3>
+      <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
+          <h3 className="text-lg leading-6 font-bold text-indigo-900">Monthly Analytics</h3>
         </div>
       <div>
-        <table className="min-w-full divide-y divide-neutral-200 print:divide-black print:border-collapse">
-          <thead className="bg-neutral-50 print:bg-neutral-100">
+        <table className="min-w-full divide-y divide-neutral-200">
+          <thead className="bg-neutral-50">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Month</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Resident Days</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Average Census</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Total Infections</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Infection Rate / 1000</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">Total ABT Days</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider print:text-black print:border print:border-black print:p-1">AUR / 1000</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Month</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Resident Days</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Average Census</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Infections</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Infection Rate / 1000</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Total ABT Days</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">AUR / 1000</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+          <tbody className="bg-white divide-y divide-neutral-200">
             {analytics.map(row => (
               <tr key={row.month}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{row.month}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.residentDays}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.averageCensus}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.totalInfections}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.infectionRate}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.totalAbtDays}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 print:text-black print:border print:border-black print:p-1">{row.aur}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">{row.month}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.residentDays}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.averageCensus}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.totalInfections}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.infectionRate}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.totalAbtDays}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">{row.aur}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       </div>
-
-      <footer className="mt-auto pt-12 hidden print:block">
-        <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
-          <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Prepared by:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">Title:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold">Signature:</label><span className="border-b border-black flex-1"></span></div>
-          <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Date/Time:</label><span className="border-b border-black flex-1"></span></div>
-        </div>
-      </footer>
     </div>
     </div>
   );
@@ -1705,42 +1584,9 @@ const QapiRollup: React.FC = () => {
     });
   }, [vaccineTypes, store.vaxEvents, activeResidentCount]);
 
-  const handleExportPdf = () => {
-    exportPDF({
-      title: `QAPI Rollup — ${selectedMonth}`,
-      orientation: 'landscape',
-      filters: { Month: selectedMonth },
-      tables: [
-        {
-          title: 'Infections by Category',
-          columns: ['Category', 'Count'],
-          rows: infectionsByCategory.map(([cat, cnt]) => [cat, cnt]),
-          pageBreakAfter: true,
-        },
-        {
-          title: 'Infections by Unit',
-          columns: ['Unit', 'Count'],
-          rows: infectionsByUnit.map(([unit, cnt]) => [unit, cnt]),
-          pageBreakAfter: true,
-        },
-        {
-          title: 'ABT Use Rate',
-          columns: ['New ABT Courses (Month)', 'Active Residents', 'Rate per Resident'],
-          rows: [[String(abtCount), String(activeResidentCount), activeResidentCount > 0 ? (abtCount / activeResidentCount * 100).toFixed(1) + '%' : 'N/A']],
-          pageBreakAfter: true,
-        },
-        {
-          title: 'Vaccine Coverage (Cumulative)',
-          columns: ['Vaccine', 'Residents Given', 'Active Census', 'Coverage %'],
-          rows: vaccineCoverage.map((r) => [r.vaccine, String(r.given), String(r.total), r.pct + '%']),
-        },
-      ],
-    });
-  };
-
   return (
     <div className="space-y-6">
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
         <span className="font-bold text-indigo-900 text-sm">QAPI Rollup</span>
         <input
           type="month"
@@ -1768,55 +1614,35 @@ const QapiRollup: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
-        <style>{`@page { size: letter; margin: 0.75in; }`}</style>
-        
-        <div className="hidden print:block text-center mb-6">
-           <h1 className="text-xl font-bold uppercase mb-1">QAPI Infection Control Rollup</h1>
-           <div className="flex justify-center gap-8 text-sm">
-            <div className="flex items-end gap-2">
-              <label className="font-bold uppercase">MONTH:</label>
-              <span className="border-b border-black min-w-[100px] inline-block">
-                {selectedMonth}
-              </span>
-            </div>
-            <div className="flex items-end gap-2">
-              <label className="font-bold uppercase">GENERATED:</label>
-              <span className="border-b border-black min-w-[150px] inline-block">
-                {new Date().toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-1 print:gap-8">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Infections by Category */}
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-          <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200 print:bg-neutral-100 print:border-black print:py-2">
-            <h3 className="text-lg leading-6 font-bold text-red-900 print:text-black print:text-base print:uppercase">Infections by Category</h3>
-            <p className="text-xs text-red-700 mt-1 print:hidden">New infections created in {selectedMonth}</p>
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
+            <h3 className="text-lg leading-6 font-bold text-red-900">Infections by Category</h3>
+            <p className="text-xs text-red-700 mt-1">New infections created in {selectedMonth}</p>
           </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-            <thead className="bg-neutral-50 print:bg-neutral-100">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Category</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Count</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Count</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+            <tbody className="bg-white divide-y divide-neutral-200">
               {infectionsByCategory.length === 0 && (
-                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400 print:text-black print:border print:border-black print:p-1">No infections this month</td></tr>
+                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400">No infections this month</td></tr>
               )}
               {infectionsByCategory.map(([cat, cnt]) => (
                 <tr key={cat}>
-                  <td className="px-4 py-2 text-neutral-700 print:text-black print:border print:border-black print:p-1">{cat}</td>
-                  <td className="px-4 py-2 text-right font-semibold text-neutral-900 print:text-black print:border print:border-black print:p-1">{cnt}</td>
+                  <td className="px-4 py-2 text-neutral-700">{cat}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-neutral-900">{cnt}</td>
                 </tr>
               ))}
               {infectionsByCategory.length > 0 && (
-                <tr className="bg-neutral-50 print:bg-neutral-100">
-                  <td className="px-4 py-2 font-bold text-neutral-700 print:text-black print:border print:border-black print:p-1">Total</td>
-                  <td className="px-4 py-2 text-right font-bold text-neutral-900 print:text-black print:border print:border-black print:p-1">{infectionsByCategory.reduce((s, [, c]) => s + c, 0)}</td>
+                <tr className="bg-neutral-50">
+                  <td className="px-4 py-2 font-bold text-neutral-700">Total</td>
+                  <td className="px-4 py-2 text-right font-bold text-neutral-900">{infectionsByCategory.reduce((s, [, c]) => s + c, 0)}</td>
                 </tr>
               )}
             </tbody>
@@ -1829,21 +1655,21 @@ const QapiRollup: React.FC = () => {
             <h3 className="text-lg leading-6 font-bold text-amber-900">Infections by Unit</h3>
             <p className="text-xs text-amber-700 mt-1">New infections created in {selectedMonth}</p>
           </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-            <thead className="bg-neutral-50 print:bg-neutral-100">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Unit</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Count</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Count</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
+            <tbody className="bg-white divide-y divide-neutral-200">
               {infectionsByUnit.length === 0 && (
-                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400 print:text-black print:border print:border-black print:p-1">No infections this month</td></tr>
+                <tr><td colSpan={2} className="px-4 py-6 text-center text-neutral-400">No infections this month</td></tr>
               )}
               {infectionsByUnit.map(([unit, cnt]) => (
                 <tr key={unit}>
-                  <td className="px-4 py-2 text-neutral-700 print:text-black print:border print:border-black print:p-1">{unit}</td>
-                  <td className="px-4 py-2 text-right font-semibold text-neutral-900 print:text-black print:border print:border-black print:p-1">{cnt}</td>
+                  <td className="px-4 py-2 text-neutral-700">{unit}</td>
+                  <td className="px-4 py-2 text-right font-semibold text-neutral-900">{cnt}</td>
                 </tr>
               ))}
             </tbody>
@@ -2053,7 +1879,7 @@ const VaccineCoverageReport: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
         <DrilldownHeader
           title="Vaccine Coverage Summary"
           subtitle="Counts active residents with qualifying in-house or historical vaccine events"
@@ -2076,11 +1902,6 @@ const VaccineCoverageReport: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="hidden print:block text-center mb-6">
-           <h2 className="text-xl font-bold">Vaccine Coverage Report</h2>
-           <p className="text-sm text-neutral-500">Total Active Census: {result.totalActiveCensus}</p>
-        </div>
-
         {/* Summary counts */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="px-4 py-5 sm:px-6 bg-teal-50 border-b border-teal-200">
@@ -2140,7 +1961,6 @@ const VaccineCoverageReport: React.FC = () => {
 
       {selectedReOffer && (
         <>
-          <div className="print-page-break" />
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
               <DrilldownHeader
@@ -2238,7 +2058,7 @@ const VaccineCoverageReport: React.FC = () => {
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Date</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Source</th>
-                  <th className="no-print px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Actions</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-neutral-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-neutral-200">
@@ -2255,7 +2075,7 @@ const VaccineCoverageReport: React.FC = () => {
                       <td className="px-4 py-2 text-neutral-500">{eventDate ? new Date(eventDate).toLocaleDateString() : '—'}</td>
                       <td className="px-4 py-2 text-neutral-500">{event.status}</td>
                       <td className="px-4 py-2 text-neutral-500">{event.source || '—'}</td>
-                      <td className="no-print px-4 py-2 text-right space-x-3">
+                      <td className="px-4 py-2 text-right space-x-3">
                         <button
                           onClick={() => setEditingVaxEvent(event)}
                           className="text-indigo-600 hover:text-indigo-900"

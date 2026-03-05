@@ -1,6 +1,7 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Activity, Users, Map, FileText, Settings, ShieldAlert } from "lucide-react";
+import { GlobalSearch } from "./GlobalSearch";
 
 const navItems = [
   { name: "Resident Board", path: "/", icon: Users },
@@ -16,13 +17,13 @@ export function Layout() {
 
   return (
     <div className="flex h-screen bg-neutral-50 text-neutral-900 font-sans">
-      <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col">
+      <aside className="w-64 bg-white border-r border-neutral-200 flex flex-col shrink-0">
         <div className="p-6">
           <h1 className="text-lg font-semibold tracking-tight text-emerald-700">
             Infection Control & Antibiotic Stewardship Console
           </h1>
         </div>
-        <nav className="flex-1 px-4 space-y-1">
+        <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -43,9 +44,19 @@ export function Layout() {
           })}
         </nav>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-8 max-w-7xl mx-auto">
-          <Outlet />
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white border-b border-neutral-200 px-8 py-4 flex justify-between items-center shrink-0 z-10">
+          <h2 className="text-xl font-semibold text-neutral-800">
+            {navItems.find(item => item.path === location.pathname)?.name || "Dashboard"}
+          </h2>
+          <div className="w-96">
+            <GlobalSearch />
+          </div>
+        </header>
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>

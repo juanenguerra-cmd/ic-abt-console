@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2, GitBranch } from "lucide-react";
+import { X, Save, Edit2, User, GitBranch } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices } from '../../utils/clinicalDevices';
+import { ResidentTimeline } from './ResidentTimeline';
 
 interface Props {
   residentId: string;
@@ -119,16 +120,6 @@ export const ResidentProfileModal: React.FC<Props> = ({
     </div>
   );
 
-  const residentAbts = (Object.values(store.abts) as any[]).filter(a => a.residentRef.kind === 'mrn' && a.residentRef.id === residentId).sort((a: any, b: any) => (b.startDate || b.createdAt || '0000-00-00').localeCompare(a.startDate || a.createdAt || '0000-00-00'));
-  const residentInfections = (Object.values(store.infections) as any[]).filter(i => i.residentRef.kind === 'mrn' && i.residentRef.id === residentId).sort((a: any, b: any) => (b.onsetDate || b.createdAt || '0000-00-00').localeCompare(a.onsetDate || a.createdAt || '0000-00-00'));
-  const vaxEvents = (Object.values(store.vaxEvents) as any[]).filter(v => v.residentRef.kind === 'mrn' && v.residentRef.id === residentId);
-
-  const getStatusBadgeClasses = (status: string): string => {
-    if (status === 'active') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    if (status === 'completed') return 'bg-green-100 text-green-700 border-green-200';
-    return 'bg-neutral-100 text-neutral-600 border-neutral-300';
-  };
-
   const getAge = (dobStr?: string) => {
     const birthDate = new Date(dobStr);
     const today = new Date();
@@ -138,20 +129,6 @@ export const ResidentProfileModal: React.FC<Props> = ({
       age--;
     }
     return age;
-  };
-
-  /**
-   * Build a human-readable precaution label from an infection record.
-   * - isolationType only  → e.g. "Contact"
-   * - ebp only           → "EBP"
-   * - both               → e.g. "Contact + EBP"
-   * - neither            → "None"
-   */
-  const getPrecautionLabel = (ip: any): string => {
-    if (ip.isolationType && ip.ebp) return `${ip.isolationType} + EBP`;
-    if (ip.isolationType) return ip.isolationType;
-    if (ip.ebp) return 'EBP';
-    return 'None';
   };
 
   const handleSave = () => {
@@ -441,115 +418,16 @@ export const ResidentProfileModal: React.FC<Props> = ({
                   </button>
                 </div>
               </div>
-              <div className="space-y-3">
-                {residentAbts.map((abt: any) => {
-                  const isActive = abt.status === 'active';
-                  return (
-                    <div key={abt.id} onClick={() => onEditAbt(abt.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${isActive ? 'bg-emerald-50 border-emerald-100' : 'bg-neutral-50 border-neutral-200'}`}>
-                      <Activity className={`w-5 h-5 shrink-0 mt-0.5 ${isActive ? 'text-emerald-600' : 'text-neutral-400'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${isActive ? 'text-emerald-900' : 'text-neutral-700'}`}>
-                          ABT: {abt.medication}
-                          <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(abt.status)}`}>{abt.status}</span>
-                        </p>
-                        <p className={`text-xs ${isActive ? 'text-emerald-700' : 'text-neutral-500'}`}>{abt.indication} • Started: {abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'Unknown'}{abt.endDate ? ` • Ended: ${new Date(abt.endDate).toLocaleDateString()}` : ''}</p>
-                      </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteAbt(abt.id); }}
-                        className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                        title="Delete ABT record"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-                {residentInfections.map((ip: any) => {
-                  const isActive = ip.status === 'active';
-                  // EBP-only = ebp flag set but no formal isolationType assigned → blue theme
-                  // Isolation (with or without EBP) = amber theme
-                  const isEbpOnly = isActive && ip.ebp === true && !ip.isolationType;
-
-                  const rowClass = !isActive
-                    ? 'bg-neutral-50 border-neutral-200'
-                    : isEbpOnly
-                      ? 'bg-blue-50 border-blue-100'
-                      : 'bg-amber-50 border-amber-100';
-
-                  const iconClass = !isActive
-                    ? 'text-neutral-400'
-                    : isEbpOnly
-                      ? 'text-blue-600'
-                      : 'text-amber-600';
-
-                  const titleClass = !isActive
-                    ? 'text-neutral-700'
-                    : isEbpOnly
-                      ? 'text-blue-900'
-                      : 'text-amber-900';
-
-                  const subtitleClass = !isActive
-                    ? 'text-neutral-500'
-                    : isEbpOnly
-                      ? 'text-blue-700'
-                      : 'text-amber-700';
-
-                  return (
-                    <div key={ip.id} onClick={() => onEditIp(ip.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${rowClass}`}>
-                      <Shield className={`w-5 h-5 shrink-0 mt-0.5 ${iconClass}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${titleClass}`}>
-                          Infection: {ip.infectionCategory || 'Unspecified'}
-                          <span className={`ml-2 uppercase text-[10px] px-1.5 py-0.5 rounded border font-medium ${getStatusBadgeClasses(ip.status)}`}>{ip.status}</span>
-                        </p>
-                        <p className={`text-xs ${subtitleClass}`}>{ip.organism || 'Unknown Organism'} • Precaution: {getPrecautionLabel(ip)}</p>
-                      </div>
-                      {onStartContactTrace && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onStartContactTrace({ kind: 'ipEvent', id: ip.id }); }}
-                          className="shrink-0 px-2 py-1 text-[11px] font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded transition-colors"
-                          title="Start Contact Trace"
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <GitBranch className="w-3.5 h-3.5" />
-                            Start Contact Trace
-                          </span>
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDeleteIp(ip.id); }}
-                        className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                        title="Delete IP event"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  );
-                })}
-                {vaxEvents.map((vax: any) => (
-                  <div key={vax.id} onClick={() => onEditVax(vax.id)} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow ${vax.status === 'due' || vax.status === 'overdue' ? 'bg-purple-50 border-purple-100' : 'bg-neutral-50 border-neutral-200'}`}>
-                    <Syringe className={`w-5 h-5 shrink-0 mt-0.5 ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-600' : 'text-neutral-500'}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-bold ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-900' : 'text-neutral-700'}`}>
-                        Vaccine: {vax.vaccine} <span className="uppercase text-[10px] ml-1 px-1.5 py-0.5 bg-white rounded border">{vax.status}</span>
-                      </p>
-                      <p className={`text-xs ${vax.status === 'due' || vax.status === 'overdue' ? 'text-purple-700' : 'text-neutral-500'}`}>
-                        {vax.status === 'given' ? `Given: ${formatDateLikeForDisplay(vax.dateGiven)}` : `Due: ${formatDateLikeForDisplay(vax.dueDate)}`}
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onDeleteVax(vax.id); }}
-                      className="shrink-0 p-1 text-neutral-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
-                      title="Delete vaccination record"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                {!residentAbts.length && !residentInfections.length && !vaxEvents.length && (
-                  <p className="text-sm text-neutral-500 italic">No clinical events logged.</p>
-                )}
-              </div>
+              <ResidentTimeline 
+                residentId={residentId}
+                onEditAbt={onEditAbt}
+                onEditIp={onEditIp}
+                onEditVax={onEditVax}
+                onDeleteAbt={onDeleteAbt}
+                onDeleteIp={onDeleteIp}
+                onDeleteVax={onDeleteVax}
+                onStartContactTrace={onStartContactTrace}
+              />
             </section>
           )}
         </div>

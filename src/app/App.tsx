@@ -20,7 +20,6 @@ import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
-import PrecautionsPrintPage from "../pages/print/PrecautionsPrintPage";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
@@ -154,7 +153,6 @@ const SidebarSection = ({ title, children }: { title: string, children: React.Re
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPrintRoute = location.pathname === "/print/precautions";
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
@@ -164,7 +162,7 @@ const AppShell = () => {
   const facilitySwitcherRef = React.useRef<HTMLDivElement>(null);
   const [showBackupBanner, setShowBackupBanner] = React.useState(false);
   const [lastBackupLabel, setLastBackupLabel] = React.useState<string | null>(null);
-  const [isLocked, setIsLocked] = React.useState(!isPrintRoute);
+  const [isLocked, setIsLocked] = React.useState(true);
 
   React.useEffect(() => {
     const lastBackupTimestamp = localStorage.getItem(LS_LAST_BACKUP_TS);
@@ -193,7 +191,7 @@ const AppShell = () => {
 
   // G6: Idle PIN lock — re-engage lock screen on route change when user has been idle
   React.useEffect(() => {
-    if (isPrintRoute || isLocked) return;
+    if (isLocked) return;
     const lastActiveStr = localStorage.getItem(LS_LAST_ACTIVE_TS);
     if (lastActiveStr) {
       const lastActiveMs = parseInt(lastActiveStr, 10);
@@ -207,12 +205,10 @@ const AppShell = () => {
     }
     // Reset the activity timestamp on each route navigation
     localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
-  }, [location, isPrintRoute, isLocked]);
+  }, [location, isLocked]);
 
   // G6: Track user activity (clicks/keystrokes) to reset the idle timer
   React.useEffect(() => {
-    if (isPrintRoute) return;
-
     const updateActivity = () => {
       localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
     };
@@ -222,7 +218,7 @@ const AppShell = () => {
       window.removeEventListener("click", updateActivity);
       window.removeEventListener("keydown", updateActivity);
     };
-  }, [isPrintRoute]);
+  }, []);
 
   React.useEffect(() => {
     if (!isFacilitySwitcherOpen) return;
@@ -238,15 +234,6 @@ const AppShell = () => {
   const facilities = Object.values(db?.data?.facilities?.byId || {}) as any[];
   const activeFacility = db?.data?.facilities?.byId?.[activeFacilityId];
   const quarantineCount = (Object.values(store?.quarantine || {}) as any[]).filter((q: any) => !q.resolvedToMrn).length;
-
-
-  if (isPrintRoute) {
-    return (
-      <Routes>
-        <Route path="/print/precautions" element={<PrecautionsPrintPage />} />
-      </Routes>
-    );
-  }
 
   if (isLocked) {
     return (

@@ -137,7 +137,7 @@ export const SymptomWatchReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="no-print bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+      <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl font-bold text-neutral-900">Symptom Watch & Hashtag Report</h2>
@@ -195,11 +195,6 @@ export const SymptomWatchReport: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="hidden print:block text-center mb-6">
-           <h2 className="text-xl font-bold">Symptom Watch Report</h2>
-           <p className="text-sm text-neutral-500">Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-
         <div className="bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
             <h3 className="text-lg leading-6 font-bold text-indigo-900">Detected Symptoms & Hashtags</h3>
