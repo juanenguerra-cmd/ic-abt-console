@@ -60,6 +60,17 @@ export interface Resident {
     attendingMD: string;
     admissionDate: string;
   };
+  clinicalDevices?: {
+    oxygen: {
+      enabled: boolean;
+      mode: "PRN" | "Continuous" | null;
+    };
+    urinaryCatheter: boolean;
+    indwellingCatheter: boolean;
+    midline: boolean;
+    picc: boolean;
+    piv: boolean;
+  };
 }
 
 export interface QuarantineResident {

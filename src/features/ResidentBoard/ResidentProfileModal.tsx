@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2, GitBranch } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { formatDateLikeForDisplay } from '../../lib/dateUtils';
+
+const EMPTY_CLINICAL_DEVICES: NonNullable<Resident["clinicalDevices"]> = {
+  oxygen: { enabled: false, mode: null },
+  urinaryCatheter: false,
+  indwellingCatheter: false,
+  midline: false,
+  picc: false,
+  piv: false,
+};
 
 interface Props {
   residentId: string;
@@ -53,6 +62,26 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const [attendingMD, setAttendingMD] = useState("");
   const [allergiesInput, setAllergiesInput] = useState("");
   const [cognitiveStatus, setCognitiveStatus] = useState<Resident["cognitiveStatus"]>(undefined);
+  const [oxygenEnabled, setOxygenEnabled] = useState(false);
+  const [oxygenMode, setOxygenMode] = useState<"PRN" | "Continuous" | null>(null);
+  const [urinaryCatheter, setUrinaryCatheter] = useState(false);
+  const [indwellingCatheter, setIndwellingCatheter] = useState(false);
+  const [midline, setMidline] = useState(false);
+  const [picc, setPicc] = useState(false);
+  const [piv, setPiv] = useState(false);
+
+  const clinicalDevices = useMemo<NonNullable<Resident["clinicalDevices"]>>(() => ({
+    oxygen: {
+      enabled: oxygenEnabled,
+      mode: oxygenEnabled ? oxygenMode : null,
+    },
+    urinaryCatheter,
+    indwellingCatheter,
+    midline,
+    picc,
+    piv,
+  }), [oxygenEnabled, oxygenMode, urinaryCatheter, indwellingCatheter, midline, picc, piv]);
+
 
   useEffect(() => {
     if (resident) {
@@ -68,6 +97,14 @@ export const ResidentProfileModal: React.FC<Props> = ({
       setAttendingMD(resident.attendingMD || "");
       setAllergiesInput(resident.allergies ? resident.allergies.join(", ") : "");
       setCognitiveStatus(resident.cognitiveStatus);
+      const residentDevices = resident.clinicalDevices || EMPTY_CLINICAL_DEVICES;
+      setOxygenEnabled(Boolean(residentDevices.oxygen.enabled));
+      setOxygenMode(residentDevices.oxygen.mode || null);
+      setUrinaryCatheter(Boolean(residentDevices.urinaryCatheter));
+      setIndwellingCatheter(Boolean(residentDevices.indwellingCatheter));
+      setMidline(Boolean(residentDevices.midline));
+      setPicc(Boolean(residentDevices.picc));
+      setPiv(Boolean(residentDevices.piv));
     }
   }, [resident]);
 
@@ -133,6 +170,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
         r.attendingMD = attendingMD.trim() || undefined;
         r.allergies = allergiesInput.trim() ? allergiesInput.split(",").map(a => a.trim()).filter(a => a) : [];
         r.cognitiveStatus = cognitiveStatus;
+        r.clinicalDevices = clinicalDevices;
         r.updatedAt = new Date().toISOString();
       }
     }, { action: 'update', entityType: 'Resident', entityId: residentId });
@@ -267,9 +305,75 @@ export const ResidentProfileModal: React.FC<Props> = ({
                     <option value="Unknown">Unknown</option>
                   </select>
                 </div>
+                <div className="md:col-span-2 border border-neutral-200 rounded-lg p-4 bg-neutral-50">
+                  <h4 className="text-sm font-semibold text-neutral-900 mb-3">Clinical Devices &amp; Support</h4>
+                  <div className="space-y-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-neutral-800">
+                      <input
+                        type="checkbox"
+                        checked={oxygenEnabled}
+                        onChange={e => {
+                          const enabled = e.target.checked;
+                          setOxygenEnabled(enabled);
+                          if (!enabled) setOxygenMode(null);
+                        }}
+                        className="rounded border-neutral-300"
+                      />
+                      Oxygen
+                    </label>
+                    <div className="ml-6 flex items-center gap-5">
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
+                        <input
+                          type="radio"
+                          name="oxygen-mode"
+                          checked={oxygenMode === "PRN"}
+                          onChange={() => setOxygenMode("PRN")}
+                          disabled={!oxygenEnabled}
+                        />
+                        PRN
+                      </label>
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
+                        <input
+                          type="radio"
+                          name="oxygen-mode"
+                          checked={oxygenMode === "Continuous"}
+                          onChange={() => setOxygenMode("Continuous")}
+                          disabled={!oxygenEnabled}
+                        />
+                        Continuous
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={urinaryCatheter} onChange={e => setUrinaryCatheter(e.target.checked)} className="rounded border-neutral-300" />Urinary Catheter</label>
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={indwellingCatheter} onChange={e => setIndwellingCatheter(e.target.checked)} className="rounded border-neutral-300" />Indwelling Catheter</label>
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={midline} onChange={e => setMidline(e.target.checked)} className="rounded border-neutral-300" />Midline</label>
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={picc} onChange={e => setPicc(e.target.checked)} className="rounded border-neutral-300" />PICC Line</label>
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800 md:col-span-2"><input type="checkbox" checked={piv} onChange={e => setPiv(e.target.checked)} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-neutral-500 mb-1">Clinical Devices &amp; Support</p>
+                  <div className="flex flex-wrap gap-2">
+                    {clinicalDevices.oxygen.enabled && (
+                      <span className="px-2 py-1 bg-sky-50 text-sky-700 text-xs font-medium rounded border border-sky-100">
+                        Oxygen {clinicalDevices.oxygen.mode ? `(${clinicalDevices.oxygen.mode})` : ''}
+                      </span>
+                    )}
+                    {clinicalDevices.urinaryCatheter && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Urinary Catheter</span>}
+                    {clinicalDevices.indwellingCatheter && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Indwelling Catheter</span>}
+                    {clinicalDevices.midline && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Midline</span>}
+                    {clinicalDevices.picc && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">PICC Line</span>}
+                    {clinicalDevices.piv && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Peripheral IV (PIV)</span>}
+                    {!clinicalDevices.oxygen.enabled && !clinicalDevices.urinaryCatheter && !clinicalDevices.indwellingCatheter && !clinicalDevices.midline && !clinicalDevices.picc && !clinicalDevices.piv && (
+                      <p className="text-sm text-neutral-900 italic">No clinical devices documented.</p>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <p className="text-sm text-neutral-500 mb-1">Allergies</p>
                   {resident.allergies && resident.allergies.length > 0 ? (
