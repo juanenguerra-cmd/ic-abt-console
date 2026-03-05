@@ -1,4 +1,4 @@
-import { PrintJob, PrintJobKind } from './printJob';
+import { PrintJob } from './printJob';
 import { cleanupExpiredPrintJobs, savePrintJob } from './printJobStore';
 import { isPrintFeatureEnabled, PrintFeature } from './printFlags';
 
@@ -11,7 +11,6 @@ interface StartPrintOptions {
 }
 
 export async function startPrint<TPayload>(
-  kind: PrintJobKind,
   titleOrBuildPayload: string | (() => Promise<TPayload> | TPayload),
   maybeBuildPayload?: () => Promise<TPayload> | TPayload,
   options?: StartPrintOptions,
@@ -42,7 +41,7 @@ export async function startPrint<TPayload>(
 
     const job: PrintJob<TPayload> = {
       id: jobId,
-      kind,
+      kind: 'dom',
       createdAt: Date.now(),
       title: typeof titleOrBuildPayload === 'string' ? titleOrBuildPayload : undefined,
       payload,
