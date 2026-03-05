@@ -3,15 +3,7 @@ import { X, Save, Edit2, Shield, Activity, Syringe, User, Trash2, GitBranch } fr
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { formatDateLikeForDisplay } from '../../lib/dateUtils';
-
-const EMPTY_CLINICAL_DEVICES: NonNullable<Resident["clinicalDevices"]> = {
-  oxygen: { enabled: false, mode: null },
-  urinaryCatheter: false,
-  indwellingCatheter: false,
-  midline: false,
-  picc: false,
-  piv: false,
-};
+import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices } from '../../utils/clinicalDevices';
 
 interface Props {
   residentId: string;
@@ -65,22 +57,27 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const [oxygenEnabled, setOxygenEnabled] = useState(false);
   const [oxygenMode, setOxygenMode] = useState<"PRN" | "Continuous" | null>(null);
   const [urinaryCatheter, setUrinaryCatheter] = useState(false);
+  const [urinaryCatheterInsertedDate, setUrinaryCatheterInsertedDate] = useState("");
   const [indwellingCatheter, setIndwellingCatheter] = useState(false);
+  const [indwellingCatheterInsertedDate, setIndwellingCatheterInsertedDate] = useState("");
   const [midline, setMidline] = useState(false);
+  const [midlineInsertedDate, setMidlineInsertedDate] = useState("");
   const [picc, setPicc] = useState(false);
+  const [piccInsertedDate, setPiccInsertedDate] = useState("");
   const [piv, setPiv] = useState(false);
+  const [pivInsertedDate, setPivInsertedDate] = useState("");
 
-  const clinicalDevices = useMemo<NonNullable<Resident["clinicalDevices"]>>(() => ({
+  const clinicalDevices = useMemo<ClinicalDevices>(() => ({
     oxygen: {
       enabled: oxygenEnabled,
       mode: oxygenEnabled ? oxygenMode : null,
     },
-    urinaryCatheter,
-    indwellingCatheter,
-    midline,
-    picc,
-    piv,
-  }), [oxygenEnabled, oxygenMode, urinaryCatheter, indwellingCatheter, midline, picc, piv]);
+    urinaryCatheter: { active: urinaryCatheter, insertedDate: urinaryCatheter ? (urinaryCatheterInsertedDate || null) : null },
+    indwellingCatheter: { active: indwellingCatheter, insertedDate: indwellingCatheter ? (indwellingCatheterInsertedDate || null) : null },
+    midline: { active: midline, insertedDate: midline ? (midlineInsertedDate || null) : null },
+    picc: { active: picc, insertedDate: picc ? (piccInsertedDate || null) : null },
+    piv: { active: piv, insertedDate: piv ? (pivInsertedDate || null) : null },
+  }), [oxygenEnabled, oxygenMode, urinaryCatheter, urinaryCatheterInsertedDate, indwellingCatheter, indwellingCatheterInsertedDate, midline, midlineInsertedDate, picc, piccInsertedDate, piv, pivInsertedDate]);
 
 
   useEffect(() => {
@@ -97,14 +94,19 @@ export const ResidentProfileModal: React.FC<Props> = ({
       setAttendingMD(resident.attendingMD || "");
       setAllergiesInput(resident.allergies ? resident.allergies.join(", ") : "");
       setCognitiveStatus(resident.cognitiveStatus);
-      const residentDevices = resident.clinicalDevices || EMPTY_CLINICAL_DEVICES;
+      const residentDevices = normalizeClinicalDevices(resident) || EMPTY_CLINICAL_DEVICES;
       setOxygenEnabled(Boolean(residentDevices.oxygen.enabled));
       setOxygenMode(residentDevices.oxygen.mode || null);
-      setUrinaryCatheter(Boolean(residentDevices.urinaryCatheter));
-      setIndwellingCatheter(Boolean(residentDevices.indwellingCatheter));
-      setMidline(Boolean(residentDevices.midline));
-      setPicc(Boolean(residentDevices.picc));
-      setPiv(Boolean(residentDevices.piv));
+      setUrinaryCatheter(Boolean(residentDevices.urinaryCatheter.active));
+      setUrinaryCatheterInsertedDate(residentDevices.urinaryCatheter.insertedDate || "");
+      setIndwellingCatheter(Boolean(residentDevices.indwellingCatheter.active));
+      setIndwellingCatheterInsertedDate(residentDevices.indwellingCatheter.insertedDate || "");
+      setMidline(Boolean(residentDevices.midline.active));
+      setMidlineInsertedDate(residentDevices.midline.insertedDate || "");
+      setPicc(Boolean(residentDevices.picc.active));
+      setPiccInsertedDate(residentDevices.picc.insertedDate || "");
+      setPiv(Boolean(residentDevices.piv.active));
+      setPivInsertedDate(residentDevices.piv.insertedDate || "");
     }
   }, [resident]);
 
@@ -343,12 +345,21 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         Continuous
                       </label>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={urinaryCatheter} onChange={e => setUrinaryCatheter(e.target.checked)} className="rounded border-neutral-300" />Urinary Catheter</label>
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={indwellingCatheter} onChange={e => setIndwellingCatheter(e.target.checked)} className="rounded border-neutral-300" />Indwelling Catheter</label>
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={midline} onChange={e => setMidline(e.target.checked)} className="rounded border-neutral-300" />Midline</label>
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={picc} onChange={e => setPicc(e.target.checked)} className="rounded border-neutral-300" />PICC Line</label>
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800 md:col-span-2"><input type="checkbox" checked={piv} onChange={e => setPiv(e.target.checked)} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
+                    <div className="grid grid-cols-1 gap-2 pt-2">
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={urinaryCatheter} onChange={e => { const checked = e.target.checked; setUrinaryCatheter(checked); if (!checked) setUrinaryCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Urinary Catheter</label>
+                      {urinaryCatheter && <input type="date" value={urinaryCatheterInsertedDate} onChange={e => setUrinaryCatheterInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={indwellingCatheter} onChange={e => { const checked = e.target.checked; setIndwellingCatheter(checked); if (!checked) setIndwellingCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Indwelling Catheter</label>
+                      {indwellingCatheter && <input type="date" value={indwellingCatheterInsertedDate} onChange={e => setIndwellingCatheterInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={midline} onChange={e => { const checked = e.target.checked; setMidline(checked); if (!checked) setMidlineInsertedDate(""); }} className="rounded border-neutral-300" />Midline</label>
+                      {midline && <input type="date" value={midlineInsertedDate} onChange={e => setMidlineInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={picc} onChange={e => { const checked = e.target.checked; setPicc(checked); if (!checked) setPiccInsertedDate(""); }} className="rounded border-neutral-300" />PICC Line</label>
+                      {picc && <input type="date" value={piccInsertedDate} onChange={e => setPiccInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={piv} onChange={e => { const checked = e.target.checked; setPiv(checked); if (!checked) setPivInsertedDate(""); }} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
+                      {piv && <input type="date" value={pivInsertedDate} onChange={e => setPivInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
                     </div>
                   </div>
                 </div>
@@ -363,12 +374,12 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         Oxygen {clinicalDevices.oxygen.mode ? `(${clinicalDevices.oxygen.mode})` : ''}
                       </span>
                     )}
-                    {clinicalDevices.urinaryCatheter && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Urinary Catheter</span>}
-                    {clinicalDevices.indwellingCatheter && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Indwelling Catheter</span>}
-                    {clinicalDevices.midline && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Midline</span>}
-                    {clinicalDevices.picc && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">PICC Line</span>}
-                    {clinicalDevices.piv && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Peripheral IV (PIV)</span>}
-                    {!clinicalDevices.oxygen.enabled && !clinicalDevices.urinaryCatheter && !clinicalDevices.indwellingCatheter && !clinicalDevices.midline && !clinicalDevices.picc && !clinicalDevices.piv && (
+                    {clinicalDevices.urinaryCatheter.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Urinary Catheter {clinicalDevices.urinaryCatheter.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.urinaryCatheter.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.indwellingCatheter.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Indwelling Catheter {clinicalDevices.indwellingCatheter.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.indwellingCatheter.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.midline.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Midline {clinicalDevices.midline.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.midline.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.picc.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">PICC Line {clinicalDevices.picc.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.picc.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.piv.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Peripheral IV (PIV) {clinicalDevices.piv.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.piv.insertedDate)})` : ''}</span>}
+                    {!clinicalDevices.oxygen.enabled && !clinicalDevices.urinaryCatheter.active && !clinicalDevices.indwellingCatheter.active && !clinicalDevices.midline.active && !clinicalDevices.picc.active && !clinicalDevices.piv.active && (
                       <p className="text-sm text-neutral-900 italic">No clinical devices documented.</p>
                     )}
                   </div>

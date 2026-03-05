@@ -18,6 +18,7 @@ import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
+import { getDeviceDay, normalizeClinicalDevices } from "../../utils/clinicalDevices";
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -27,8 +28,7 @@ import { v4 as uuidv4 } from "uuid";
  */
 
 const getClinicalDeviceIndicators = (resident: Resident): Array<{ icon: string; label: string }> => {
-  const devices = resident.clinicalDevices;
-  if (!devices) return [];
+  const devices = normalizeClinicalDevices(resident);
 
   const indicators: Array<{ icon: string; label: string }> = [];
   if (devices.oxygen.enabled) {
@@ -37,11 +37,26 @@ const getClinicalDeviceIndicators = (resident: Resident): Array<{ icon: string; 
       label: devices.oxygen.mode === 'Continuous' ? 'O2 Continuous' : 'O2 PRN',
     });
   }
-  if (devices.urinaryCatheter) indicators.push({ icon: '💧', label: 'Foley' });
-  if (devices.indwellingCatheter) indicators.push({ icon: '💧', label: 'Indwelling' });
-  if (devices.midline) indicators.push({ icon: '🧬', label: 'Midline' });
-  if (devices.picc) indicators.push({ icon: '💉', label: 'PICC' });
-  if (devices.piv) indicators.push({ icon: '🩸', label: 'Peripheral IV (PIV)' });
+  if (devices.picc.active) {
+    const day = getDeviceDay(devices.picc.insertedDate);
+    indicators.push({ icon: '💉', label: day ? `PICC Day ${day}` : 'PICC' });
+  }
+  if (devices.urinaryCatheter.active) {
+    const day = getDeviceDay(devices.urinaryCatheter.insertedDate);
+    indicators.push({ icon: '💧', label: day ? `Foley Day ${day}` : 'Foley' });
+  }
+  if (devices.indwellingCatheter.active) {
+    const day = getDeviceDay(devices.indwellingCatheter.insertedDate);
+    indicators.push({ icon: '💧', label: day ? `Indwelling Day ${day}` : 'Indwelling' });
+  }
+  if (devices.midline.active) {
+    const day = getDeviceDay(devices.midline.insertedDate);
+    indicators.push({ icon: '🧬', label: day ? `Midline Day ${day}` : 'Midline' });
+  }
+  if (devices.piv.active) {
+    const day = getDeviceDay(devices.piv.insertedDate);
+    indicators.push({ icon: '🩸', label: day ? `PIV Day ${day}` : 'Peripheral IV (PIV)' });
+  }
 
   return indicators;
 };
@@ -513,6 +528,10 @@ export const ResidentBoard: React.FC = () => {
                   const tileColor = TILE_COLORS[sigs.strip] ?? TILE_COLORS.none;
                   const isSelected = selectedResidentId === resident.mrn;
                   const clinicalDeviceIndicators = getClinicalDeviceIndicators(resident);
+                  const operationalIndicators: Array<{ icon: string; label: string }> = [...clinicalDeviceIndicators];
+                  if (sigs.hasActivePrecaution) operationalIndicators.push({ icon: '🦠', label: 'Isolation' });
+                  if (sigs.hasActiveAbt) operationalIndicators.push({ icon: '💊', label: 'ABT' });
+                  if (sigs.hasDueVax) operationalIndicators.push({ icon: '💉', label: 'VAX' });
 
                   return (
                     <div 
@@ -582,9 +601,9 @@ export const ResidentBoard: React.FC = () => {
                           <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
                           <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
                         </div>
-                        {clinicalDeviceIndicators.length > 0 && (
+                        {operationalIndicators.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mb-2">
-                            {clinicalDeviceIndicators.map((indicator, idx) => (
+                            {operationalIndicators.map((indicator, idx) => (
                               <span
                                 key={`${indicator.label}-${idx}`}
                                 title={indicator.label}

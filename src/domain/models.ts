@@ -65,11 +65,26 @@ export interface Resident {
       enabled: boolean;
       mode: "PRN" | "Continuous" | null;
     };
-    urinaryCatheter: boolean;
-    indwellingCatheter: boolean;
-    midline: boolean;
-    picc: boolean;
-    piv: boolean;
+    urinaryCatheter: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    indwellingCatheter: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    midline: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    picc: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    piv: {
+      active: boolean;
+      insertedDate: string | null;
+    };
   };
 }
 

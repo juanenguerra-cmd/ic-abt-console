@@ -10,6 +10,7 @@ import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import { exportPDF } from '../../utils/pdfExport';
+import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -955,15 +956,23 @@ const OnDemandReport: React.FC = () => {
       return true;
     });
     return {
-      rows: filtered.map(r => [
-        r.displayName,
-        r.mrn,
-        r.currentUnit || '—',
-        r.currentRoom || '—',
-        r.admissionDate || '—',
-        r.attendingMD || '—',
-        r.status || '—',
-      ]),
+      rows: filtered.map(r => {
+        const activeAbt = (Object.values(store.abts) as ABTCourse[]).find(a => a.residentRef.kind === 'mrn' && a.residentRef.id === r.mrn && a.status === 'active');
+        const activeIsolation = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.kind === 'mrn' && i.residentRef.id === r.mrn && i.status === 'active' && i.isolationType);
+        const devices = normalizeClinicalDevices(r);
+        const foleyDay = devices.urinaryCatheter.active ? getDeviceDay(devices.urinaryCatheter.insertedDate) : null;
+        const piccDay = devices.picc.active ? getDeviceDay(devices.picc.insertedDate) : null;
+
+        return [
+          r.displayName,
+          activeAbt?.medication || '—',
+          devices.oxygen.enabled ? (devices.oxygen.mode || 'Enabled') : '—',
+          foleyDay ? `Day ${foleyDay}` : (devices.urinaryCatheter.active ? 'Active' : '—'),
+          piccDay ? `Day ${piccDay}` : (devices.picc.active ? 'Active' : '—'),
+          activeIsolation?.isolationType || '—',
+          '',
+        ];
+      }),
       rowMeta: filtered.map(() => null as RowMeta),
     };
   }, [dataset, startDate, endDate, unitFilter, statusFilter, typeFilter, store]);
@@ -972,7 +981,7 @@ const OnDemandReport: React.FC = () => {
     infections: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Site', 'Status', 'Isolation', 'EBP', 'Organism', 'Date'],
     abts: ['Resident', 'MRN', 'Unit', 'Room', 'Medication', 'Indication', 'Syndrome', 'Status', 'Start', 'End', 'Culture'],
     vax: ['Resident', 'MRN', 'Unit', 'Room', 'Vaccine', 'Status', 'Date Given', 'Decline Reason', 'Due Date'],
-    residents: ['Resident', 'MRN', 'Unit', 'Room', 'Admission Date', 'Attending MD', 'Status'],
+    residents: ['Resident', 'ABT', 'O2', 'Foley', 'PICC', 'Isolation', 'Notes'],
   };
 
   // For saved templates, derive headers from template columns
