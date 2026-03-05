@@ -3,20 +3,26 @@ import { Download } from 'lucide-react';
 import { exportPdfDocument, type PdfSpec } from '../pdf/exportPdf';
 
 interface ExportPdfButtonProps {
-  buildPdfSpec: () => PdfSpec;
+  buildSpec?: () => PdfSpec;
+  buildPdfSpec?: () => PdfSpec;
   filename?: string;
   className?: string;
   label?: string;
 }
 
 export const ExportPdfButton: React.FC<ExportPdfButtonProps> = ({
+  buildSpec,
   buildPdfSpec,
   filename,
   className,
   label = 'Export PDF',
 }) => {
   const handleClick = () => {
-    const spec = buildPdfSpec();
+    const specBuilder = buildSpec ?? buildPdfSpec;
+    if (!specBuilder) {
+      return;
+    }
+    const spec = specBuilder();
     exportPdfDocument({ ...spec, filename: filename ?? spec.filename });
   };
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
+import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { useFacilityData } from '../../app/providers';
 import { ABTCourse, Resident, ResidentNote } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
@@ -76,10 +77,12 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[90vh]">
-        <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
-          <h2 className="text-xl font-bold text-neutral-900">Antibiotic Stewardship</h2>
-          <div className="flex items-center gap-3">
-            <ExportPdfButton
+        <div className="px-6 py-4 border-b border-neutral-200 bg-neutral-50 space-y-3">
+          <DrilldownHeader
+            title="Active ABTs"
+            subtitle="Antibiotic stewardship"
+            right={
+              <ExportPdfButton
               filename="active-abts"
               buildPdfSpec={() => ({
                 title: 'Active ABTs',
@@ -119,8 +122,10 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
                   },
                 ],
               })}
-            />
-                    <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
+            />}
+          />
+          <div className="flex justify-end">
+            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
             <X className="w-6 h-6" />
           </button>
           </div>
