@@ -44,6 +44,7 @@ export const VaxReofferList: React.FC = () => {
   const offerVaccine = (residentMrn: string, residentName: string, vaccineName: (typeof VACCINES)[number]) => {
     const now = new Date().toISOString();
     const eventId = uuidv4();
+    const notifId = uuidv4();
     updateDB((draft) => {
       const facility = draft.data.facilityData[activeFacilityId];
       facility.vaxEvents[eventId] = {
@@ -55,11 +56,6 @@ export const VaxReofferList: React.FC = () => {
         createdAt: now,
         updatedAt: now,
       };
-    });
-
-    const notifId = uuidv4();
-    updateDB((draft) => {
-      const facility = draft.data.facilityData[activeFacilityId];
       facility.notifications[notifId] = {
         id: notifId,
         facilityId: activeFacilityId,
@@ -67,7 +63,7 @@ export const VaxReofferList: React.FC = () => {
         status: 'unread',
         category: 'VAX_REOFFER',
         residentId: residentMrn,
-        message: `${residentName} was offered ${vaccineName} today. Consent form generated — pending administration.`,
+        message: `${residentName} was offered ${vaccineName} today — pending administration.`,
         ruleId: 'vax_reoffer_manual',
       };
     });
@@ -116,8 +112,6 @@ export const VaxReofferList: React.FC = () => {
             <p className="mt-2 text-xs text-amber-700">No vaccine consent template detected in Reports &gt; Forms.</p>
           )}
         </div>
-        <div className="flex gap-2">
-        </div>
       </div>
 
       <div className="no-print flex flex-wrap gap-2 justify-between items-center">
@@ -134,7 +128,6 @@ export const VaxReofferList: React.FC = () => {
           </button>
         ))}
         </div>
-        {/* Print Button Placeholder - will fix in next step if import needed */}
       </div>
 
       <div className="space-y-6">

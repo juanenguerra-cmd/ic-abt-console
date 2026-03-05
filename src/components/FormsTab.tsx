@@ -58,9 +58,8 @@ export function FormsTab() {
     }
 
     toast({
-      title: 'Print unavailable',
-      description: 'Form printing is currently unavailable.',
-      variant: 'destructive',
+      title: 'PDF generation coming soon',
+      description: 'PDF generation will be available in a future update.',
     });
   };
 

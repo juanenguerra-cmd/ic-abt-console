@@ -242,6 +242,7 @@ const AppShell = () => {
     return (
       <Routes>
         <Route path="/print/precautions" element={<DomPrintPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }
