@@ -93,35 +93,32 @@ export function ILILineListTable({ rows, facilityName, startDate, endDate, facil
   return (
     <div style={{ overflowX: 'auto' }}>
       {/* Report header */}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: 'Arial, sans-serif', fontSize: '8pt', marginBottom: '4px' }}>
-        <tbody>
-          <tr>
-            <td style={{ border: '1px solid #000', padding: '3px 6px', fontWeight: 700, fontSize: '10pt', textAlign: 'center' }} colSpan={27}>
-              INFLUENZA-LIKE ILLNESS LINE LIST
-            </td>
-          </tr>
-          <tr>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={14}>
-              <strong>Facility: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '200px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: facilityName }}
-              />
-            </td>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={13}>
-              <strong>Date: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '150px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: `${startDate} – ${endDate}` }}
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', fontFamily: 'Arial, sans-serif' }}>
+        <div style={{ width: '44%', textAlign: 'center' }}>
+          <div style={{ fontSize: '18pt', fontWeight: 700, letterSpacing: '0.4px' }}>INFLUENZA-LIKE ILLNESS</div>
+          <div style={{ fontSize: '18pt', fontWeight: 700, marginTop: '18px', letterSpacing: '0.4px' }}>LINE LIST</div>
+        </div>
+        <div style={{ width: '44%', fontSize: '10pt', paddingTop: '6px' }}>
+          <div style={{ marginBottom: '16px', fontSize: '18pt', fontWeight: 700 }}>
+            FACILITY:
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              style={{ borderBottom: '2px solid #000', marginLeft: '8px', display: 'inline-block', minWidth: '360px', verticalAlign: 'middle' }}
+              dangerouslySetInnerHTML={{ __html: facilityName }}
+            />
+          </div>
+          <div style={{ fontSize: '18pt', fontWeight: 700 }}>
+            DATE:
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              style={{ borderBottom: '2px solid #000', marginLeft: '8px', display: 'inline-block', minWidth: '420px', verticalAlign: 'middle' }}
+              dangerouslySetInnerHTML={{ __html: `${startDate} – ${endDate}` }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Data table */}
       <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: 'Arial, sans-serif', fontSize: '7pt' }}>
