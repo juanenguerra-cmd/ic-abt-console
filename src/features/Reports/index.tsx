@@ -10,6 +10,8 @@ import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import { exportPDF } from '../../utils/pdfExport';
+import { ExportPdfButton } from '../../components/ExportPdfButton';
+import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import {
   computeVaccineCoverage,
@@ -208,14 +210,60 @@ const SurveyPacketsReport: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* E6: Line List Export */}
-      <div className="no-print flex justify-end gap-2">
-        <button
-          onClick={handleExportLineList}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          Generate Line List (PDF)
-        </button>
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+        <DrilldownHeader
+          title="Line Listing"
+          subtitle="Survey-ready active precautions and ABT courses"
+          right={
+            <ExportPdfButton
+              label="Export PDF"
+              filename="line-listing"
+              buildSpec={() => ({
+                title: 'Line Listing',
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [
+                  `Precautions: ${activePrecautions.length}`,
+                  `Active ABT: ${activeAbts.length}`,
+                ],
+                sections: [
+                  {
+                    type: 'table',
+                    columns: ['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes'],
+                    rows: [
+                      ...activePrecautions.map(({ ip, res }) => [
+                        'IP Event',
+                        residentLabel(res),
+                        (res as any)?.mrn || '',
+                        ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                        ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                        ip.infectionCategory || '',
+                        ip.isolationType || '',
+                        ip.organism || '',
+                        ip.onsetDate || ip.createdAt?.split('T')[0] || '',
+                        ip.status,
+                        ip.notes || '',
+                      ]),
+                      ...activeAbts.map(({ abt, res }) => [
+                        'ABT Course',
+                        residentLabel(res),
+                        (res as any)?.mrn || '',
+                        abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                        abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                        abt.syndromeCategory || abt.indication || '',
+                        '',
+                        abt.organismIdentified || '',
+                        abt.startDate || '',
+                        abt.status,
+                        abt.notes || '',
+                      ]),
+                    ],
+                  },
+                ],
+              })}
+            />
+          }
+        />
       </div>
 
       <div className="space-y-6">
@@ -340,15 +388,41 @@ const DailyReport: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3">
-        <span className="font-bold text-indigo-900 text-sm">Daily Report</span>
-        <input
-          type="date"
-          value={reportDate}
-          onChange={e => setReportDate(e.target.value)}
-          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-3">
+        <DrilldownHeader
+          title="Daily Report"
+          subtitle="Standard of care daily infection-control snapshot"
+          right={
+            <ExportPdfButton
+              filename="daily-report"
+              buildSpec={() => ({
+                title: `Daily Report — ${reportDate}`,
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [
+                  `Date: ${reportDate}`,
+                  `Precautions: ${activePrecautions.length}`,
+                  `Active ABT: ${activeAbts.length}`,
+                  `Recent Admissions: ${recentAdmissions.length}`,
+                ],
+                sections: [
+                  { type: 'table', title: 'Active Precautions', columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], rows: activePrecautions.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '—', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—', ip.locationSnapshot?.room || (res as any)?.currentRoom || '—', ip.infectionCategory || '—', ip.isolationType || '—', ip.organism || '—']) },
+                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '—', abt.medication || '—', abt.indication || '—', abt.startDate || '—', abt.status]) },
+                  { type: 'table', title: 'Recent Admissions (Last 72h)', columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], rows: recentAdmissions.map(({ res, hasScreening }) => [res.displayName, res.mrn, res.admissionDate || '—', hasScreening ? 'Completed' : 'Missing']) },
+                ],
+              })}
+            />
+          }
         />
-        <span className="text-indigo-700 text-sm">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={reportDate}
+            onChange={e => setReportDate(e.target.value)}
+            className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          <span className="text-indigo-700 text-sm">{new Date(reportDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        </div>
       </div>
 
       <div className="space-y-6 print:space-y-8 print:font-serif print:text-black print:p-0">
@@ -565,21 +639,48 @@ const WeeklyReport: React.FC = () => {
   return (
     <>
       {/* Controls — hidden when printing */}
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center gap-3 mb-6">
-        <span className="font-bold text-indigo-900 text-sm">Weekly Report</span>
-        <input
-          type="date"
-          value={startDate}
-          onChange={e => setStartDate(e.target.value)}
-          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 space-y-3">
+        <DrilldownHeader
+          title="Weekly Report (Standard of Care Report)"
+          subtitle="Weekly infections, ABT starts, and vaccination activity"
+          right={
+            <ExportPdfButton
+              filename="weekly-report"
+              buildSpec={() => ({
+                title: `Weekly Report — ${startDate} to ${endDate}`,
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [
+                  `Start: ${startDate}`,
+                  `End: ${endDate}`,
+                  `Infections: ${newInfections.length}`,
+                  `ABT: ${newAbts.length}`,
+                  `Vax: ${vaxActivity.length}`,
+                ],
+                sections: [
+                  { type: 'table', title: 'New Infections', columns: ['Resident', 'MRN', 'Unit', 'Category', 'Onset Date', 'Status'], rows: newInfections.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '—', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—', ip.infectionCategory || '—', ip.onsetDate || ip.createdAt?.split('T')[0] || '—', ip.status]) },
+                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '—', abt.medication || '—', abt.indication || '—', abt.syndromeCategory || '—', abt.startDate || '—', abt.status]) },
+                  { type: 'table', title: 'Vaccination Activity', columns: ['Resident', 'MRN', 'Vaccine', 'Status', 'Date', 'Decline Reason'], rows: vaxActivity.map(({ vax, res }) => [residentLabel(res), (res as any)?.mrn || '—', vax.vaccine || '—', normalizeVaxStatusDisplay(vax.status), getVaxDate(vax), vax.declineReason || '—']) },
+                ],
+              })}
+            />
+          }
         />
-        <span className="text-indigo-500 text-sm">–</span>
-        <input
-          type="date"
-          value={endDate}
-          onChange={e => setEndDate(e.target.value)}
-          className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
+          />
+          <span className="text-indigo-500 text-sm">–</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
+          />
+        </div>
       </div>
 
       {/* Screen content */}
@@ -1141,12 +1242,24 @@ const OnDemandReport: React.FC = () => {
             >
               Export CSV
             </button>
-            <button
-              onClick={handleExportPdf}
+            <ExportPdfButton
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700"
-            >
-              Export PDF
-            </button>
+              filename="on-demand-report"
+              buildSpec={() => ({
+                title: `On Demand Report — ${dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}`,
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [
+                  `Dataset: ${dataset}`,
+                  `Unit: ${unitFilter}`,
+                  `Status: ${statusFilter}`,
+                  `Type: ${typeFilter}`,
+                  `Start: ${startDate || 'Not set'}`,
+                  `End: ${endDate || 'Not set'}`,
+                ],
+                sections: [{ type: 'table', columns: currentHeaders, rows }],
+              })}
+            />
           </div>
         </div>
       </div>
@@ -1636,12 +1749,22 @@ const QapiRollup: React.FC = () => {
           className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
         />
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={handleExportPdf}
+          <ExportPdfButton
             className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
-          >
-            Export PDF
-          </button>
+            filename="qapi-rollup"
+            buildSpec={() => ({
+              title: `QAPI Rollup — ${selectedMonth}`,
+              orientation: 'landscape',
+              template: 'LANDSCAPE_TEMPLATE_V1',
+              subtitleLines: [`Month: ${selectedMonth}`],
+              sections: [
+                { type: 'table', title: 'Infections by Category', columns: ['Category', 'Count'], rows: infectionsByCategory.map(([cat, cnt]) => [cat, cnt]) },
+                { type: 'table', title: 'Infections by Unit', columns: ['Unit', 'Count'], rows: infectionsByUnit.map(([unit, cnt]) => [unit, cnt]) },
+                { type: 'table', title: 'ABT Use Rate', columns: ['New ABT Courses (Month)', 'Active Residents', 'Rate per Resident'], rows: [[String(abtCount), String(activeResidentCount), activeResidentCount > 0 ? (abtCount / activeResidentCount * 100).toFixed(1) + '%' : 'N/A']] },
+                { type: 'table', title: 'Vaccine Coverage (Cumulative)', columns: ['Vaccine', 'Residents Given', 'Active Census', 'Coverage %'], rows: vaccineCoverage.map((r) => [r.vaccine, String(r.given), String(r.total), r.pct + '%']) },
+              ],
+            })}
+          />
         </div>
       </div>
 
@@ -1930,13 +2053,26 @@ const VaccineCoverageReport: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-start justify-between gap-3">
-        <div>
-        <span className="font-bold text-indigo-900 text-sm">Vaccine Coverage — Active Census</span>
-        <p className="text-xs text-indigo-700 mt-0.5">
-          Counts active residents with at least one qualifying in-house or documented-historical vaccine event.
-        </p>
-        </div>
+      <div className="no-print bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+        <DrilldownHeader
+          title="Vaccine Coverage Summary"
+          subtitle="Counts active residents with qualifying in-house or historical vaccine events"
+          right={
+            <ExportPdfButton
+              filename="vaccine-coverage-summary"
+              buildSpec={() => ({
+                title: 'Vaccine Coverage Summary',
+                orientation: 'landscape',
+                template: 'LANDSCAPE_TEMPLATE_V1',
+                subtitleLines: [`Active Census: ${result.totalActiveCensus}`],
+                sections: [
+                  { type: 'table', title: 'Coverage Overview', columns: ['Vaccine', 'Covered', 'Coverage %', 'Declined', 'Declined/Covered %', 'Detail'], rows: coverageRows.map(row => [row.label, row.count, `${pct(row.count)}%`, row.declined, `${declinedVsCoveredPct(row.declined, row.count)}%`, row.detail]) },
+                  { type: 'table', title: 'Re-Offer Candidates', columns: ['Vaccine', 'Residents to Re-Offer'], rows: Object.values(reOfferRows).map((entry) => [entry.label, entry.count]) },
+                ],
+              })}
+            />
+          }
+        />
       </div>
 
       <div className="space-y-6">
@@ -2006,20 +2142,36 @@ const VaccineCoverageReport: React.FC = () => {
         <>
           <div className="print-page-break" />
           <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg leading-6 font-bold text-indigo-900">Re-Offer Drill Down — {selectedReOffer.label}</h3>
-              <p className="text-xs text-indigo-700 mt-1">
-                Not vaccinated active residents available for outreach: <span className="font-semibold">{selectedReOffer.count}</span>
-              </p>
+            <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
+              <DrilldownHeader
+                title={`Re-Offer Drill Down — ${selectedReOffer.label}`}
+                subtitle={`Not vaccinated active residents available for outreach: ${selectedReOffer.count}`}
+                right={
+                  <>
+                    <ExportPdfButton
+                      filename="vaccine-reoffer-drilldown"
+                      buildSpec={() => ({
+                        title: `Re-Offer Drill Down — ${selectedReOffer.label}`,
+                        orientation: 'portrait',
+                        template: 'PORTRAIT_TEMPLATE_V1',
+                        subtitleLines: [`Candidates: ${selectedReOffer.residents.length}`],
+                        sections: [{
+                          type: 'table',
+                          columns: ['Resident', 'MRN', 'Unit', 'Room', 'Previously Declined'],
+                          rows: selectedReOffer.residents.map(r => [r.displayName, r.mrn, r.unit, r.room, r.previouslyDeclined ? 'Yes' : 'No']),
+                        }],
+                      })}
+                    />
+                    <button
+                      onClick={() => setSelectedVaccine(null)}
+                      className="px-2 py-1 text-xs font-medium rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </>
+                }
+              />
             </div>
-            <button
-              onClick={() => setSelectedVaccine(null)}
-              className="px-2 py-1 text-xs font-medium rounded border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
-            >
-              Close
-            </button>
-          </div>
           <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead className="bg-neutral-50">
               <tr>

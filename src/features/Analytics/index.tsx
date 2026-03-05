@@ -8,6 +8,8 @@ import {
   TrendingUp, AlertTriangle, Activity, Pill, Users,
   ShieldAlert, CheckCircle, Stethoscope, ClipboardList
 } from 'lucide-react';
+import { ExportPdfButton } from '../../components/ExportPdfButton';
+import { DrilldownHeader } from '../../components/DrilldownHeader';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MDRO_CATEGORIES = [
@@ -225,23 +227,33 @@ export const AnalyticsDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm">
+          <DrilldownHeader
+            title="Active MDRO Cases"
+            right={<ExportPdfButton className="text-xs" filename="active-mdro-cases" buildSpec={() => ({ title: 'Active MDRO Cases', orientation: 'landscape', template: 'LANDSCAPE_TEMPLATE_V1', subtitleLines: [`Count: ${qualityMetrics.mdroCount}`], sections: [{ type: 'table', columns: ['Metric', 'Value'], rows: [['Active MDRO Cases', qualityMetrics.mdroCount]] }] })} />}
+          />
+          <div className="mt-3 flex items-center gap-4">
           <div className="p-3 bg-red-50 rounded-lg">
             <ShieldAlert className="w-6 h-6 text-red-600" />
           </div>
           <div>
-            <p className="text-sm text-neutral-500 font-medium">Active MDRO Cases</p>
             <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.mdroCount}</p>
+          </div>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm flex items-center gap-4">
+        <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-sm">
+          <DrilldownHeader
+            title="Device-Associated Cases"
+            right={<ExportPdfButton className="text-xs" filename="device-associated-cases" buildSpec={() => ({ title: 'Device-Associated Cases', orientation: 'landscape', template: 'LANDSCAPE_TEMPLATE_V1', subtitleLines: [`Count: ${qualityMetrics.deviceCount}`], sections: [{ type: 'table', columns: ['Metric', 'Value'], rows: [['Device-Associated Cases', qualityMetrics.deviceCount]] }] })} />}
+          />
+          <div className="mt-3 flex items-center gap-4">
           <div className="p-3 bg-amber-50 rounded-lg">
             <Stethoscope className="w-6 h-6 text-amber-600" />
           </div>
           <div>
-            <p className="text-sm text-neutral-500 font-medium">Device-Associated</p>
             <p className="text-2xl font-bold text-neutral-900">{qualityMetrics.deviceCount}</p>
+          </div>
           </div>
         </div>
 
@@ -261,11 +273,16 @@ export const AnalyticsDashboard: React.FC = () => {
       {/* Top Trending Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
+          <div className="mb-4">
+            <DrilldownHeader
+              title="Top Infection Types"
+              right={<ExportPdfButton className="text-xs" filename="top-infection-types" buildSpec={() => ({ title: 'Top Infection Types', orientation: 'landscape', template: 'LANDSCAPE_TEMPLATE_V1', subtitleLines: [`Top items: ${topTrends.infections.length}`], sections: [{ type: 'table', columns: ['Infection Type', 'Count'], rows: topTrends.infections.map(i => [i.name, i.count]) }] })} />}
+            />
+          </div>
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-red-50 rounded-lg">
               <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
-            <h3 className="font-semibold text-neutral-900">Top Infection Types</h3>
           </div>
           <div className="space-y-3">
             {topTrends.infections.length > 0 ? (
@@ -284,11 +301,16 @@ export const AnalyticsDashboard: React.FC = () => {
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-neutral-200 shadow-sm">
+          <div className="mb-4">
+            <DrilldownHeader
+              title="Top Antibiotics (Top 5)"
+              right={<ExportPdfButton className="text-xs" filename="top-antibiotics" buildSpec={() => ({ title: 'Top Antibiotics (Top 5)', orientation: 'landscape', template: 'LANDSCAPE_TEMPLATE_V1', subtitleLines: [`Top items: ${topTrends.abts.length}`], sections: [{ type: 'table', columns: ['Antibiotic', 'Count'], rows: topTrends.abts.map(i => [i.name, i.count]) }] })} />}
+            />
+          </div>
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 bg-blue-50 rounded-lg">
               <Pill className="w-5 h-5 text-blue-600" />
             </div>
-            <h3 className="font-semibold text-neutral-900">Top Antibiotics</h3>
           </div>
           <div className="space-y-3">
             {topTrends.abts.length > 0 ? (

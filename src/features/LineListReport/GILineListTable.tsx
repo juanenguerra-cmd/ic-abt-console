@@ -70,55 +70,38 @@ export function GILineListTable({ rows, facilityName, startDate, endDate, facili
   return (
     <div style={{ overflowX: 'auto' }}>
       {/* Report header */}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: 'Arial, sans-serif', fontSize: '8pt', marginBottom: '4px' }}>
-        <tbody>
-          <tr>
-            <td style={{ border: '1px solid #000', padding: '3px 6px', fontWeight: 700, fontSize: '10pt', textAlign: 'center' }} colSpan={21}>
-              GASTROENTERITIS LINE LIST FORM
-            </td>
-          </tr>
-          <tr>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={11}>
-              <strong>Facility Name: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '200px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: facilityName }}
-              />
-            </td>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={5}>
-              <strong>Contact Person: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '120px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: '' }}
-              />
-            </td>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={5}>
-              <strong>Email: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '150px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: '' }}
-              />
-            </td>
-          </tr>
-          <tr>
-            <td style={{ border: '1px solid #000', padding: '3px 6px' }} colSpan={21}>
-              <strong>Date Range: </strong>
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                style={{ outline: 'none', minWidth: '200px', display: 'inline-block' }}
-                dangerouslySetInnerHTML={{ __html: `${startDate} – ${endDate}` }}
-              />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', fontFamily: 'Arial, sans-serif' }}>
+        <div style={{ width: '52%' }}>
+          <div style={{ fontSize: '20pt', marginTop: '6px' }}>GASTROENTERITIS LINE LIST FORM</div>
+        </div>
+        <div style={{ width: '42%', fontSize: '12pt' }}>
+          <div style={{ fontSize: '20pt', marginBottom: '8px' }}>
+            Facility Name
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              style={{ borderBottom: '2px solid #000', marginLeft: '6px', display: 'inline-block', minWidth: '280px', verticalAlign: 'middle' }}
+              dangerouslySetInnerHTML={{ __html: facilityName }}
+            />
+          </div>
+          <div style={{ fontSize: '14pt' }}>
+            Contact Person
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              style={{ borderBottom: '2px solid #000', marginLeft: '4px', display: 'inline-block', minWidth: '150px', verticalAlign: 'middle' }}
+              dangerouslySetInnerHTML={{ __html: '' }}
+            />
+            Email
+            <span
+              contentEditable
+              suppressContentEditableWarning
+              style={{ borderBottom: '2px solid #000', marginLeft: '4px', display: 'inline-block', minWidth: '150px', verticalAlign: 'middle' }}
+              dangerouslySetInnerHTML={{ __html: '' }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Data table */}
       <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: 'Arial, sans-serif', fontSize: '7pt' }}>
@@ -205,6 +188,17 @@ export function GILineListTable({ rows, facilityName, startDate, endDate, facili
           })}
         </tbody>
       </table>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', fontFamily: 'Arial, sans-serif' }}>
+        <div style={{ fontSize: '9pt', lineHeight: 1.3 }}>
+          BCDC GI Illness Line List Form
+          <br />
+          March 2004
+          <br />
+          DRAFT
+        </div>
+        <div style={{ fontSize: '9pt', alignSelf: 'flex-end' }}>*ND = not done</div>
+      </div>
     </div>
   );
 }

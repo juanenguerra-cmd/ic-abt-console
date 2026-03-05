@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ILILineListTable, ILIRowModel } from './ILILineListTable';
 import { GILineListTable, GIRowModel } from './GILineListTable';
@@ -40,6 +40,11 @@ export function LineListReportPage() {
   const [reportTab, setReportTab] = React.useState<SymptomClass>('resp');
   const [showManualAdd, setShowManualAdd] = React.useState(false);
   const [editingEventId, setEditingEventId] = React.useState<string | null>(null);
+
+  const handleExportPdf = () => {
+    if (reportRows === null || reportTab !== tab) return;
+    window.print();
+  };
 
   const handleGenerate = () => {
     const startISO = startDate;
@@ -162,6 +167,7 @@ export function LineListReportPage() {
 
   return (
     <div className="p-6">
+      <style>{`@page { size: landscape; margin: 0.35in; }`}</style>
       {/* Filter bar — hidden on print */}
       <div className="no-print mb-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -245,6 +251,14 @@ export function LineListReportPage() {
             className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
           >
             Generate Report
+          </button>
+          <button
+            onClick={handleExportPdf}
+            disabled={reportRows === null || reportTab !== tab}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          >
+            <Download className="w-4 h-4" aria-hidden="true" />
+            Export PDF
           </button>
           <button
             onClick={() => setShowManualAdd(true)}

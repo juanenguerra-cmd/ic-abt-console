@@ -55,26 +55,32 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                   label="Export PDF"
                   filename="active-precautions"
                   buildSpec={() => ({
-                    title: 'Active Precautions',
+                    title: 'Residents on Precautions or Isolation',
                     orientation: 'landscape',
-                    template: 'LANDSCAPE_TEMPLATE_V1',
+                    template: 'ACTIVE_PRECAUTIONS_TEMPLATE_V1',
                     facilityName,
                     subtitleLines: [
-                      `Filters Applied: Unit: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
+                      `UNIT: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
+                      `DATE: ${new Date().toLocaleDateString()}`,
+                      'SHIFT: Day',
+                      'PREPARED BY: ',
                     ],
                     sections: [{
                       type: 'table',
-                      columns: ['Resident Name', 'Room/Unit', 'Precaution Type', 'Isolation/EBP Indication', 'Start Date', 'Organism', 'Status'],
+                      columns: ['RM. #', "RESIDENT’S NAME", 'PRECAUTION/ISOLATION', 'INFECTED SOURCE', 'DURATION'],
                       rows: filteredPrecautions.map((ip) => {
                         const resident = getResident(ip.residentRef);
+                        const startDate = ip.onsetDate || ip.createdAt;
+                        const days = Math.max(1, Math.floor((Date.now() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
+                        const residentWithMrn = resident?.displayName
+                          ? `${resident.displayName}${resident.mrn ? ` (${resident.mrn})` : ''}`
+                          : 'Unknown';
                         return [
-                          resident?.displayName || 'Unknown',
-                          `${resident?.currentRoom || 'N/A'} / ${resident?.currentUnit || 'N/A'}`,
-                          ip.ebp ? 'EBP' : 'Isolation',
-                          ip.isolationType || ip.sourceOfInfection || 'N/A',
-                          new Date(ip.createdAt).toLocaleDateString(),
-                          ip.organism || 'N/A',
-                          ip.status,
+                          resident?.currentRoom || 'N/A',
+                          residentWithMrn,
+                          ip.ebp ? 'EBP' : `ISOLATION / ${ip.isolationType || 'N/A'}`,
+                          ip.sourceOfInfection || ip.organism || 'N/A',
+                          `${days} days and ongoing`,
                         ];
                       }),
                     }],
