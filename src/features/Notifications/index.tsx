@@ -267,8 +267,6 @@ export const NotificationsPage: React.FC = () => {
       });
   }, [displayList, store]);
 
-  const selectedGroups = useMemo(() => groupedVaxNotifications.filter(group => selectedVaxGroups.has(group.id)), [groupedVaxNotifications, selectedVaxGroups]);
-
   const nonVaxDisplayList = displayList.filter(n => n.category !== 'VAX_GAP');
 
   const uniqueCategories = Array.from(new Set([...notifications, ...historyNotifications].map(n => n.category)));
@@ -671,33 +669,6 @@ export const NotificationsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Hidden Print View */}
-      <div className="hidden">
-        <div style={{ fontFamily: 'Arial, sans-serif', color: '#111827', margin: 0, fontSize: '12px' }}>
-          <h1 style={{ margin: '0 0 4px', fontSize: '22px' }}>Notifications & Recommendations</h1>
-          <div style={{ marginBottom: '16px', color: '#4b5563', fontSize: '11px' }}>Printed: {new Date().toLocaleString()}</div>
-          
-          {selectedGroups.map(group => (
-            <section key={group.id} style={{ marginBottom: '16px', border: '1px solid #d1d5db', borderRadius: '8px', padding: '12px', pageBreakInside: 'avoid' }}>
-              <h2 style={{ margin: '0 0 6px', fontSize: '16px' }}>{group.title}</h2>
-              <div style={{ marginBottom: '8px', fontSize: '12px', color: '#374151' }}>Count: {group.residents.length}</div>
-              <ul style={{ margin: 0, paddingLeft: '18px' }}>
-                {group.residents.map((resident, idx) => (
-                  <li key={idx} style={{ marginBottom: '8px' }}>
-                    <strong>{resident.name}</strong>
-                    {resident.mrn && <div style={{ marginLeft: '8px', color: '#4b5563', fontSize: '11px' }}>MRN: {resident.mrn}</div>}
-                    {(resident.unit || resident.room) && (
-                      <div style={{ marginLeft: '8px', color: '#4b5563', fontSize: '11px' }}>
-                        Location: {resident.unit || 'Unknown'}{resident.room ? ` - ${resident.room}` : ''}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      </div>
     </div>
     </>
   );

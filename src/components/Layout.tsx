@@ -7,7 +7,7 @@ const navItems = [
   { name: "Floor Map", path: "/floor-map", icon: Map },
   { name: "Census Parser", path: "/census", icon: FileText },
   { name: "Outbreaks", path: "/outbreaks", icon: ShieldAlert },
-  { name: "Reports & Exports", path: "/reports", icon: Activity },
+  { name: "Reports", path: "/reports", icon: Activity },
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 

@@ -4,9 +4,8 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { FileText, Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { FormsTab } from '../../components/FormsTab';
+import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
@@ -42,10 +41,8 @@ const getVaxDate = (vax: VaxEvent): string =>
 
 const ReportsConsole: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const formsRoute = '/reports/forms';
   const [activeTab, setActiveTab] = useState(
-    (location.state as any)?.activeTab || (location.pathname === formsRoute ? 'forms' : 'monthly')
+    (location.state as any)?.activeTab || 'monthly'
   );
 
   useEffect(() => {
@@ -53,23 +50,11 @@ const ReportsConsole: React.FC = () => {
       setActiveTab((location.state as any).activeTab);
       // Clear state so it doesn't persist on reload
       window.history.replaceState({}, document.title);
-    } else if (location.pathname === formsRoute) {
-      setActiveTab('forms');
-    } else if (activeTab === 'forms') {
-      setActiveTab('monthly');
     }
-  }, [location.pathname, location.state, activeTab]);
+  }, [location.state]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    if (tab === 'forms') {
-      navigate(formsRoute);
-      return;
-    }
-
-    if (location.pathname === formsRoute) {
-      navigate('/reports');
-    }
   };
 
   return (
@@ -113,13 +98,6 @@ const ReportsConsole: React.FC = () => {
             On Demand
           </button>
           <button
-            data-testid="forms-tab-button"
-            onClick={() => handleTabChange('forms')}
-            className={`${activeTab === 'forms' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95 inline-flex items-center gap-2`}>
-            <FileText className="h-4 w-4" />
-            Forms
-          </button>
-          <button
             data-testid="symptomwatch-tab-button"
             onClick={() => handleTabChange('symptomwatch')}
             className={`${activeTab === 'symptomwatch' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
@@ -148,7 +126,6 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'monthly' && <MonthlyAnalytics />}
         {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
-        {activeTab === 'forms' && <FormsTab />}
         {activeTab === 'symptomwatch' && <SymptomWatchReport />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
         {activeTab === 'vaxreoffer' && <VaxReofferList />}

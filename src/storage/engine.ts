@@ -36,9 +36,6 @@ export class SchemaMigrationError extends Error {
 
 /** Builds an empty FacilityStore used when back-filling missing stores. */
 function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
-  const now = new Date().toISOString();
-  const vaccineConsentProfileId = 'seed-vax-consent-profile';
-
   return {
     residents: {},
     quarantine: {},
@@ -54,27 +51,7 @@ function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
     outbreakCases: {},
     outbreakExposures: {},
     outbreakDailyStatuses: {},
-    exportProfiles: {
-      [vaccineConsentProfileId]: {
-        id: vaccineConsentProfileId,
-        name: 'Vaccine Consent Form',
-        facilityId,
-        type: 'pdf',
-        dataset: 'vaxEvents',
-        includePHI: true,
-        columns: [
-          { header: 'Resident Name', fieldPath: 'resident.displayName' },
-          { header: 'DOB', fieldPath: 'resident.dob' },
-          { header: 'Vaccine', fieldPath: 'vax.vaccine' },
-          { header: 'Dose', fieldPath: 'vax.dose' },
-          { header: 'Offer Date', fieldPath: 'vax.offerDate' },
-          { header: 'Administered By', fieldPath: 'vax.administeredBy' },
-          { header: 'Signature Line', fieldPath: 'vax.notes' },
-        ],
-        createdAt: now,
-        updatedAt: now,
-      },
-    },
+    exportProfiles: {},
     surveyPackets: {},
     infectionControlAuditSessions: {},
     infectionControlAuditItems: {},

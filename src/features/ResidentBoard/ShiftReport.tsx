@@ -7,7 +7,6 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
 import { ReportBuilderModal } from './ReportBuilderModal';
-import { DailyPrecautionList } from './PrintableForms/DailyPrecautionList';
 
 interface Props {
   onBack: () => void;
@@ -23,7 +22,6 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
   const [endDate, setEndDate] = useState<Date | null>(new Date());
   const [filterType, setFilterType] = useState<'initiated' | 'active'>('initiated');
   const [showReportBuilder, setShowReportBuilder] = useState(false);
-  const [showPrecautionList, setShowPrecautionList] = useState(false);
   const [selectedShift, setSelectedShift] = useState<string>('');
 
   const [customReports, setCustomReports] = useState<any[]>([]);
@@ -142,16 +140,6 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
           </div>
         )}
       </div>
-
-      {showPrecautionList && startDate && (
-        <DailyPrecautionList
-          date={startDate}
-          onClose={() => setShowPrecautionList(false)}
-          facilityName={facility?.name}
-          shift={selectedShift || undefined}
-        />
-      )}
-
       {showReportBuilder && (
         <ReportBuilderModal 
           onClose={() => setShowReportBuilder(false)} 

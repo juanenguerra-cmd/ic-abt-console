@@ -65,7 +65,10 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
     const openedWindow = window.open("/print/precautions", "_blank", "noopener,noreferrer");
     if (!openedWindow) {
       window.alert("Popup blocked. Please allow popups for this site to print precautions.");
+      return;
     }
+
+    onClose();
   };
 
   return (
@@ -88,7 +91,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                 className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
               >
                 <Printer className="w-4 h-4" />
-                Print
+                Print Precaution List
               </button>
               <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
                 <X className="w-6 h-6" />

@@ -20,7 +20,7 @@ const sections = [
     bullets: [
       "Track infection status and precautions.",
       "Document IP events, vaccines, and antibiotic courses.",
-      "Open resident profile and printable forms.",
+      "Open resident profile and supporting documentation.",
     ],
   },
   {
@@ -45,13 +45,13 @@ const sections = [
   },
   {
     title: "Reports",
-    purpose: "Build, run, and manage reporting outputs.",
-    bullets: ["Create custom report criteria.", "Browse saved reports and export deliverables."],
+    purpose: "Build, run, and review reporting outputs.",
+    bullets: ["Create custom report criteria.", "Browse saved reports and key trends."],
   },
   {
     title: "Audit Center",
-    purpose: "Structured audit documentation and print-ready output.",
-    bullets: ["Complete infection-control audits.", "Produce printable compliance reports."],
+    purpose: "Structured audit documentation and compliance output.",
+    bullets: ["Complete infection-control audits.", "Review compliance reports."],
   },
   {
     title: "Back Office",
