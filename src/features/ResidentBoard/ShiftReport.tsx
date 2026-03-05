@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ResidentNote } from '../../domain/models';
-import { ArrowLeft, Tag, Printer } from 'lucide-react';
+import { ArrowLeft, Tag } from 'lucide-react';
 
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
