@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Printer } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
-import { usePrint } from '../../print/usePrint';
+import { printPrecautionsNode } from '../../print/precautionsPrint';
 
 interface Props {
   onClose: () => void;
@@ -43,8 +43,6 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
 
   const printedDate = new Date().toLocaleDateString();
 
-  const { requestPrint } = usePrint();
-
   const handlePrint = () => {
     const now = new Date();
     
@@ -60,7 +58,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
       </tr>
     ));
 
-    requestPrint(
+    printPrecautionsNode(
       <div style={{ fontFamily: '"Arial", sans-serif', color: '#000', margin: 0, padding: '20px' }}>
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>{facilityName}</div>
@@ -139,7 +137,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
           * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
         </div>
       </div>,
-      { extraCss: '@page { size: landscape; margin: 0.5in; }', feature: 'precautions' }
+      { extraCss: '@page { size: landscape; margin: 0.5in; }' }
     );
   };
 

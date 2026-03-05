@@ -23,7 +23,6 @@ import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
 import DomPrintPage from "../pages/print/DomPrintPage";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
-import { PrintProvider } from "../print/PrintProvider";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
@@ -243,6 +242,14 @@ const AppShell = () => {
     return (
       <Routes>
         <Route path="/print/precautions" element={<DomPrintPage />} />
+        <Route
+          path="/print/*"
+          element={(
+            <div className="min-h-screen flex items-center justify-center p-6 text-center text-neutral-700">
+              This print route is no longer available.
+            </div>
+          )}
+        />
       </Routes>
     );
   }
@@ -492,9 +499,7 @@ export default function App() {
         <RoleProvider>
           <BrowserRouter>
             <UndoToastProvider>
-              <PrintProvider>
-                <AppShell />
-              </PrintProvider>
+              <AppShell />
             </UndoToastProvider>
           </BrowserRouter>
         </RoleProvider>

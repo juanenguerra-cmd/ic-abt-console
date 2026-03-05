@@ -1,7 +1,7 @@
 import React, { useMemo, useRef } from 'react';
 import { useFacilityData } from '../../../app/providers';
 import { IPEvent } from '../../../domain/models';
-import { PrintButton } from '../../../components/PrintButton';
+import { openPrecautionsPrintWindow } from '../../../print/precautionsPrint';
 
 interface Props {
   date: Date;
@@ -29,6 +29,18 @@ const formatDate = (d: Date) => {
 export const DailyPrecautionList: React.FC<Props> = ({ date, onClose, facilityName, unit, shift }) => {
   const { store } = useFacilityData();
   const printRef = useRef<HTMLDivElement>(null);
+
+
+  const handlePrint = () => {
+    const html = printRef.current?.innerHTML;
+    if (!html) return;
+
+    openPrecautionsPrintWindow({
+      title: 'Daily Precaution List',
+      html,
+      pageStyle: '@page { size: letter; margin: 0.75in; }',
+    });
+  };
 
   const precautionList = useMemo(() => {
     const activePrecautions: PrecautionRow[] = [];
@@ -82,7 +94,7 @@ export const DailyPrecautionList: React.FC<Props> = ({ date, onClose, facilityNa
         <div className="flex items-center justify-between p-4 border-b border-neutral-200 no-print">
           <h2 className="text-lg font-bold">Daily Precaution List</h2>
           <div className="flex items-center gap-2">
-            <PrintButton contentRef={printRef} title="Daily Precaution List" pageStyle="@page { size: letter; margin: 0.75in; }" feature="precautions" />
+            <button onClick={handlePrint} className="no-print inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-50 transition-colors">Print</button>
             <button onClick={onClose} className="px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 rounded-md">Close</button>
           </div>
         </div>
