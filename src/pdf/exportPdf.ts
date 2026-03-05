@@ -28,141 +28,53 @@ export interface PdfSpec {
   template: PdfTemplate;
   filename?: string;
   facilityName?: string;
+  showSignatureLines?: boolean;
 }
 
 const DEFAULT_FACILITY = 'Long Beach Nursing & Rehabilitation Center';
-const PRODUCT_LINE = 'Infection Prevention & Antibiotic Stewardship Console';
 
 const escapePdfText = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)');
 
 const wrap = (text: string, maxChars: number): string[] => {
-  if (text.length <= maxChars) return [text];
+  const limit = Math.max(1, maxChars);
+  if (text.length <= limit) return [text];
+  
   const words = text.split(/\s+/);
   const lines: string[] = [];
   let current = '';
+  
   words.forEach((word) => {
-    const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length <= maxChars) {
-      current = candidate;
+    if (word.length > limit) {
+      if (current) lines.push(current);
+      let remaining = word;
+      while (remaining.length > limit) {
+        lines.push(remaining.slice(0, limit));
+        remaining = remaining.slice(limit);
+      }
+      current = remaining;
       return;
     }
-    if (current) lines.push(current);
-    current = word;
+
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= limit) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = word;
+    }
   });
   if (current) lines.push(current);
-  return lines.length ? lines : [text.slice(0, maxChars)];
-};
-
-const tableToLines = (section: PdfTableSection, maxChars: number): string[] => {
-  const lines: string[] = [];
-  if (section.title) {
-    lines.push(section.title);
-  }
-
-  const numCols = section.columns.length;
-  if (numCols === 0) return lines;
-
-  // 1. Calculate max content length for each column (including header)
-  const colMaxLengths = section.columns.map((col, i) => {
-    let max = col.length;
-    section.rows.forEach((row) => {
-      const val = String(row[i] ?? '');
-      if (val.length > max) max = val.length;
-    });
-    return max;
-  });
-
-  const availableWidth = maxChars - (numCols - 1) * 3; // 3 chars for " | "
-
-  // 2. Initial distribution: proportional to content length
-  const totalContentLength = colMaxLengths.reduce((a, b) => a + b, 0) || 1;
-  let colWidths = colMaxLengths.map((len) => {
-    const proportional = Math.floor((len / totalContentLength) * availableWidth);
-    return Math.max(6, proportional);
-  });
-
-  // 3. Adjust to fit exactly availableWidth
-  let currentTotal = colWidths.reduce((a, b) => a + b, 0);
-  if (currentTotal < availableWidth) {
-    let diff = availableWidth - currentTotal;
-    while (diff > 0) {
-      // Prefer adding to columns that are still shorter than their max content
-      const candidates = colWidths.map((w, i) => (w < colMaxLengths[i] ? i : -1)).filter((i) => i !== -1);
-      const targetIdx = candidates.length > 0 ? candidates[0] : colWidths.indexOf(Math.min(...colWidths));
-      colWidths[targetIdx] += 1;
-      diff -= 1;
-    }
-  } else if (currentTotal > availableWidth) {
-    let diff = currentTotal - availableWidth;
-    while (diff > 0) {
-      const maxIdx = colWidths.indexOf(Math.max(...colWidths));
-      colWidths[maxIdx] -= 1;
-      diff -= 1;
-    }
-  }
-
-  const renderRow = (cells: string[]) => {
-    const wrappedCells = cells.map((cell, i) => wrap(cell, colWidths[i]));
-    const rowHeight = Math.max(...wrappedCells.map((cell) => cell.length));
-    for (let i = 0; i < rowHeight; i += 1) {
-      lines.push(
-        wrappedCells
-          .map((cellLines, colIdx) => (cellLines[i] ?? '').padEnd(colWidths[colIdx], ' '))
-          .join(' | '),
-      );
-    }
-  };
-
-  renderRow(section.columns);
-  lines.push('-'.repeat(maxChars));
-  section.rows.forEach((row) => renderRow(row.map((cell) => String(cell ?? '—'))));
   return lines;
 };
 
-const sectionsToLines = (spec: PdfSpec, maxChars: number): string[] => {
-  const lines: string[] = [];
-  spec.sections.forEach((section, idx) => {
-    if (section.type === 'table') {
-      lines.push(...tableToLines(section, maxChars));
-    } else {
-      if (section.title) lines.push(section.title);
-      section.lines.forEach((line) => lines.push(...wrap(line, maxChars)));
-    }
-
-    if (section.pageBreakAfter && idx !== spec.sections.length - 1) {
-      lines.push('__PAGE_BREAK__');
-    } else {
-      lines.push('');
-    }
-  });
-  return lines;
-};
-
-const paginate = (lines: string[], linesPerPage: number): string[][] => {
-  const pages: string[][] = [[]];
-  lines.forEach((line) => {
-    if (line === '__PAGE_BREAK__') {
-      pages.push([]);
-      return;
-    }
-    const current = pages[pages.length - 1];
-    if (current.length >= linesPerPage) {
-      pages.push([line]);
-      return;
-    }
-    current.push(line);
-  });
-  return pages.filter((page) => page.length > 0);
-};
-
-const buildPdf = (pages: string[][], orientation: PdfOrientation, headerLines: string[]): Blob => {
-  const isLandscape = orientation === 'landscape';
+const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
+  const isLandscape = spec.orientation === 'landscape';
   const width = isLandscape ? 792 : 612;
   const height = isLandscape ? 612 : 792;
-  const marginX = 36;
+  const margin = 36;
   const topY = height - 36;
-  const lineHeight = 11;
+  const footerY = 24;
 
   const objects: string[] = [];
   const xref: number[] = [0];
@@ -172,40 +84,182 @@ const buildPdf = (pages: string[][], orientation: PdfOrientation, headerLines: s
     return objects.length;
   };
 
-  const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const fontRegularId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const fontBoldId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+  const fontMonoId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+
+  const drawText = (x: number, y: number, text: string, size = 9, font = 'F1') => {
+    const safe = escapePdfText(text);
+    return `BT 0 g /${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
+  };
 
   const pageIds: number[] = [];
+  let currentLines: string[] = [];
+  let currentY = topY;
+  let pageNumber = 1;
 
-  pages.forEach((pageLines, index) => {
-    const pageNumber = index + 1;
-    const fullLines = [
-      ...headerLines,
-      '',
-      ...pageLines,
-      '',
-      `Page ${pageNumber} of ${pages.length}`,
-    ];
+  const startPage = () => {
+    currentLines = [];
+    currentY = topY;
+    
+    // Facility Name
+    currentLines.push(drawText(margin, currentY, spec.facilityName || DEFAULT_FACILITY, 14, 'F2'));
+    currentY -= 18;
+    
+    // Report Title
+    currentLines.push(drawText(margin, currentY, spec.title.toUpperCase(), 11, 'F2'));
+    currentY -= 14;
 
-    const textCommands = fullLines
-      .map((line, lineIndex) => {
-        const y = topY - lineIndex * lineHeight;
-        return `BT /F1 9 Tf ${marginX} ${Math.max(18, y)} Td (${escapePdfText(line)}) Tj ET`;
-      })
-      .join('\n');
+    // Subtitles
+    spec.subtitleLines.forEach(line => {
+      currentLines.push(drawText(margin, currentY, line, 9, 'F1'));
+      currentY -= 11;
+    });
 
-    const content = `<< /Length ${textCommands.length} >>\nstream\n${textCommands}\nendstream`;
-    const contentId = addObject(content);
+    currentY -= 10;
+    // Header Line
+    currentLines.push(`0.5 G 0.5 w ${margin} ${currentY} m ${width - margin} ${currentY} l S`);
+    currentY -= 20;
+  };
 
-    const pageId = addObject(
-      `<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
-    );
+  const finishPage = () => {
+    // Footer Line
+    currentLines.push(`0.5 G 0.5 w ${margin} ${footerY + 12} m ${width - margin} ${footerY + 12} l S`);
+    currentLines.push(drawText(margin, footerY, `Page ${pageNumber} of {TOTAL_PAGES}`, 8, 'F1'));
+    
+    const contentStream = currentLines.join('\n');
+    const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R /F3 ${fontMonoId} 0 R >> >> /Contents ${contentId} 0 R >>`);
     pageIds.push(pageId);
+    pageNumber++;
+  };
+
+  startPage();
+
+  spec.sections.forEach((section) => {
+    if (section.type === 'text') {
+      if (section.title) {
+        if (currentY < margin + 40) { finishPage(); startPage(); }
+        currentLines.push(drawText(margin, currentY, section.title, 10, 'F2'));
+        currentY -= 14;
+      }
+      section.lines.forEach(line => {
+        const wrapped = wrap(line, isLandscape ? 110 : 80);
+        wrapped.forEach(w => {
+          if (currentY < margin + 20) { finishPage(); startPage(); }
+          currentLines.push(drawText(margin, currentY, w, 9, 'F1'));
+          currentY -= 11;
+        });
+      });
+      currentY -= 10;
+    } else if (section.type === 'table') {
+      if (section.title) {
+        if (currentY < margin + 60) { finishPage(); startPage(); }
+        currentLines.push(drawText(margin, currentY, section.title, 10, 'F2'));
+        currentY -= 14;
+      }
+
+      const numCols = section.columns.length;
+      const availableWidth = width - margin * 2;
+      
+      // Calculate column widths
+      const colMaxLengths = section.columns.map((col, i) => {
+        let max = col.length;
+        section.rows.forEach((row) => {
+          const val = String(row[i] ?? '');
+          if (val.length > max) max = val.length;
+        });
+        return Math.max(max, col.length);
+      });
+      
+      const totalChars = colMaxLengths.reduce((a, b) => a + b, 0) || 1;
+      
+      // Initial widths based on characters
+      let colWidths = colMaxLengths.map((len) => (len / totalChars) * availableWidth);
+      
+      // Ensure a minimum width for each column (e.g. 45 points)
+      const minColWidth = 45;
+      let adjustedTotal = 0;
+      colWidths = colWidths.map((w) => {
+        const adjusted = Math.max(minColWidth, w);
+        adjustedTotal += adjusted;
+        return adjusted;
+      });
+
+      // If we exceeded available width due to minimums, we must scale back
+      if (adjustedTotal > availableWidth) {
+        const scale = availableWidth / adjustedTotal;
+        colWidths = colWidths.map((w) => w * scale);
+      }
+
+      const renderHeader = () => {
+        currentLines.push('0.9 g'); // Light gray background
+        currentLines.push(`${margin} ${currentY - 15} ${availableWidth} 15 re f`);
+        currentLines.push('0 g 0 G 0.5 w'); // Reset fill to black, stroke to black
+        currentLines.push(`${margin} ${currentY} m ${width - margin} ${currentY} l S`);
+        currentLines.push(`${margin} ${currentY - 15} m ${width - margin} ${currentY - 15} l S`);
+        
+        let x = margin;
+        section.columns.forEach((col, i) => {
+          const headerMaxChars = Math.floor((colWidths[i] - 6) / 5.5);
+          const headerText = col.length > headerMaxChars ? col.slice(0, headerMaxChars) : col;
+          currentLines.push(drawText(x + 3, currentY - 11, headerText.toUpperCase(), 8, 'F2'));
+          if (i > 0) currentLines.push(`${x} ${currentY} m ${x} ${currentY - 15} l S`);
+          x += colWidths[i];
+        });
+        currentLines.push(`${margin} ${currentY} m ${margin} ${currentY - 15} l S`);
+        currentLines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - 15} l S`);
+        currentY -= 15;
+      };
+
+      renderHeader();
+
+      section.rows.forEach((row) => {
+        const wrappedCells = row.map((cell, i) => {
+          const charsPerLine = Math.floor((colWidths[i] - 6) / 5.2);
+          return wrap(String(cell ?? ''), charsPerLine);
+        });
+        const rowHeight = Math.max(1, ...wrappedCells.map((c) => c.length)) * 12;
+
+        if (currentY - rowHeight < margin + 20) {
+          // Close table on current page
+          currentLines.push(`${margin} ${currentY} m ${width - margin} ${currentY} l S`);
+          finishPage();
+          startPage();
+          renderHeader();
+        }
+
+        let x = margin;
+        wrappedCells.forEach((cellLines, i) => {
+          cellLines.forEach((line, lineIdx) => {
+            currentLines.push(drawText(x + 3, currentY - 10 - lineIdx * 12, line, 8, 'F1'));
+          });
+          if (i > 0) currentLines.push(`${x} ${currentY} m ${x} ${currentY - rowHeight} l S`);
+          x += colWidths[i];
+        });
+        
+        currentLines.push(`${margin} ${currentY} m ${margin} ${currentY - rowHeight} l S`);
+        currentLines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - rowHeight} l S`);
+        currentLines.push(`${margin} ${currentY - rowHeight} m ${width - margin} ${currentY - rowHeight} l S`);
+        
+        currentY -= rowHeight;
+      });
+
+      currentY -= 15;
+    }
+
+    if (section.pageBreakAfter) {
+      finishPage();
+      startPage();
+    }
   });
 
-  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
+  finishPage();
 
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   pageIds.forEach((pageId) => {
     objects[pageId - 1] = objects[pageId - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
+    objects[pageId - 1] = objects[pageId - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
   });
 
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
@@ -226,10 +280,6 @@ const buildPdf = (pages: string[][], orientation: PdfOrientation, headerLines: s
 
   return new Blob([body], { type: 'application/pdf' });
 };
-
-
-
-
 
 const buildStandardFormPdf = (spec: PdfSpec): Blob => {
   const isLandscape = spec.orientation === 'landscape';
@@ -280,29 +330,34 @@ const buildStandardFormPdf = (spec: PdfSpec): Blob => {
 
   const drawText = (x: number, y: number, text: string, size = 10, bold = false) => {
     const safe = escapePdfText(text);
-    return `BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
+    return `BT 0 g /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
   };
 
   const lines: string[] = [];
+  const pdfLines = lines; // Alias for consistency
   lines.push('0.5 g');
   lines.push(`${margin} ${tableTop - headerHeight} ${width - margin * 2} ${headerHeight} re f`);
-  lines.push('0 G');
+  lines.push('0 g 0 G');
   lines.push('1 w');
-  lines.push(`${margin} ${tableBottom} ${width - margin * 2} ${tableHeight} re S`);
+  // Removed pre-drawn table border as we draw it dynamically
+  // lines.push(`${margin} ${tableBottom} ${width - margin * 2} ${tableHeight} re S`);
 
-  let cursorX = margin;
-  for (let i = 0; i < colWidths.length - 1; i += 1) {
-    cursorX += colWidths[i];
-    lines.push(`${cursorX} ${tableBottom} m ${cursorX} ${tableTop} l S`);
-  }
+  // Removed pre-drawn vertical lines
+  // let cursorX = margin;
+  // for (let i = 0; i < colWidths.length - 1; i += 1) {
+  //   cursorX += colWidths[i];
+  //   lines.push(`${cursorX} ${tableBottom} m ${cursorX} ${tableTop} l S`);
+  // }
+  
   lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
 
-  for (let i = 1; i < rowLimit; i += 1) {
-    const y = tableTop - headerHeight - i * rowHeight;
-    lines.push(`${margin} ${y} m ${width - margin} ${y} l S`);
-  }
+  // Removed pre-drawn row dividers
+  // for (let i = 1; i < rowLimit; i += 1) {
+  //   const y = tableTop - headerHeight - i * rowHeight;
+  //   lines.push(`${margin} ${y} m ${width - margin} ${y} l S`);
+  // }
 
-  lines.push(drawText(width / 2 - 150, titleY, spec.facilityName || DEFAULT_FACILITY, 16, true));
+  lines.push(drawText(width / 2 - 150, titleY, spec.facilityName || DEFAULT_FACILITY, 14, true));
   lines.push(drawText(width / 2 - Math.min(200, spec.title.length * 3.4), titleY - 30, spec.title.toUpperCase(), 12, true));
 
   lines.push(drawText(90, titleY - 56, 'UNIT:', 11, true));
@@ -317,36 +372,66 @@ const buildStandardFormPdf = (spec: PdfSpec): Blob => {
   lines.push(drawText(width - 144, titleY - 56, shift, 11, true));
   lines.push((width - 162) + ' ' + (titleY - 59) + ' m ' + (width - 42) + ' ' + (titleY - 59) + ' l S');
 
-  cursorX = margin;
+  let cursorX = margin;
   columns.forEach((header, i) => {
     const approxCenter = cursorX + colWidths[i] / 2 - Math.min(20, header.length * 2.5);
     lines.push(drawText(approxCenter, tableTop - 24, header, 10, true));
+    if (i < colWidths.length - 1) {
+       lines.push(`${cursorX + colWidths[i]} ${tableTop} m ${cursorX + colWidths[i]} ${tableTop - headerHeight} l S`);
+    }
     cursorX += colWidths[i];
   });
+  
+  // Draw top border
+  lines.push(`${margin} ${tableTop} m ${width - margin} ${tableTop} l S`);
+  lines.push(`${margin} ${tableTop} m ${margin} ${tableTop - headerHeight} l S`);
+  lines.push(`${width - margin} ${tableTop} m ${width - margin} ${tableTop - headerHeight} l S`);
 
-  rows.forEach((row, rowIdx) => {
-    const y = tableTop - headerHeight - (rowIdx + 1) * rowHeight + Math.max(8, rowHeight / 2 - 3);
-    let x = margin + 5;
-    row.forEach((val, i) => {
-      const clipped = String(val || '').slice(0, Math.max(8, Math.floor(colWidths[i] / 6)));
-      lines.push(drawText(x, y, clipped, 9));
+  let currentY = tableTop - headerHeight;
+
+  rows.forEach((row) => {
+    const wrappedCells = row.map((val, i) => {
+      const charsPerLine = Math.floor((colWidths[i] - 6) / 5.5);
+      return wrap(String(val ?? ''), charsPerLine);
+    });
+    const rowHeight = Math.max(1, ...wrappedCells.map(c => c.length)) * 11 + 8;
+    
+    const yTop = currentY;
+    let x = margin;
+    
+    wrappedCells.forEach((lines, i) => {
+      lines.forEach((line, lineIdx) => {
+        pdfLines.push(drawText(x + 4, yTop - 12 - lineIdx * 11, line, 9));
+      });
       x += colWidths[i];
     });
+    
+    // Draw row lines
+    pdfLines.push(`${margin} ${yTop - rowHeight} m ${width - margin} ${yTop - rowHeight} l S`);
+    let cursorX = margin;
+    for (let i = 0; i < colWidths.length - 1; i += 1) {
+      cursorX += colWidths[i];
+      pdfLines.push(`${cursorX} ${yTop} m ${cursorX} ${yTop - rowHeight} l S`);
+    }
+    
+    currentY -= rowHeight;
   });
 
-  const footerY = tableBottom - 34;
-  lines.push(drawText(margin, footerY, 'Prepared by:', 11, true));
-  lines.push(drawText(margin + 62, footerY, preparedBy, 11, true));
-  lines.push(`${margin + 60} ${footerY - 2} m ${margin + 238} ${footerY - 2} l S`);
+  const footerY = currentY - 34;
+  if (spec.showSignatureLines) {
+    lines.push(drawText(margin, footerY, 'Prepared by:', 11, true));
+    lines.push(drawText(margin + 62, footerY, preparedBy, 11, true));
+    lines.push(`${margin + 60} ${footerY - 2} m ${margin + 238} ${footerY - 2} l S`);
 
-  lines.push(drawText(width / 2 + 8, footerY, 'Title:', 11, true));
-  lines.push(`${width / 2 + 40} ${footerY - 2} m ${width - margin - 40} ${footerY - 2} l S`);
+    lines.push(drawText(width / 2 + 8, footerY, 'Title:', 11, true));
+    lines.push(`${width / 2 + 40} ${footerY - 2} m ${width - margin - 40} ${footerY - 2} l S`);
 
-  lines.push(drawText(margin, footerY - 28, 'Signature:', 11, true));
-  lines.push(`${margin + 60} ${footerY - 30} m ${margin + 238} ${footerY - 30} l S`);
+    lines.push(drawText(margin, footerY - 28, 'Signature:', 11, true));
+    lines.push(`${margin + 60} ${footerY - 30} m ${margin + 238} ${footerY - 30} l S`);
 
-  lines.push(drawText(width / 2 + 8, footerY - 28, 'Date/Time:', 11, true));
-  lines.push(`${width / 2 + 72} ${footerY - 30} m ${width - margin - 40} ${footerY - 30} l S`);
+    lines.push(drawText(width / 2 + 8, footerY - 28, 'Date/Time:', 11, true));
+    lines.push(`${width / 2 + 72} ${footerY - 30} m ${width - margin - 40} ${footerY - 30} l S`);
+  }
 
   const contentStream = lines.join('\n');
   const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
@@ -370,6 +455,7 @@ const buildStandardFormPdf = (spec: PdfSpec): Blob => {
 
   return new Blob([body], { type: 'application/pdf' });
 };
+
 const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   const width = 792;
   const height = 612;
@@ -377,9 +463,11 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   const tableTop = 500;
   const headerHeight = 34;
   const rowHeight = 30;
+  const rowsPerPage = Math.floor((tableTop - headerHeight - 120) / rowHeight); // Leave space for footer
 
   const primaryTable = spec.sections.find((section): section is PdfTableSection => section.type === 'table');
   const rows = primaryTable?.rows ?? [];
+  const rowText = rows.length ? rows : [['', 'No active precautions', '', '', '']];
 
   const subtitleLookup = new Map(spec.subtitleLines.map((line) => {
     const idx = line.indexOf(':');
@@ -407,97 +495,134 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
 
   const drawText = (x: number, y: number, text: string, size = 10, bold = false) => {
     const safe = escapePdfText(text);
-    return `BT /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
+    return `BT 0 g /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
   };
 
-  const lines: string[] = [];
-  lines.push('0.5 g');
-  lines.push(`${margin} ${tableTop - headerHeight} ${width - margin * 2} ${headerHeight} re f`);
-  lines.push('0 G');
-  lines.push('1 w');
+  const pageIds: number[] = [];
+  let currentRowIdx = 0;
+  
+  while (currentRowIdx < rowText.length) {
+    const lines: string[] = [];
 
-  const totalRows = Math.max(rows.length, 1);
-  const tableHeight = headerHeight + totalRows * rowHeight;
-  const tableBottom = tableTop - tableHeight;
+    // Header Background
+    lines.push('0.5 g');
+    lines.push(`${margin} ${tableTop - headerHeight} ${width - margin * 2} ${headerHeight} re f`);
+    lines.push('0 g 0 G');
+    lines.push('1 w');
 
-  lines.push(`${margin} ${tableBottom} ${width - margin * 2} ${tableHeight} re S`);
+    // Header/Row Divider
+    lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
 
-  let cursorX = margin;
-  for (let i = 0; i < colWidths.length - 1; i += 1) {
-    cursorX += colWidths[i];
-    lines.push(`${cursorX} ${tableBottom} m ${cursorX} ${tableTop} l S`);
-  }
-  lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
+    // Titles
+    lines.push(drawText(width / 2 - 150, 576, spec.facilityName || DEFAULT_FACILITY, 14, true));
+    lines.push(drawText(width / 2 - 138, 548, 'RESIDENTS ON PRECAUTIONS OR ISOLATION', 12, true));
 
-  for (let i = 1; i < totalRows; i += 1) {
-    const y = tableTop - headerHeight - i * rowHeight;
-    lines.push(`${margin} ${y} m ${width - margin} ${y} l S`);
-  }
+    // Subtitles
+    lines.push(drawText(180, 525, 'UNIT:', 11, true));
+    lines.push(drawText(255, 525, unit, 11, true));
+    lines.push('150 522 m 290 522 l S');
 
-  lines.push(drawText(width / 2 - 150, 576, spec.facilityName || DEFAULT_FACILITY, 16, true));
-  lines.push(drawText(width / 2 - 138, 548, 'RESIDENTS ON PRECAUTIONS OR ISOLATION', 12, true));
+    lines.push(drawText(325, 525, 'DATE:', 11, true));
+    lines.push(drawText(390, 525, date, 11, true));
+    lines.push('355 522 m 470 522 l S');
 
-  lines.push(drawText(180, 525, 'UNIT:', 11, true));
-  lines.push(drawText(255, 525, unit, 11, true));
-  lines.push('150 522 m 290 522 l S');
+    lines.push(drawText(500, 525, 'SHIFT:', 11, true));
+    lines.push(drawText(565, 525, shift, 11, true));
+    lines.push('535 522 m 700 522 l S');
 
-  lines.push(drawText(325, 525, 'DATE:', 11, true));
-  lines.push(drawText(390, 525, date, 11, true));
-  lines.push('355 522 m 470 522 l S');
-
-  lines.push(drawText(500, 525, 'SHIFT:', 11, true));
-  lines.push(drawText(565, 525, shift, 11, true));
-  lines.push('535 522 m 700 522 l S');
-
-  cursorX = margin;
-  colHeaders.forEach((header, i) => {
-    const parts = header.split('\n');
-    const cx = cursorX + colWidths[i] / 2;
-    if (parts.length === 1) {
-      lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 22, parts[0], 10, true));
-    } else {
-      lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 18, parts[0], 10, true));
-      lines.push(drawText(cx - (parts[1].length * 2.8), tableTop - 30, parts[1], 10, true));
-    }
-    cursorX += colWidths[i];
-  });
-
-  const rowText = rows.length ? rows : [['', 'No active precautions', '', '', '']];
-  rowText.slice(0, totalRows).forEach((row, rowIdx) => {
-    const y = tableTop - headerHeight - (rowIdx + 1) * rowHeight + 10;
-    const values = [
-      String(row[0] ?? ''),
-      String(row[1] ?? ''),
-      String(row[2] ?? ''),
-      String(row[3] ?? ''),
-      String(row[4] ?? ''),
-    ];
-    let x = margin + 6;
-    values.forEach((val, i) => {
-      lines.push(drawText(x, y, val, 9));
-      x += colWidths[i];
+    // Column Headers
+    let cursorX = margin;
+    colHeaders.forEach((header, i) => {
+      const parts = header.split('\n');
+      const cx = cursorX + colWidths[i] / 2;
+      if (parts.length === 1) {
+        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 22, parts[0], 10, true));
+      } else {
+        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 18, parts[0], 10, true));
+        lines.push(drawText(cx - (parts[1].length * 2.8), tableTop - 30, parts[1], 10, true));
+      }
+      // Vertical lines for header
+      if (i < colWidths.length - 1) {
+         lines.push(`${cursorX + colWidths[i]} ${tableTop} m ${cursorX + colWidths[i]} ${tableTop - headerHeight} l S`);
+      }
+      cursorX += colWidths[i];
     });
+
+    // Table Border (Top part)
+    lines.push(`${margin} ${tableTop} ${width - margin * 2} ${headerHeight} re S`);
+
+    let currentY = tableTop - headerHeight;
+    
+    // Rows
+    while (currentRowIdx < rowText.length) {
+      const row = rowText[currentRowIdx];
+      const wrappedCells = row.slice(0, 5).map((val, i) => {
+        const charsPerLine = Math.floor((colWidths[i] - 8) / 5.5);
+        return wrap(String(val ?? ''), charsPerLine);
+      });
+      
+      const rowHeight = Math.max(1, ...wrappedCells.map(c => c.length)) * 11 + 10;
+      
+      if (currentY - rowHeight < 60) {
+        break;
+      }
+
+      let x = margin;
+      wrappedCells.forEach((cellLines, i) => {
+        cellLines.forEach((line, lineIdx) => {
+          lines.push(drawText(x + 4, currentY - 14 - lineIdx * 11, line, 9));
+        });
+        if (i > 0) lines.push(`${x} ${currentY} m ${x} ${currentY - rowHeight} l S`);
+        x += colWidths[i];
+      });
+      
+      // Row bottom border
+      lines.push(`${margin} ${currentY - rowHeight} m ${width - margin} ${currentY - rowHeight} l S`);
+      // Outer border for this row
+      lines.push(`${margin} ${currentY} m ${margin} ${currentY - rowHeight} l S`);
+      lines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - rowHeight} l S`);
+
+      currentY -= rowHeight;
+      currentRowIdx++;
+    }
+
+    // Footer
+    const footerY = 30;
+    if (spec.showSignatureLines) {
+      lines.push(drawText(12, footerY, 'Prepared by:', 11, true));
+      lines.push(drawText(72, footerY, preparedBy, 11, true));
+      lines.push(`70 ${footerY - 2} m 240 ${footerY - 2} l S`);
+
+      lines.push(drawText(400, footerY, 'Title:', 11, true));
+      lines.push(`430 ${footerY - 2} m 610 ${footerY - 2} l S`);
+
+      lines.push(drawText(12, footerY - 30, 'Signature:', 11, true));
+      lines.push(`70 ${footerY - 32} m 240 ${footerY - 32} l S`);
+
+      lines.push(drawText(400, footerY - 30, 'Date/Time:', 11, true));
+      lines.push(`460 ${footerY - 32} m 610 ${footerY - 32} l S`);
+    }
+
+    // Page Number
+    // Calculate total pages is hard dynamically, so we'll just show "Page X"
+    // Or we can pre-calculate. For now, let's just put Page X.
+    // The original code calculated totalPages.
+    // We can't easily know totalPages without running the simulation twice.
+    // Let's just use a placeholder or omit total if not critical, or use {TOTAL_PAGES} replacement trick.
+    lines.push(drawText(width - 100, 20, `Page ${pageIds.length + 1} of {TOTAL_PAGES}`, 8));
+
+    const contentStream = lines.join('\n');
+    const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  }
+
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
+  pageIds.forEach(id => {
+    objects[id - 1] = objects[id - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
+    objects[id - 1] = objects[id - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
   });
 
-  const footerY = tableBottom - 42;
-  lines.push(drawText(12, footerY, 'Prepared by:', 11, true));
-  lines.push(drawText(72, footerY, preparedBy, 11, true));
-  lines.push(`70 ${footerY - 2} m 240 ${footerY - 2} l S`);
-
-  lines.push(drawText(400, footerY, 'Title:', 11, true));
-  lines.push(`430 ${footerY - 2} m 610 ${footerY - 2} l S`);
-
-  lines.push(drawText(12, footerY - 30, 'Signature:', 11, true));
-  lines.push(`70 ${footerY - 32} m 240 ${footerY - 32} l S`);
-
-  lines.push(drawText(400, footerY - 30, 'Date/Time:', 11, true));
-  lines.push(`460 ${footerY - 32} m 610 ${footerY - 32} l S`);
-
-  const contentStream = lines.join('\n');
-  const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
-  const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-  const pagesId = addObject(`<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`);
-  objects[pageId - 1] = objects[pageId - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
 
   let body = '%PDF-1.4\n';
@@ -515,23 +640,14 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
 
   return new Blob([body], { type: 'application/pdf' });
 };
+
 export const exportPdfDocument = (spec: PdfSpec): void => {
   let blob: Blob;
 
   if (spec.template === 'ACTIVE_PRECAUTIONS_TEMPLATE_V1') {
     blob = buildActivePrecautionsPdf(spec);
   } else if (spec.template === 'LANDSCAPE_TEMPLATE_V1' || spec.template === 'PORTRAIT_TEMPLATE_V1') {
-    const maxChars = spec.orientation === 'landscape' ? 120 : 80;
-    const linesPerPage = spec.orientation === 'landscape' ? 45 : 60;
-    const lines = sectionsToLines(spec, maxChars);
-    const pages = paginate(lines, linesPerPage);
-    const headerLines = [
-      spec.facilityName || DEFAULT_FACILITY,
-      PRODUCT_LINE,
-      spec.title.toUpperCase(),
-      ...spec.subtitleLines,
-    ];
-    blob = buildPdf(pages, spec.orientation, headerLines);
+    blob = buildMultiPageGraphicalPdf(spec);
   } else {
     blob = buildStandardFormPdf(spec);
   }

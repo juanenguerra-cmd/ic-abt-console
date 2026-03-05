@@ -59,6 +59,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                     orientation: 'landscape',
                     template: 'ACTIVE_PRECAUTIONS_TEMPLATE_V1',
                     facilityName,
+                    showSignatureLines: true,
                     subtitleLines: [
                       `UNIT: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
                       `DATE: ${new Date().toLocaleDateString()}`,

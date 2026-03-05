@@ -343,7 +343,7 @@ const DailyReport: React.FC = () => {
             <ExportPdfButton
               filename="daily-report"
               buildSpec={() => ({
-                title: `Daily Report — ${reportDate}`,
+                title: `Daily Report - ${reportDate}`,
                 orientation: 'landscape',
                 template: 'LANDSCAPE_TEMPLATE_V1',
                 subtitleLines: [
@@ -353,9 +353,9 @@ const DailyReport: React.FC = () => {
                   `Recent Admissions: ${recentAdmissions.length}`,
                 ],
                 sections: [
-                  { type: 'table', title: 'Active Precautions', columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], rows: activePrecautions.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '—', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—', ip.locationSnapshot?.room || (res as any)?.currentRoom || '—', ip.infectionCategory || '—', ip.isolationType || '—', ip.organism || '—']) },
-                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '—', abt.medication || '—', abt.indication || '—', abt.startDate || '—', abt.status]) },
-                  { type: 'table', title: 'Recent Admissions (Last 72h)', columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], rows: recentAdmissions.map(({ res, hasScreening }) => [res.displayName, res.mrn, res.admissionDate || '—', hasScreening ? 'Completed' : 'Missing']) },
+                  { type: 'table', title: 'Active Precautions', columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], rows: activePrecautions.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.locationSnapshot?.room || (res as any)?.currentRoom || '-', ip.infectionCategory || '-', ip.isolationType || '-', ip.organism || '-']) },
+                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '-', abt.medication || '-', abt.indication || '-', abt.startDate || '-', abt.status]) },
+                  { type: 'table', title: 'Recent Admissions (Last 72h)', columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], rows: recentAdmissions.map(({ res, hasScreening }) => [res.displayName, res.mrn, res.admissionDate || '-', hasScreening ? 'Completed' : 'Missing']) },
                 ],
               })}
             />
@@ -571,7 +571,7 @@ const WeeklyReport: React.FC = () => {
             <ExportPdfButton
               filename="weekly-report"
               buildSpec={() => ({
-                title: `Weekly Report — ${startDate} to ${endDate}`,
+                title: `Weekly Report - ${startDate} to ${endDate}`,
                 orientation: 'landscape',
                 template: 'LANDSCAPE_TEMPLATE_V1',
                 subtitleLines: [
@@ -582,9 +582,9 @@ const WeeklyReport: React.FC = () => {
                   `Vax: ${vaxActivity.length}`,
                 ],
                 sections: [
-                  { type: 'table', title: 'New Infections', columns: ['Resident', 'MRN', 'Unit', 'Category', 'Onset Date', 'Status'], rows: newInfections.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '—', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—', ip.infectionCategory || '—', ip.onsetDate || ip.createdAt?.split('T')[0] || '—', ip.status]) },
-                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '—', abt.medication || '—', abt.indication || '—', abt.syndromeCategory || '—', abt.startDate || '—', abt.status]) },
-                  { type: 'table', title: 'Vaccination Activity', columns: ['Resident', 'MRN', 'Vaccine', 'Status', 'Date', 'Decline Reason'], rows: vaxActivity.map(({ vax, res }) => [residentLabel(res), (res as any)?.mrn || '—', vax.vaccine || '—', normalizeVaxStatusDisplay(vax.status), getVaxDate(vax), vax.declineReason || '—']) },
+                  { type: 'table', title: 'New Infections', columns: ['Resident', 'MRN', 'Unit', 'Category', 'Onset Date', 'Status'], rows: newInfections.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.infectionCategory || '-', ip.onsetDate || ip.createdAt?.split('T')[0] || '-', ip.status]) },
+                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '-', abt.medication || '-', abt.indication || '-', abt.syndromeCategory || '-', abt.startDate || '-', abt.status]) },
+                  { type: 'table', title: 'Vaccination Activity', columns: ['Resident', 'MRN', 'Vaccine', 'Status', 'Date', 'Decline Reason'], rows: vaxActivity.map(({ vax, res }) => [residentLabel(res), (res as any)?.mrn || '-', vax.vaccine || '-', normalizeVaxStatusDisplay(vax.status), getVaxDate(vax), vax.declineReason || '-']) },
                 ],
               })}
             />
@@ -1022,7 +1022,7 @@ const OnDemandReport: React.FC = () => {
 
   const handleExportPdf = () => {
     exportPDF({
-      title: `On Demand Report — ${dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}`,
+      title: `On Demand Report - ${dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}`,
       orientation: 'landscape',
       columns: currentHeaders,
       rows,
@@ -1034,7 +1034,6 @@ const OnDemandReport: React.FC = () => {
         StartDate: startDate || 'Not set',
         EndDate: endDate || 'Not set',
       },
-      footerNote: 'Generated by IC Console',
     });
   };
 
@@ -1154,7 +1153,7 @@ const OnDemandReport: React.FC = () => {
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-medium hover:bg-indigo-700"
               filename="on-demand-report"
               buildSpec={() => ({
-                title: `On Demand Report — ${dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}`,
+                title: `On Demand Report - ${dataset === 'infections' ? 'Infections' : dataset === 'abts' ? 'Antibiotics' : dataset === 'vax' ? 'Vaccinations' : 'Residents'}`,
                 orientation: 'landscape',
                 template: 'LANDSCAPE_TEMPLATE_V1',
                 subtitleLines: [
