@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../app/providers";
 import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession } from "../domain/models";
 import { AUDIT_CATEGORIES, infectionControlAuditTemplates, InfectionControlAuditCategory } from "../constants/infectionControlAuditTemplates";
+import { DrilldownHeader } from "../components/DrilldownHeader";
+import { ExportPdfButton } from "../components/ExportPdfButton";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const RESPONSE_OPTIONS: InfectionControlAuditResponse[] = ["COMPLIANT", "NON_COMPLIANT", "NA"];
@@ -239,7 +241,34 @@ const InfectionControlAuditCenter: React.FC = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="no-print bg-white border border-neutral-200 rounded-xl p-4">
-        <h1 className="text-xl font-bold text-neutral-900 mb-4">Infection Control Audit Center</h1>
+        <div className="mb-4">
+          <DrilldownHeader
+            title="Infection Control Audit Center"
+            subtitle="Create and manage audit sessions"
+            right={
+              <ExportPdfButton
+                filename="audit-center-session"
+                buildSpec={() => ({
+                  title: `Audit Center — ${selectedSession ? selectedSession.auditDateISO : 'No Session Selected'}`,
+                  orientation: 'portrait',
+                  template: 'PORTRAIT_TEMPLATE_V1',
+                  subtitleLines: [
+                    `Session: ${selectedSession ? CATEGORY_LABEL[selectedSession.auditType] : 'None'}`,
+                    `Answered: ${sessionMetrics.answered}/${sessionMetrics.total}`,
+                    `Open Corrective: ${sessionMetrics.openCorrective}`,
+                  ],
+                  sections: selectedSession
+                    ? [{
+                        type: 'table',
+                        columns: ['Category', 'Question', 'Response', 'Severity', 'Corrective Action', 'Due Date', 'Completed At'],
+                        rows: selectedItems.map(i => [i.category, i.questionText, i.response, i.severity, i.correctiveAction || '—', i.dueDateISO || '—', i.completedAt || '—']),
+                      }]
+                    : [{ type: 'text', lines: ['No audit session selected.'] }],
+                })}
+              />
+            }
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <select
             value={form.auditType}
