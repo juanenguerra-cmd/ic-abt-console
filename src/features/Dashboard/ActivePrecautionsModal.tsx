@@ -1,8 +1,8 @@
 import React from 'react';
-import { X, Printer } from 'lucide-react';
+import { Printer, X } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
-import { printPrecautionsNode } from '../../print/precautionsPrint';
+import { savePrecautionsPrintPayload } from '../../print/precautionsPrint';
 
 interface Props {
   onClose: () => void;
@@ -41,104 +41,31 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
     return (resident?.currentUnit?.trim() || 'Unknown') === selectedUnit;
   });
 
-  const printedDate = new Date().toLocaleDateString();
-
   const handlePrint = () => {
-    const now = new Date();
-    
-    // Calculate empty rows to fill the page
-    const emptyRowsCount = Math.max(0, 12 - filteredPrecautions.length);
-    const emptyRows = Array(emptyRowsCount).fill(0).map((_, i) => (
-      <tr key={`empty-${i}`} style={{ height: '32px' }}>
-        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
-        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
-        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
-        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
-        <td style={{ border: '2px solid #000', padding: '4px 8px' }}>&nbsp;</td>
-      </tr>
-    ));
+    const rows = filteredPrecautions.map((ip) => {
+      const resident = getResident(ip.residentRef);
+      return {
+        room: resident?.currentRoom || 'N/A',
+        residentName: resident?.displayName || 'Unknown',
+        precautionType: ip.ebp ? 'EBP' : 'Isolation',
+        indication: ip.isolationType || ip.sourceOfInfection || 'N/A',
+        startDate: new Date(ip.createdAt).toLocaleDateString(),
+        organism: ip.organism || 'N/A',
+        status: ip.status,
+      };
+    });
 
-    printPrecautionsNode(
-      <div style={{ fontFamily: '"Arial", sans-serif', color: '#000', margin: 0, padding: '20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>{facilityName}</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '16px' }}>RESIDENTS ON PRECAUTIONS OR ISOLATION</div>
-        </div>
+    savePrecautionsPrintPayload({
+      facilityName,
+      unitLabel: selectedUnit === 'all' ? 'All Units' : selectedUnit,
+      printedDate: new Date().toLocaleDateString(),
+      rows,
+    });
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '40px', marginBottom: '20px', fontWeight: 'bold', fontSize: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            UNIT: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>{selectedUnit === 'all' ? 'All Units' : selectedUnit}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            DATE: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>{printedDate}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            SHIFT: <span style={{ borderBottom: '2px solid #000', minWidth: '120px', textAlign: 'center', padding: '0 10px' }}>Day</span>
-          </div>
-        </div>
-
-        <table style={{ width: '100%', borderCollapse: 'collapse', border: '2px solid #000', marginBottom: '20px' }}>
-          <thead>
-            <tr>
-              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '10%' }}>RM. #</th>
-              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '25%' }}>RESIDENT'S NAME</th>
-              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '25%' }}>PRECAUTION/ISOLATION</th>
-              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '20%' }}>INFECTED SOURCE</th>
-              <th style={{ border: '2px solid #000', padding: '8px', textAlign: 'center', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px', width: '20%' }}>DURATION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredPrecautions.map(ip => {
-              const resident = getResident(ip.residentRef);
-              const days = Math.floor((now.getTime() - new Date(ip.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-              const duration = `${days} days and ongoing`;
-              
-              let precautionDisplay = '';
-              if (ip.ebp) {
-                precautionDisplay = 'EBP';
-              } else {
-                precautionDisplay = `ISOLATION / ${ip.isolationType || ''}`;
-              }
-
-              return (
-                <tr key={ip.id} style={{ height: '32px' }}>
-                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{resident?.currentRoom || 'N/A'}</td>
-                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{resident?.displayName || 'Unknown'} ({resident?.mrn || ''})</td>
-                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{precautionDisplay}</td>
-                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{ip.organism || ip.sourceOfInfection || 'N/A'}</td>
-                  <td style={{ border: '2px solid #000', padding: '4px 8px', textAlign: 'left', fontSize: '12px' }}>{duration}</td>
-                </tr>
-              );
-            })}
-            {emptyRows}
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: '30px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '15px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
-              Prepared by: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}>Juan Enguerra RN</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
-              Title: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', marginBottom: '15px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
-              Signature: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', fontWeight: 'bold', fontSize: '13px' }}>
-              Date/Time: <span style={{ borderBottom: '2px solid #000', flex: 1, minHeight: '1.2em' }}></span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ fontSize: '10px', fontStyle: 'italic', marginTop: '20px', lineHeight: 1.4 }}>
-          * If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.
-        </div>
-      </div>,
-      { extraCss: '@page { size: landscape; margin: 0.5in; }' }
-    );
+    const openedWindow = window.open("/print/precautions", "_blank", "noopener,noreferrer");
+    if (!openedWindow) {
+      window.alert("Popup blocked. Please allow popups for this site to print precautions.");
+    }
   };
 
   return (
@@ -156,9 +83,12 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                 <option value="all">All Units</option>
                 {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
               </select>
-              <button onClick={handlePrint} className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-800">
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
+              >
                 <Printer className="w-4 h-4" />
-                Print Precaution List
+                Print
               </button>
               <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
                 <X className="w-6 h-6" />

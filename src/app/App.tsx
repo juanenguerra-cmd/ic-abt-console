@@ -20,7 +20,7 @@ import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
-import DomPrintPage from "../pages/print/DomPrintPage";
+import PrecautionsPrintPage from "../pages/print/PrecautionsPrintPage";
 import { GlobalSearch } from "../components/GlobalSearch";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
@@ -154,7 +154,7 @@ const SidebarSection = ({ title, children }: { title: string, children: React.Re
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPrintRoute = location.pathname.startsWith("/print/");
+  const isPrintRoute = location.pathname === "/print/precautions";
   const { db } = useDatabase();
   const { activeFacilityId, setActiveFacilityId, store } = useFacilityData();
   const { notifications } = useNotifications();
@@ -212,6 +212,7 @@ const AppShell = () => {
   // G6: Track user activity (clicks/keystrokes) to reset the idle timer
   React.useEffect(() => {
     if (isPrintRoute) return;
+
     const updateActivity = () => {
       localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
     };
@@ -238,18 +239,11 @@ const AppShell = () => {
   const activeFacility = db?.data?.facilities?.byId?.[activeFacilityId];
   const quarantineCount = (Object.values(store?.quarantine || {}) as any[]).filter((q: any) => !q.resolvedToMrn).length;
 
+
   if (isPrintRoute) {
     return (
       <Routes>
-        <Route path="/print/precautions" element={<DomPrintPage />} />
-        <Route
-          path="/print/*"
-          element={(
-            <div className="min-h-screen flex items-center justify-center p-6 text-center text-neutral-700">
-              This print route is no longer available.
-            </div>
-          )}
-        />
+        <Route path="/print/precautions" element={<PrecautionsPrintPage />} />
       </Routes>
     );
   }
