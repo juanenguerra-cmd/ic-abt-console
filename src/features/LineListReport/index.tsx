@@ -1,11 +1,10 @@
 import React from 'react';
-import { Printer, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ILILineListTable, ILIRowModel } from './ILILineListTable';
 import { GILineListTable, GIRowModel } from './GILineListTable';
 import { ManualAddLineListModal } from './ManualAddLineListModal';
 import { EditLineListEntryModal } from './EditLineListEntryModal';
-import { LineListPrintForm } from './LineListPrintForm';
 import { formatDate, computeAge } from './lineListUtils';
 
 import type { SymptomClass, LineListEvent, ABTCourse, VaxEvent } from '../../domain/models';
@@ -41,7 +40,6 @@ export function LineListReportPage() {
   const [reportTab, setReportTab] = React.useState<SymptomClass>('resp');
   const [showManualAdd, setShowManualAdd] = React.useState(false);
   const [editingEventId, setEditingEventId] = React.useState<string | null>(null);
-  const [showPrintForm, setShowPrintForm] = React.useState(false);
 
   const handleGenerate = () => {
     const startISO = startDate;
@@ -162,10 +160,6 @@ export function LineListReportPage() {
     }
   };
 
-  const handlePrint = () => {
-    setShowPrintForm(true);
-  };
-
   return (
     <div className="p-6">
       {/* Filter bar — hidden on print */}
@@ -259,13 +253,6 @@ export function LineListReportPage() {
             <Plus className="w-4 h-4" aria-hidden="true" />
             Add Entry
           </button>
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-700 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
-          >
-            <Printer className="w-4 h-4" aria-hidden="true" />
-            Print
-          </button>
         </div>
       </div>
 
@@ -320,17 +307,6 @@ export function LineListReportPage() {
         />
       )}
 
-      {showPrintForm && (
-        <LineListPrintForm
-          tab={tab}
-          startDate={startDate}
-          endDate={endDate}
-          unit={selectedUnit}
-          facilityName={facilityName}
-          facilityId={activeFacilityId}
-          onClose={() => setShowPrintForm(false)}
-        />
-      )}
     </div>
   );
 }
