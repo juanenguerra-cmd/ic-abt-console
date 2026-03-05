@@ -1,8 +1,8 @@
 import React from 'react';
-import { Printer, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
-import { savePrecautionsPrintPayload } from '../../print/precautionsPrint';
+import { ExportPdfButton } from '../../components/ExportPdfButton';
 
 interface Props {
   onClose: () => void;
@@ -41,36 +41,6 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
     return (resident?.currentUnit?.trim() || 'Unknown') === selectedUnit;
   });
 
-  const handlePrint = () => {
-    const rows = filteredPrecautions.map((ip) => {
-      const resident = getResident(ip.residentRef);
-      return {
-        room: resident?.currentRoom || 'N/A',
-        residentName: resident?.displayName || 'Unknown',
-        precautionType: ip.ebp ? 'EBP' : 'Isolation',
-        indication: ip.isolationType || ip.sourceOfInfection || 'N/A',
-        startDate: new Date(ip.createdAt).toLocaleDateString(),
-        organism: ip.organism || 'N/A',
-        status: ip.status,
-      };
-    });
-
-    savePrecautionsPrintPayload({
-      facilityName,
-      unitLabel: selectedUnit === 'all' ? 'All Units' : selectedUnit,
-      printedDate: new Date().toLocaleDateString(),
-      rows,
-    });
-
-    const openedWindow = window.open("/print/precautions", "_blank", "noopener,noreferrer");
-    if (!openedWindow) {
-      window.alert("Popup blocked. Please allow popups for this site to print precautions.");
-      return;
-    }
-
-    onClose();
-  };
-
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -86,13 +56,35 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                 <option value="all">All Units</option>
                 {units.map(unit => <option key={unit} value={unit}>{unit}</option>)}
               </select>
-              <button
-                onClick={handlePrint}
-                className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
-              >
-                <Printer className="w-4 h-4" />
-                Print Precaution List
-              </button>
+              <ExportPdfButton
+                label="Export PDF"
+                filename="active-precautions"
+                buildPdfSpec={() => ({
+                  title: 'Active Precautions',
+                  orientation: 'landscape',
+                  template: 'LANDSCAPE_TEMPLATE_V1',
+                  facilityName,
+                  subtitleLines: [
+                    `Filters Applied: Unit: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
+                  ],
+                  sections: [{
+                    type: 'table',
+                    columns: ['Resident Name', 'Room/Unit', 'Precaution Type', 'Isolation/EBP Indication', 'Start Date', 'Organism', 'Status'],
+                    rows: filteredPrecautions.map((ip) => {
+                      const resident = getResident(ip.residentRef);
+                      return [
+                        resident?.displayName || 'Unknown',
+                        `${resident?.currentRoom || 'N/A'} / ${resident?.currentUnit || 'N/A'}`,
+                        ip.ebp ? 'EBP' : 'Isolation',
+                        ip.isolationType || ip.sourceOfInfection || 'N/A',
+                        new Date(ip.createdAt).toLocaleDateString(),
+                        ip.organism || 'N/A',
+                        ip.status,
+                      ];
+                    }),
+                  }],
+                })}
+              />
               <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
                 <X className="w-6 h-6" />
               </button>
