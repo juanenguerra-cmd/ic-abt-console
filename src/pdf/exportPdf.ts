@@ -59,14 +59,56 @@ const tableToLines = (section: PdfTableSection, maxChars: number): string[] => {
   if (section.title) {
     lines.push(section.title);
   }
-  const colWidth = Math.max(8, Math.floor((maxChars - (section.columns.length - 1) * 3) / Math.max(section.columns.length, 1)));
+
+  const numCols = section.columns.length;
+  if (numCols === 0) return lines;
+
+  // 1. Calculate max content length for each column (including header)
+  const colMaxLengths = section.columns.map((col, i) => {
+    let max = col.length;
+    section.rows.forEach((row) => {
+      const val = String(row[i] ?? '');
+      if (val.length > max) max = val.length;
+    });
+    return max;
+  });
+
+  const availableWidth = maxChars - (numCols - 1) * 3; // 3 chars for " | "
+
+  // 2. Initial distribution: proportional to content length
+  const totalContentLength = colMaxLengths.reduce((a, b) => a + b, 0) || 1;
+  let colWidths = colMaxLengths.map((len) => {
+    const proportional = Math.floor((len / totalContentLength) * availableWidth);
+    return Math.max(6, proportional);
+  });
+
+  // 3. Adjust to fit exactly availableWidth
+  let currentTotal = colWidths.reduce((a, b) => a + b, 0);
+  if (currentTotal < availableWidth) {
+    let diff = availableWidth - currentTotal;
+    while (diff > 0) {
+      // Prefer adding to columns that are still shorter than their max content
+      const candidates = colWidths.map((w, i) => (w < colMaxLengths[i] ? i : -1)).filter((i) => i !== -1);
+      const targetIdx = candidates.length > 0 ? candidates[0] : colWidths.indexOf(Math.min(...colWidths));
+      colWidths[targetIdx] += 1;
+      diff -= 1;
+    }
+  } else if (currentTotal > availableWidth) {
+    let diff = currentTotal - availableWidth;
+    while (diff > 0) {
+      const maxIdx = colWidths.indexOf(Math.max(...colWidths));
+      colWidths[maxIdx] -= 1;
+      diff -= 1;
+    }
+  }
+
   const renderRow = (cells: string[]) => {
-    const wrappedCells = cells.map((cell) => wrap(cell, colWidth));
+    const wrappedCells = cells.map((cell, i) => wrap(cell, colWidths[i]));
     const rowHeight = Math.max(...wrappedCells.map((cell) => cell.length));
     for (let i = 0; i < rowHeight; i += 1) {
       lines.push(
         wrappedCells
-          .map((cellLines) => (cellLines[i] ?? '').padEnd(colWidth, ' '))
+          .map((cellLines, colIdx) => (cellLines[i] ?? '').padEnd(colWidths[colIdx], ' '))
           .join(' | '),
       );
     }
@@ -306,10 +348,6 @@ const buildStandardFormPdf = (spec: PdfSpec): Blob => {
   lines.push(drawText(width / 2 + 8, footerY - 28, 'Date/Time:', 11, true));
   lines.push(`${width / 2 + 72} ${footerY - 30} m ${width - margin - 40} ${footerY - 30} l S`);
 
-  lines.push(drawText(margin, footerY - 64, '* If the patient is known to have an MRSA, VRE or any multidrug resistant infection or colonization,', 8, true));
-  lines.push(drawText(margin, footerY - 76, 'the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be', 8, true));
-  lines.push(drawText(margin, footerY - 88, 'worn. Patients must also wash their hands to avoid spreading the bacteria to others.', 8, true));
-
   const contentStream = lines.join('\n');
   const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
   const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
@@ -455,10 +493,6 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   lines.push(drawText(400, footerY - 30, 'Date/Time:', 11, true));
   lines.push(`460 ${footerY - 32} m 610 ${footerY - 32} l S`);
 
-  lines.push(drawText(12, footerY - 68, '* If the patient is known to have an MRSA, VRE or any multidrug resistant infection or colonization,', 8, true));
-  lines.push(drawText(12, footerY - 80, 'the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be', 8, true));
-  lines.push(drawText(12, footerY - 92, 'worn. Patients must also wash their hands to avoid spreading the bacteria to others.', 8, true));
-
   const contentStream = lines.join('\n');
   const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
   const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
@@ -482,20 +516,26 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   return new Blob([body], { type: 'application/pdf' });
 };
 export const exportPdfDocument = (spec: PdfSpec): void => {
+  let blob: Blob;
+
   if (spec.template === 'ACTIVE_PRECAUTIONS_TEMPLATE_V1') {
-    const blob = buildActivePrecautionsPdf(spec);
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    const fallbackFilename = spec.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'report';
-    link.download = `${spec.filename || fallbackFilename}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(link.href);
-    return;
+    blob = buildActivePrecautionsPdf(spec);
+  } else if (spec.template === 'LANDSCAPE_TEMPLATE_V1' || spec.template === 'PORTRAIT_TEMPLATE_V1') {
+    const maxChars = spec.orientation === 'landscape' ? 120 : 80;
+    const linesPerPage = spec.orientation === 'landscape' ? 45 : 60;
+    const lines = sectionsToLines(spec, maxChars);
+    const pages = paginate(lines, linesPerPage);
+    const headerLines = [
+      spec.facilityName || DEFAULT_FACILITY,
+      PRODUCT_LINE,
+      spec.title.toUpperCase(),
+      ...spec.subtitleLines,
+    ];
+    blob = buildPdf(pages, spec.orientation, headerLines);
+  } else {
+    blob = buildStandardFormPdf(spec);
   }
 
-  const blob = buildStandardFormPdf(spec);
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   const fallbackFilename = spec.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'report';
