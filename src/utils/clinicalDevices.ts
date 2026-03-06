@@ -70,5 +70,5 @@ export const getDeviceDay = (insertedDate?: string | null): number | null => {
 
 export const formatDeviceDayLabel = (name: string, insertedDate?: string | null): string => {
   const day = getDeviceDay(insertedDate);
-  return day ? `${name} Day ${day}` : name;
+  return day ? `${name} (Day ${day})` : name;
 };

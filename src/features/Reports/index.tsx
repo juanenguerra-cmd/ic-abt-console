@@ -14,6 +14,7 @@ import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { LineListExportButton } from '../../components/LineListExportButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
+import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -212,7 +213,10 @@ const CombinedLineList: React.FC = () => {
                 <td className="px-4 py-2 text-neutral-500">{(res as any).mrn || (res as any).tempId}</td>
                 <td className="px-4 py-2 text-neutral-500">{(res as any).currentUnit || (res as any).unitSnapshot} / {(res as any).currentRoom || (res as any).roomSnapshot}</td>
                 <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.infectionCategory).join(', ')}</td>
-                <td className="px-4 py-2 text-neutral-500">{abts.map(a => a.medication).join(', ')}</td>
+                <td className="px-4 py-2 text-neutral-500">{abts.map(a => {
+                  const days = getAbtDays(a.startDate, a.endDate);
+                  return days ? `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : a.medication;
+                }).join(', ')}</td>
                 <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.organism).join(', ')}</td>
               </tr>
             ))}
@@ -236,7 +240,7 @@ const SurveyPacketsReport: React.FC = () => {
   );
 
   const activeAbts = useMemo(() =>
-    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active')
+    getActiveABT(Object.values(store.abts) as ABTCourse[])
       .map(a => {
         const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
         return { abt: a, res };
@@ -369,7 +373,12 @@ const SurveyPacketsReport: React.FC = () => {
                 <td className="px-4 py-3 text-sm font-medium text-neutral-900">{residentLabel(res)}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-3 text-sm text-neutral-500">
+                  {(() => {
+                    const days = getAbtDays(abt.startDate, abt.endDate);
+                    return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                  })()}
+                </td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.indication || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.startDate || '—'}</td>
                 <td className="px-4 py-3 text-sm text-neutral-500">{abt.cultureCollected ? `Yes${abt.cultureCollectionDate ? ' (' + abt.cultureCollectionDate + ')' : ''}` : 'No'}</td>
@@ -400,7 +409,8 @@ const DailyReport: React.FC = () => {
   );
 
   const activeAbts = useMemo(() =>
-    (Object.values(store.abts) as ABTCourse[]).filter(a => a.status === 'active' && (!a.startDate || new Date(a.startDate) <= reportDateObj))
+    getActiveABT(Object.values(store.abts) as ABTCourse[])
+      .filter(a => (!a.startDate || new Date(a.startDate) <= reportDateObj))
       .map(a => {
         const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
         return { abt: a, res };
@@ -444,7 +454,11 @@ const DailyReport: React.FC = () => {
                 ],
                 sections: [
                   { type: 'table', title: 'Active Precautions', columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], rows: activePrecautions.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.locationSnapshot?.room || (res as any)?.currentRoom || '-', ip.infectionCategory || '-', ip.isolationType || '-', ip.organism || '-']) },
-                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '-', abt.medication || '-', abt.indication || '-', abt.startDate || '-', abt.status]) },
+                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => {
+                    const days = getAbtDays(abt.startDate, abt.endDate);
+                    const med = days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                    return [residentLabel(res), (res as any)?.mrn || '-', med || '-', abt.indication || '-', abt.startDate || '-', abt.status];
+                  }) },
                   { type: 'table', title: 'Recent Admissions (Last 72h)', columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], rows: recentAdmissions.map(({ res, hasScreening }) => [res.displayName, res.mrn, res.admissionDate || '-', hasScreening ? 'Completed' : 'Missing']) },
                 ],
               })}
@@ -528,7 +542,12 @@ const DailyReport: React.FC = () => {
                 <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.medication}</td>
+                <td className="px-4 py-2 text-neutral-500">
+                  {(() => {
+                    const days = getAbtDays(abt.startDate, abt.endDate);
+                    return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                  })()}
+                </td>
                 <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
                 <td className="px-4 py-2 text-neutral-500">{abt.cultureCollected ? 'Yes' : 'No'}</td>
@@ -673,7 +692,11 @@ const WeeklyReport: React.FC = () => {
                 ],
                 sections: [
                   { type: 'table', title: 'New Infections', columns: ['Resident', 'MRN', 'Unit', 'Category', 'Onset Date', 'Status'], rows: newInfections.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.infectionCategory || '-', ip.onsetDate || ip.createdAt?.split('T')[0] || '-', ip.status]) },
-                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => [residentLabel(res), (res as any)?.mrn || '-', abt.medication || '-', abt.indication || '-', abt.syndromeCategory || '-', abt.startDate || '-', abt.status]) },
+                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => {
+                    const days = getAbtDays(abt.startDate, abt.endDate);
+                    const med = days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                    return [residentLabel(res), (res as any)?.mrn || '-', med || '-', abt.indication || '-', abt.syndromeCategory || '-', abt.startDate || '-', abt.status];
+                  }) },
                   { type: 'table', title: 'Vaccination Activity', columns: ['Resident', 'MRN', 'Vaccine', 'Status', 'Date', 'Decline Reason'], rows: vaxActivity.map(({ vax, res }) => [residentLabel(res), (res as any)?.mrn || '-', vax.vaccine || '-', normalizeVaxStatusDisplay(vax.status), getVaxDate(vax), vax.declineReason || '-']) },
                 ],
               })}
@@ -803,7 +826,12 @@ const WeeklyReport: React.FC = () => {
                     {abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
                     {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
                   </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.medication}</td>
+                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">
+                    {(() => {
+                      const days = getAbtDays(abt.startDate, abt.endDate);
+                      return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                    })()}
+                  </td>
                   <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.indication || '—'}</td>
                   <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.syndromeCategory || '—'}</td>
                   <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.startDate || '—'}</td>
@@ -1004,12 +1032,13 @@ const OnDemandReport: React.FC = () => {
       return {
         rows: filtered.map(a => {
           const res = getRes(a.residentRef);
+          const days = getAbtDays(a.startDate, a.endDate);
           return [
             residentLabel(res),
             (res as any)?.mrn || '—',
             (res as any)?.currentUnit || a.locationSnapshot?.unit || '—',
             (res as any)?.currentRoom || a.locationSnapshot?.room || '—',
-            a.medication,
+            days ? `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : a.medication,
             a.indication || '—',
             a.syndromeCategory || '—',
             a.status,
@@ -1056,7 +1085,11 @@ const OnDemandReport: React.FC = () => {
     });
     return {
       rows: filtered.map(r => {
-        const activeAbt = (Object.values(store.abts) as ABTCourse[]).find(a => a.residentRef.kind === 'mrn' && a.residentRef.id === r.mrn && a.status === 'active');
+        const activeAbts = getActiveABT(Object.values(store.abts) as ABTCourse[], r.mrn);
+        const activeAbtText = activeAbts.map(a => {
+          const days = getAbtDays(a.startDate, a.endDate);
+          return days ? `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : a.medication;
+        }).join(', ') || '—';
         const activeIsolation = (Object.values(store.infections) as IPEvent[]).find(i => i.residentRef.kind === 'mrn' && i.residentRef.id === r.mrn && i.status === 'active' && i.isolationType);
         const devices = normalizeClinicalDevices(r);
         const foleyDay = devices.urinaryCatheter.active ? getDeviceDay(devices.urinaryCatheter.insertedDate) : null;
@@ -1064,7 +1097,7 @@ const OnDemandReport: React.FC = () => {
 
         return [
           r.displayName,
-          activeAbt?.medication || '—',
+          activeAbtText,
           devices.oxygen.enabled ? (devices.oxygen.mode || 'Enabled') : '—',
           foleyDay ? `Day ${foleyDay}` : (devices.urinaryCatheter.active ? 'Active' : '—'),
           piccDay ? `Day ${piccDay}` : (devices.picc.active ? 'Active' : '—'),

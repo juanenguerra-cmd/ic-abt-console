@@ -15,10 +15,10 @@ import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
-import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from "../../utils/countCardDataHelpers";
+import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus, getAbtDays } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
-import { getDeviceDay, normalizeClinicalDevices } from "../../utils/clinicalDevices";
+import { getDeviceDay, normalizeClinicalDevices, formatDeviceDayLabel } from "../../utils/clinicalDevices";
 import { ExportPdfButton } from "../../components/ExportPdfButton";
 import { PdfSpec, DEFAULT_FACILITY } from "../../pdf/exportPdf";
 
@@ -310,7 +310,13 @@ export const ResidentBoard: React.FC = () => {
       
       // ABT / VAX DUE
       const residentAbts = getActiveABT(activeABTs, mrn);
-      const abtText = residentAbts.map(a => `${a.medication} (Day ${Math.floor((Date.now() - new Date(a.startDate || '').getTime()) / (86400000)) + 1})`).join('\n');
+      const abtText = residentAbts.map(a => {
+        const days = getAbtDays(a.startDate, a.endDate);
+        if (days) {
+          return `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})`;
+        }
+        return a.medication;
+      }).join('\n');
       
       const residentVaxDue = getVaxDue(vaxEvents, mrn);
       const vaxText = residentVaxDue.length > 0 ? `Due: ${residentVaxDue.map(v => v.vaccine).join(', ')}` : '';
@@ -321,11 +327,11 @@ export const ResidentBoard: React.FC = () => {
       const devices = normalizeClinicalDevices(r);
       const deviceList: string[] = [];
       if (devices.oxygen.enabled) deviceList.push(`O2 (${devices.oxygen.mode})`);
-      if (devices.urinaryCatheter.active) deviceList.push(`Foley (Day ${getDeviceDay(devices.urinaryCatheter.insertedDate)})`);
-      if (devices.indwellingCatheter.active) deviceList.push(`Indwelling (Day ${getDeviceDay(devices.indwellingCatheter.insertedDate)})`);
-      if (devices.picc.active) deviceList.push(`PICC (Day ${getDeviceDay(devices.picc.insertedDate)})`);
-      if (devices.midline.active) deviceList.push(`Midline (Day ${getDeviceDay(devices.midline.insertedDate)})`);
-      if (devices.piv.active) deviceList.push(`PIV (Day ${getDeviceDay(devices.piv.insertedDate)})`);
+      if (devices.urinaryCatheter.active) deviceList.push(formatDeviceDayLabel('Foley', devices.urinaryCatheter.insertedDate));
+      if (devices.indwellingCatheter.active) deviceList.push(formatDeviceDayLabel('Indwelling', devices.indwellingCatheter.insertedDate));
+      if (devices.picc.active) deviceList.push(formatDeviceDayLabel('PICC', devices.picc.insertedDate));
+      if (devices.midline.active) deviceList.push(formatDeviceDayLabel('Midline', devices.midline.insertedDate));
+      if (devices.piv.active) deviceList.push(formatDeviceDayLabel('PIV', devices.piv.insertedDate));
       const devicesText = deviceList.join('\n');
 
       return [
@@ -611,7 +617,21 @@ export const ResidentBoard: React.FC = () => {
                   const clinicalDeviceIndicators = getClinicalDeviceIndicators(resident);
                   const operationalIndicators: Array<{ icon: string; label: string }> = [...clinicalDeviceIndicators];
                   if (sigs.hasActivePrecaution) operationalIndicators.push({ icon: '🦠', label: 'Isolation' });
-                  if (sigs.hasActiveAbt) operationalIndicators.push({ icon: '💊', label: 'ABT' });
+                  
+                  const residentAbts = activeABTs.filter(a => a.residentRef.kind === 'mrn' && a.residentRef.id === resident.mrn);
+                  if (residentAbts.length > 0) {
+                    residentAbts.forEach(abt => {
+                      const days = getAbtDays(abt.startDate, abt.endDate);
+                      const label = days 
+                        ? `ABT Day ${days.current}${days.total ? '/' + days.total : ''}`
+                        : 'ABT';
+                      operationalIndicators.push({ icon: '💊', label });
+                    });
+                  } else if (sigs.hasActiveAbt) {
+                    // Fallback if signal says active but we filtered it out (shouldn't happen with consistent logic)
+                    operationalIndicators.push({ icon: '💊', label: 'ABT' });
+                  }
+
                   if (sigs.hasDueVax) operationalIndicators.push({ icon: '💉', label: 'VAX' });
 
                   return (
