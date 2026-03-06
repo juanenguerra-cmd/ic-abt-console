@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Edit2, User, GitBranch } from "lucide-react";
+import { X, Save, Edit2, User, GitBranch, AlertTriangle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices } from '../../utils/clinicalDevices';
 import { ResidentTimeline } from './ResidentTimeline';
+import { useResidentAlerts } from "../../hooks/useResidentAlerts";
 
 interface Props {
   residentId: string;
@@ -39,6 +40,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const { activeFacilityId, store } = useFacilityData();
   
   const resident = store.residents[residentId];
+  const alerts = useResidentAlerts(residentId);
   
   const [isEditing, setIsEditing] = useState(false);
   
@@ -199,6 +201,21 @@ export const ResidentProfileModal: React.FC<Props> = ({
         </div>
         
         <div className="p-6 overflow-y-auto flex-1 space-y-8">
+          {/* Clinical Alerts */}
+          {alerts.length > 0 && (
+            <section className="space-y-2">
+              {alerts.map((alert, idx) => (
+                <div key={idx} className={`p-3 rounded-lg border flex items-start gap-3 ${alert.category === 'ABT_STEWARDSHIP' ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold uppercase tracking-wider text-[10px] opacity-70 mb-0.5">{alert.category.replace('_', ' ')}</p>
+                    <p className="text-sm font-medium leading-tight">{alert.message}</p>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
           {/* Demographics */}
           <section>
             <h3 className="text-sm font-bold text-neutral-900 mb-4 border-b pb-1">Demographics & Location</h3>

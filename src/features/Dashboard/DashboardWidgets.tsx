@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X, ArrowUpRight } from 'lucide-react';
+import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X, ArrowUpRight, Database, Syringe, AlertTriangle } from 'lucide-react';
 import { FloorMap, RoomStatus } from '../Heatmap/FloorMap';
-import { Resident, FloorLayout } from '../../domain/models';
+import { Resident, FloorLayout, ABTCourse, IPEvent } from '../../domain/models';
 import { SymptomIndicator } from '../../utils/symptomIndicators';
+import { DetectionRules } from '../../services/detectionRules';
 
 // --- Props Interfaces ---
 
@@ -303,18 +304,212 @@ export const WorkQueueWidget: React.FC<WidgetProps> = ({ navigate, newNotificati
   );
 };
 
+// --- Command Center Widget ---
+
+export const CommandCenterWidget: React.FC<WidgetProps> = ({ 
+  navigate, 
+  store, 
+  vaxDueList, 
+  stewardshipEscalations, 
+  isolationReviews, 
+  openCorrectiveActions,
+  backupStatus 
+}) => {
+  const alerts = [
+    {
+      id: 'isolation',
+      title: 'Missing Isolation',
+      count: isolationReviews.length,
+      description: 'Active infections without isolation assigned > 4h',
+      icon: Shield,
+      color: 'red',
+      link: '/resident-board',
+      state: { onPrecautions: true }
+    },
+    {
+      id: 'abt',
+      title: 'Prolonged ABT',
+      count: stewardshipEscalations.length,
+      description: 'Antibiotic courses exceeding 14 days',
+      icon: Activity,
+      color: 'orange',
+      link: '/resident-board',
+      state: { abtActive: true }
+    },
+    {
+      id: 'corrective',
+      title: 'Overdue Actions',
+      count: openCorrectiveActions,
+      description: 'Audit non-compliance items pending correction',
+      icon: ClipboardCheck,
+      color: 'amber',
+      link: '/audit-center',
+      state: {}
+    },
+    {
+      id: 'backup',
+      title: 'Stale Backup',
+      count: backupStatus.isStale ? 1 : 0,
+      description: backupStatus.label || 'No backup found in last 24h',
+      icon: Database,
+      color: 'rose',
+      link: '/settings',
+      state: {},
+      hidden: !backupStatus.isStale
+    },
+    {
+      id: 'vax',
+      title: 'Vax Review',
+      count: vaxDueList.length,
+      description: 'Residents with due or overdue vaccinations',
+      icon: Syringe,
+      color: 'purple',
+      link: '/resident-board',
+      state: { vaxDue: true }
+    }
+  ].filter(a => !a.hidden && a.count > 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+          <Bell className="w-5 h-5 text-indigo-600" />
+          Clinical Command Center
+        </h2>
+        <span className="text-xs text-neutral-500 font-medium bg-neutral-100 px-2 py-1 rounded-full">
+          {alerts.length} Active Alerts
+        </span>
+      </div>
+
+      {alerts.length === 0 ? (
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-8 text-center">
+          <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Shield className="w-6 h-6 text-emerald-600" />
+          </div>
+          <h3 className="text-emerald-900 font-bold">All Systems Clear</h3>
+          <p className="text-emerald-700 text-sm mt-1">No high-priority clinical alerts at this time.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {alerts.map((alert) => (
+            <button
+              key={alert.id}
+              onClick={() => navigate(alert.link, { state: alert.state })}
+              className={`group relative bg-white border rounded-xl p-4 text-left transition-all hover:shadow-md hover:ring-2 ring-offset-2 ring-transparent ${
+                alert.color === 'red' ? 'border-red-200 hover:ring-red-500' :
+                alert.color === 'orange' ? 'border-orange-200 hover:ring-orange-500' :
+                alert.color === 'amber' ? 'border-amber-200 hover:ring-amber-500' :
+                alert.color === 'rose' ? 'border-rose-200 hover:ring-rose-500' :
+                'border-purple-200 hover:ring-purple-500'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className={`p-2 rounded-lg ${
+                  alert.color === 'red' ? 'bg-red-50 text-red-600' :
+                  alert.color === 'orange' ? 'bg-orange-50 text-orange-600' :
+                  alert.color === 'amber' ? 'bg-amber-50 text-amber-600' :
+                  alert.color === 'rose' ? 'bg-rose-50 text-rose-600' :
+                  'bg-purple-50 text-purple-600'
+                }`}>
+                  <alert.icon className="w-5 h-5" />
+                </div>
+                <span className={`text-2xl font-black ${
+                  alert.color === 'red' ? 'text-red-700' :
+                  alert.color === 'orange' ? 'text-orange-700' :
+                  alert.color === 'amber' ? 'text-amber-700' :
+                  alert.color === 'rose' ? 'text-rose-700' :
+                  'text-purple-700'
+                }`}>
+                  {alert.count}
+                </span>
+              </div>
+              <h3 className="font-bold text-neutral-900 group-hover:text-indigo-600 transition-colors">{alert.title}</h3>
+              <p className="text-xs text-neutral-500 mt-1 leading-relaxed">{alert.description}</p>
+              <div className="mt-3 flex items-center text-[10px] font-bold uppercase tracking-wider text-neutral-400 group-hover:text-indigo-500 transition-colors">
+                Take Action <ChevronRight className="w-3 h-3 ml-1" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // --- Needs Review Widget ---
 
-export const NeedsReviewWidget: React.FC<WidgetProps> = ({ navigate, store, vaxDueList, ipActive14DaysList, abtActiveList, setShowAbtModal }) => {
+export const NeedsReviewWidget: React.FC<WidgetProps> = ({ navigate, store, vaxDueList, stewardshipEscalations, isolationReviews, setShowAbtModal }) => {
   return (
     <div>
-      <h2 className="text-lg font-bold text-neutral-900 mb-4">Needs Review</h2>
+      <h2 className="text-lg font-bold text-neutral-900 mb-4">Clinical Needs Review</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Stewardship Escalations */}
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
+          <div className="bg-orange-50 border-b border-orange-100 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-orange-600" />
+              <h3 className="font-semibold text-orange-900 text-sm">ABT Stewardship Escalations</h3>
+            </div>
+            <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full">{stewardshipEscalations.length}</span>
+          </div>
+          <div className="p-0 flex-1 overflow-y-auto max-h-60">
+            {stewardshipEscalations.length > 0 ? (
+              <ul className="divide-y divide-neutral-100">
+                {stewardshipEscalations.map(({ abt, alert }: any) => {
+                  const res = store.residents?.[abt.residentRef?.id];
+                  return (
+                    <li key={abt.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <p className="text-sm font-medium text-neutral-900 truncate">{res?.displayName || 'Unknown'}</p>
+                        <p className="text-[11px] text-orange-700 leading-tight mt-0.5">{alert.message}</p>
+                      </div>
+                      <button onClick={() => navigate('/resident-board', { state: { focusMrn: abt.residentRef.id } })} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium shrink-0">Profile</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="p-6 text-center text-sm text-neutral-400 italic">No stewardship escalations.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Isolation Reviews */}
+        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
+          <div className="bg-red-50 border-b border-red-100 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-600" />
+              <h3 className="font-semibold text-red-900 text-sm">Isolation Reviews Required</h3>
+            </div>
+            <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-0.5 rounded-full">{isolationReviews.length}</span>
+          </div>
+          <div className="p-0 flex-1 overflow-y-auto max-h-60">
+            {isolationReviews.length > 0 ? (
+              <ul className="divide-y divide-neutral-100">
+                {isolationReviews.map(({ ip, alert }: any) => {
+                  const res = store.residents?.[ip.residentRef?.id];
+                  return (
+                    <li key={ip.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <p className="text-sm font-medium text-neutral-900 truncate">{res?.displayName || 'Unknown'}</p>
+                        <p className="text-[11px] text-red-700 leading-tight mt-0.5">{alert.message}</p>
+                      </div>
+                      <button onClick={() => navigate('/resident-board', { state: { focusMrn: ip.residentRef.id } })} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium shrink-0">Profile</button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="p-6 text-center text-sm text-neutral-400 italic">All active infections have isolation assigned.</div>
+            )}
+          </div>
+        </div>
+
         {/* VAX Due */}
         <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
           <div className="bg-amber-50 border-b border-amber-100 p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-amber-600" />
+              <Bell className="w-4 h-4 text-amber-600" />
               <h3 className="font-semibold text-amber-900 text-sm">Vaccinations Due</h3>
             </div>
             <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">{vaxDueList.length}</span>
@@ -336,69 +531,7 @@ export const NeedsReviewWidget: React.FC<WidgetProps> = ({ navigate, store, vaxD
                 })}
               </ul>
             ) : (
-              <div className="p-6 text-center text-sm text-neutral-400">No vaccinations due.</div>
-            )}
-          </div>
-        </div>
-
-        {/* IP > 14 Days */}
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
-          <div className="bg-red-50 border-b border-red-100 p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600" />
-              <h3 className="font-semibold text-red-900 text-sm">IP Events &gt; 14 Days</h3>
-            </div>
-            <span className="bg-red-200 text-red-800 text-xs font-bold px-2 py-0.5 rounded-full">{ipActive14DaysList.length}</span>
-          </div>
-          <div className="p-0 flex-1 overflow-y-auto max-h-60">
-            {ipActive14DaysList.length > 0 ? (
-              <ul className="divide-y divide-neutral-100">
-                {ipActive14DaysList.map((ip: any) => {
-                  const res = store.residents?.[ip.residentRef?.id];
-                  return (
-                    <li key={ip.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900">{res?.displayName || 'Unknown'}</p>
-                        <p className="text-xs text-neutral-500">{ip.infectionCategory || 'Infection'} • Started: {ip.onsetDate || ip.createdAt?.split('T')[0]}</p>
-                      </div>
-                      <button onClick={() => navigate('/resident-board', { state: { onPrecautions: true } })} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Review</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="p-6 text-center text-sm text-neutral-400">No prolonged IP events.</div>
-            )}
-          </div>
-        </div>
-
-        {/* Active ABT Courses */}
-        <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden flex flex-col">
-          <div className="bg-emerald-50 border-b border-emerald-100 p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-600" />
-              <h3 className="font-semibold text-emerald-900 text-sm">Active ABT Courses</h3>
-            </div>
-            <span className="bg-emerald-200 text-emerald-800 text-xs font-bold px-2 py-0.5 rounded-full">{abtActiveList.length}</span>
-          </div>
-          <div className="p-0 flex-1 overflow-y-auto max-h-60">
-            {abtActiveList.length > 0 ? (
-              <ul className="divide-y divide-neutral-100">
-                {abtActiveList.map((abt: any) => {
-                  const res = store.residents?.[abt.residentRef?.id];
-                  return (
-                    <li key={abt.id} className="p-3 hover:bg-neutral-50 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900">{res?.displayName || 'Unknown'}</p>
-                        <p className="text-xs text-neutral-500">{abt.medication} • End: {abt.endDate || 'Ongoing'}</p>
-                      </div>
-                      <button onClick={() => setShowAbtModal(true)} className="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Review</button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="p-6 text-center text-sm text-neutral-400">No active ABT courses.</div>
+              <div className="p-6 text-center text-sm text-neutral-400 italic">No vaccinations due.</div>
             )}
           </div>
         </div>
@@ -406,6 +539,7 @@ export const NeedsReviewWidget: React.FC<WidgetProps> = ({ navigate, store, vaxD
     </div>
   );
 };
+
 
 // --- Floor Map Widget ---
 

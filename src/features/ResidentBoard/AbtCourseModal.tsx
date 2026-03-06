@@ -65,6 +65,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
 
   // Guard-rail override acknowledgements
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const [duplicateOverrideReason, setDuplicateOverrideReason] = useState("");
   const [allergyAcknowledged, setAllergyAcknowledged] = useState(false);
   const [noIndicationAcknowledged, setNoIndicationAcknowledged] = useState(false);
 
@@ -137,8 +138,8 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
       alert("End date cannot be before start date.");
       return;
     }
-    if (duplicateWarning && !duplicateAcknowledged) {
-      alert("Please acknowledge the duplicate ABT warning before saving.");
+    if (duplicateWarning && (!duplicateAcknowledged || !duplicateOverrideReason.trim())) {
+      alert("Please acknowledge the duplicate ABT warning and provide an override reason before saving.");
       return;
     }
     if (allergyWarning && !allergyAcknowledged) {
@@ -434,15 +435,15 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
         {(allergyWarning || duplicateWarning || noIndicationWarning) && (
           <div className="px-6 pb-4 space-y-2 shrink-0">
             {allergyWarning && (
-              <div className="rounded-lg border border-red-300 bg-red-50 p-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
+              <div className="rounded-lg border border-red-700 bg-red-600 p-4 text-white shadow-lg">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-6 h-6 text-white mt-0.5 shrink-0" />
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-red-800">Allergy Conflict</p>
-                    <p className="text-sm text-red-700">{allergyWarning}</p>
-                    <label className="mt-2 flex items-center gap-2 text-sm text-red-800 cursor-pointer">
-                      <input type="checkbox" checked={allergyAcknowledged} onChange={e => setAllergyAcknowledged(e.target.checked)} className="rounded border-red-400 text-red-600 focus:ring-red-500" />
-                      I have verified this with the prescriber and confirm the order is intentional.
+                    <p className="text-lg font-bold">CRITICAL SAFETY ALERT: Allergy Conflict</p>
+                    <p className="text-sm opacity-90 font-medium leading-relaxed">{allergyWarning}</p>
+                    <label className="mt-3 flex items-center gap-2 text-sm font-bold cursor-pointer bg-white/10 p-2 rounded hover:bg-white/20 transition-colors">
+                      <input type="checkbox" checked={allergyAcknowledged} onChange={e => setAllergyAcknowledged(e.target.checked)} className="w-4 h-4 rounded border-white/30 text-red-600 focus:ring-white" />
+                      I HAVE VERIFIED THIS WITH THE PRESCRIBER AND CONFIRM THE ORDER IS INTENTIONAL
                     </label>
                   </div>
                 </div>
@@ -455,10 +456,24 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-amber-800">Duplicate Active ABT</p>
                     <p className="text-sm text-amber-700">{duplicateWarning}</p>
-                    <label className="mt-2 flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
-                      <input type="checkbox" checked={duplicateAcknowledged} onChange={e => setDuplicateAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
-                      I confirm this is a separate, intentional course.
-                    </label>
+                    <div className="mt-2 space-y-2">
+                      <label className="flex items-center gap-2 text-sm text-amber-800 cursor-pointer">
+                        <input type="checkbox" checked={duplicateAcknowledged} onChange={e => setDuplicateAcknowledged(e.target.checked)} className="rounded border-amber-400 text-amber-600 focus:ring-amber-500" />
+                        I confirm this is a separate, intentional course.
+                      </label>
+                      {duplicateAcknowledged && (
+                        <div className="animate-in fade-in slide-in-from-top-1">
+                          <label className="block text-xs font-bold text-amber-700 mb-1 uppercase tracking-wider">Clinical Justification / Override Reason *</label>
+                          <textarea
+                            value={duplicateOverrideReason}
+                            onChange={e => setDuplicateOverrideReason(e.target.value)}
+                            placeholder="Explain why a second course of the same medication is required..."
+                            className="w-full border border-amber-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500 bg-white"
+                            rows={2}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

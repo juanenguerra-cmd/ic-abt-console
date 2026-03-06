@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React from "react";
 import { Undo2, X, CheckCircle } from "lucide-react";
 
 interface UndoAction {
@@ -12,11 +12,11 @@ interface UndoToastContextValue {
   showUndo: (action: Omit<UndoAction, "id">) => void;
 }
 
-const UndoToastContext = createContext<UndoToastContextValue>({
+const UndoToastContext = React.createContext<UndoToastContextValue>({
   showUndo: () => {},
 });
 
-export const useUndoToast = () => useContext(UndoToastContext);
+export const useUndoToast = () => React.useContext(UndoToastContext);
 
 interface ActiveToast extends UndoAction {
   expiresAt: number;
@@ -24,10 +24,10 @@ interface ActiveToast extends UndoAction {
 }
 
 export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [toasts, setToasts] = useState<ActiveToast[]>([]);
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [toasts, setToasts] = React.useState<ActiveToast[]>([]);
+  const timersRef = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const dismissToast = useCallback((id: string) => {
+  const dismissToast = React.useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
     const timer = timersRef.current.get(id);
     if (timer) {
@@ -36,12 +36,12 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  const handleUndo = useCallback((toast: ActiveToast) => {
+  const handleUndo = React.useCallback((toast: ActiveToast) => {
     toast.onUndo();
     dismissToast(toast.id);
   }, [dismissToast]);
 
-  const showUndo = useCallback((action: Omit<UndoAction, "id">) => {
+  const showUndo = React.useCallback((action: Omit<UndoAction, "id">) => {
     const id = `undo-${Date.now()}-${Math.random()}`;
     const timeoutMs = action.timeoutMs ?? 5000;
     const expiresAt = Date.now() + timeoutMs;
@@ -55,7 +55,7 @@ export const UndoToastProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [dismissToast]);
 
   // Animate progress bars
-  useEffect(() => {
+  React.useEffect(() => {
     if (toasts.length === 0) return;
     const interval = setInterval(() => {
       const now = Date.now();

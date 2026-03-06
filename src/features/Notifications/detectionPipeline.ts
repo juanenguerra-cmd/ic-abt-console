@@ -1,5 +1,6 @@
 import { FacilityStore, AppNotification, ABTCourse, IPEvent, VaxEvent, ResidentNote, Resident, InfectionControlAuditItem, LineListNotificationPayload, SymptomClass } from '../../domain/models';
 import { SYMPTOM_HASHTAG_LIBRARY } from '../../utils/symptomHashtagLibrary';
+import { DetectionRules } from '../../services/detectionRules';
 
 export const runDetectionPipeline = (
   store: FacilityStore,
@@ -208,17 +209,17 @@ export const runDetectionPipeline = (
         }
 
         // G5: Active IP event with no isolation type assigned after 4 hours
-        const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000);
-        if (!ip.isolationType && createdDate < fourHoursAgo) {
+        const isolationAlert = DetectionRules.checkIpNoIsolationAlert(ip, now);
+        if (isolationAlert) {
           const resId = ip?.residentRef?.id;
           const { name } = getResDetails(resId);
           addNotif(
-            'ip_no_isolation_rule',
-            'LINE_LIST_REVIEW',
+            isolationAlert.ruleId,
+            isolationAlert.category,
             resId,
             ip.id,
-            `${name || 'Unknown Resident'} has an active ${ip.infectionCategory || 'infection'} with no isolation type assigned. Review and assign precautions.`,
-            { ipId: ip.id }
+            `${name || 'Unknown Resident'}: ${isolationAlert.message}`,
+            isolationAlert.refs
           );
         }
       }
@@ -461,43 +462,41 @@ export const runDetectionPipeline = (
   }
 
   // 8. ABT Stewardship 48-72h time-out (ABT_STEWARDSHIP)
-  const MS_PER_HOUR = 1000 * 60 * 60;
-  const THREE_DAYS_MS = 3 * 24 * MS_PER_HOUR;
-
   Object.values(store.abts || {}).forEach((abt: ABTCourse) => {
     if (abt.status === 'active' && abt.startDate) {
-      const startDate = new Date(abt.startDate);
-      const hoursElapsed = (now.getTime() - startDate.getTime()) / MS_PER_HOUR;
-      if (hoursElapsed >= 48 && hoursElapsed < 96) {
-        const resId = abt?.residentRef?.id;
-        const { name } = getResDetails(resId);
+      const resId = abt?.residentRef?.id;
+      const { name } = getResDetails(resId);
+
+      // 48-72h time-out
+      const timeoutAlert = DetectionRules.checkAbtStewardshipTimeout(abt, now);
+      if (timeoutAlert) {
         addNotif(
-          'abt_stewardship_timeout_rule',
-          'ABT_STEWARDSHIP',
+          timeoutAlert.ruleId,
+          timeoutAlert.category,
           resId,
           abt.id,
-          `${name || 'Unknown Resident'} is on ${abt.medication} for ${Math.floor(hoursElapsed)}h. 48–72h stewardship time-out review is due.`,
-          { abtId: abt.id }
+          `${name || 'Unknown Resident'}: ${timeoutAlert.message}`,
+          timeoutAlert.refs
         );
       }
 
       // G4: 14-day hard escalation
-      if (hoursElapsed >= 336) { // 14 days = 336 h
-        const resId = abt?.residentRef?.id;
-        const { name } = getResDetails(resId);
+      const escalationAlert = DetectionRules.checkAbt14DayEscalation(abt, now);
+      if (escalationAlert) {
         addNotif(
-          'abt_14day_timeout_rule',
-          'ABT_STEWARDSHIP',
+          escalationAlert.ruleId,
+          escalationAlert.category,
           resId,
           abt.id,
-          `${name || 'Unknown Resident'} has been on ${abt.medication} for ≥14 days with no end date. Escalate to prescribing provider.`,
-          { abtId: abt.id }
+          `${name || 'Unknown Resident'}: ${escalationAlert.message}`,
+          escalationAlert.refs
         );
       }
     }
   });
 
   // 9. CAUTI/CLABSI device necessity review (DEVICE_REVIEW)
+  const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
   const deviceCategories = ['CAUTI', 'CLABSI'];
   Object.values(store.infections || {}).forEach((ip: IPEvent) => {
     if (ip.status === 'active') {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle } from "lucide-react";
+import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle, Sparkles } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { IPEvent, ABTCourse, Outbreak, ShiftLogEntry } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
@@ -7,6 +7,7 @@ import { checkCauti, checkCdiffLabId, NhsnResult } from "../../utils/nhsnCriteri
 import { NhsnCriteriaPanel } from "../../components/NhsnCriteriaPanel";
 import { useHashtagShiftLogSync } from "../../hooks/useHashtagShiftLogSync";
 import { useNavigate } from "react-router-dom";
+import { extractIpEventFromText } from "../../services/geminiService";
 
 interface Props {
   residentId: string;
@@ -284,6 +285,44 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       labResultDate, deviceTypes, notes, isolationTypes, status, store, residentId, existingIp]);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [showMagicFill, setShowMagicFill] = useState(false);
+  const [magicFillText, setMagicFillText] = useState("");
+  const [isMagicFilling, setIsMagicFilling] = useState(false);
+
+  const handleMagicFill = async () => {
+    if (!magicFillText.trim()) return;
+    setIsMagicFilling(true);
+    try {
+      const extracted = await extractIpEventFromText(magicFillText);
+      if (extracted) {
+        if (extracted.infectionCategory) setInfectionCategory(extracted.infectionCategory);
+        if (extracted.infectionSite) setInfectionSite(extracted.infectionSite || "");
+        if (extracted.onsetDate) setOnsetDate(extracted.onsetDate);
+        if (extracted.organism) {
+          const orgs = extracted.organism.split(",").map(s => s.trim());
+          setInfectionTags(prev => Array.from(new Set([...prev, ...orgs])));
+        }
+        if (extracted.notes) {
+          setNotes(prev => prev ? `${prev}\n\n[AI Note]: ${extracted.notes}` : `[AI Note]: ${extracted.notes}`);
+        }
+        if (extracted.status) setStatus(extracted.status);
+        if (extracted.isolationType && extracted.isolationType.length > 0) {
+          setIsolationTypes(extracted.isolationType);
+          setProtocol("isolation");
+        }
+        
+        setShowMagicFill(false);
+        setMagicFillText("");
+      } else {
+        alert("Could not extract information. Please try again with more details.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("AI extraction failed.");
+    } finally {
+      setIsMagicFilling(false);
+    }
+  };
 
   const handleSave = async () => {
     if (specimenCollectedDate && labResultDate && labResultDate < specimenCollectedDate) {
@@ -406,10 +445,51 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             <Shield className="w-5 h-5 text-amber-600" />
             {existingIp ? "Edit Infection Event" : "New Infection Event"}
           </h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => setShowMagicFill(!showMagicFill)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 text-sm font-medium mr-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Magic Fill
+            </button>
+            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
+        
+        {showMagicFill && (
+          <div className="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
+            <label className="block text-sm font-medium text-indigo-900 mb-2">
+              Paste Clinical Note (Gemini AI)
+            </label>
+            <div className="flex gap-2">
+              <textarea
+                value={magicFillText}
+                onChange={(e) => setMagicFillText(e.target.value)}
+                placeholder="e.g., Resident started showing signs of UTI on Monday. Urine culture collected today grew E. coli."
+                className="flex-1 border border-indigo-200 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                rows={3}
+              />
+              <button
+                onClick={handleMagicFill}
+                disabled={isMagicFilling || !magicFillText.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium disabled:opacity-50 flex flex-col items-center justify-center min-w-[80px]"
+              >
+                {isMagicFilling ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mb-1"></div>
+                ) : (
+                  <Sparkles className="w-4 h-4 mb-1" />
+                )}
+                {isMagicFilling ? "..." : "Fill"}
+              </button>
+            </div>
+            <p className="text-xs text-indigo-600 mt-2">
+              AI will extract: Category, Site, Onset Date, Organism, and Notes.
+            </p>
+          </div>
+        )}
         
         <div className="flex flex-1 overflow-hidden">
           <div className="p-6 overflow-y-auto flex-1 space-y-8 border-r border-neutral-200">

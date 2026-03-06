@@ -18,8 +18,11 @@ import {
   StewardshipWidget, 
   WorkQueueWidget, 
   NeedsReviewWidget, 
-  FloorMapWidget 
+  FloorMapWidget,
+  CommandCenterWidget
 } from './DashboardWidgets';
+import { LS_LAST_BACKUP_TS } from '../../constants/storageKeys';
+import { DetectionRules } from '../../services/detectionRules';
 import { CustomizeDashboardModal } from './CustomizeDashboardModal';
 
 const CELL_WIDTH = 100;
@@ -28,6 +31,7 @@ const GAP = 16;
 
 const DEFAULT_WIDGETS = [
   { id: 'season-banner', label: 'Season Banner', visible: true },
+  { id: 'command-center', label: 'Clinical Command Center', visible: true },
   { id: 'facility-overview', label: 'Facility Overview', visible: true },
   { id: 'work-queue', label: "Today's Work Queue", visible: true },
   { id: 'compliance', label: 'Compliance & Audits', visible: true },
@@ -346,6 +350,37 @@ export const Dashboard: React.FC = () => {
   const staffVaxGiven = (Object.values(store.staffVaxEvents || {}) as any[]).filter((v: any) => v && v.status === 'given').length;
   const staffVaxCoverage = staffVaxTotal > 0 ? Math.round((staffVaxGiven / staffVaxTotal) * 100) : null;
 
+  // Command Center Alert Calculations
+  const stewardshipEscalations = useMemo(() => {
+    return Object.values(store.abts || {}).map((abt: any) => ({
+      abt,
+      alert: DetectionRules.checkAbt14DayEscalation(abt, nowForDot)
+    })).filter(x => x.alert);
+  }, [store.abts, nowForDot]);
+
+  const isolationReviews = useMemo(() => {
+    return Object.values(store.infections || {}).map((ip: any) => ({
+      ip,
+      alert: DetectionRules.checkIpNoIsolationAlert(ip, nowForDot)
+    })).filter(x => x.alert);
+  }, [store.infections, nowForDot]);
+
+  const backupStatus = useMemo(() => {
+    const lastBackupTimestamp = localStorage.getItem(LS_LAST_BACKUP_TS);
+    if (!lastBackupTimestamp) return { isStale: true, label: 'No backup found' };
+    
+    const lastBackupDate = new Date(parseInt(lastBackupTimestamp, 10));
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+    
+    const isStale = lastBackupDate < oneDayAgo;
+    const diffMs = Date.now() - lastBackupDate.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const label = diffHours < 24 ? `${diffHours}h ago` : `${Math.floor(diffHours / 24)}d ago`;
+    
+    return { isStale, label: `Last backup: ${label}` };
+  }, []);
+
   const widgetProps = {
     navigate,
     store,
@@ -358,7 +393,8 @@ export const Dashboard: React.FC = () => {
     totalDotDays, dotPer1000, residentVaxCoverage, residentVaxGiven, residentVaxTotal, vaxLabel, staffVaxCoverage, staffVaxGiven, staffVaxTotal,
     newNotificationsCount, abtNeedsReviewCount,
     vaxDueList, ipActive14DaysList, abtActiveList,
-    units, selectedUnit, setSelectedUnit, tileSize, setTileSize, filteredLayout, roomStatuses, symptomIndicators, selectedRoomId, setSelectedRoomId, roomResidentsMap, perResidentIndicators
+    units, selectedUnit, setSelectedUnit, tileSize, setTileSize, filteredLayout, roomStatuses, symptomIndicators, selectedRoomId, setSelectedRoomId, roomResidentsMap, perResidentIndicators,
+    stewardshipEscalations, isolationReviews, backupStatus
   };
 
   return (
@@ -377,6 +413,7 @@ export const Dashboard: React.FC = () => {
         {widgets.filter((w: any) => w.visible).map((widget: any) => {
           switch (widget.id) {
             case 'season-banner': return <SeasonBannerWidget key={widget.id} {...widgetProps} />;
+            case 'command-center': return <CommandCenterWidget key={widget.id} {...widgetProps} />;
             case 'facility-overview': return <FacilityOverviewWidget key={widget.id} {...widgetProps} />;
             case 'work-queue': return <WorkQueueWidget key={widget.id} {...widgetProps} />;
             case 'compliance': return <ComplianceWidget key={widget.id} {...widgetProps} />;
