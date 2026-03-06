@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { UnifiedDB, FacilityStore, MutationLogEntry } from "../domain/models";
 import { loadDBAsync, saveDBAsync, restoreFromPrevAsync, StorageError, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
@@ -35,7 +35,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [isSafeMode, setIsSafeMode] = useState(false);
   const [isMigrationRequired, setIsMigrationRequired] = useState(false);
   const [saveErrorToast, setSaveErrorToast] = useState<string | null>(null);
-  const [crossTabAlert, setCrossTabAlert] = useState(false);
 
   useEffect(() => {
     loadDBAsync()
@@ -55,26 +54,40 @@ export function AppProviders({ children }: { children: ReactNode }) {
       });
   }, []);
 
-  // Multi-tab dirty-write guard: detect when another tab writes to localStorage
+  // Multi-tab sync: detect when another tab writes to the database
   useEffect(() => {
+    const channel = new BroadcastChannel('ic_console_sync');
+    channel.onmessage = (event) => {
+      if (event.data.type === 'DB_UPDATED') {
+        loadDBAsync().then((loadedDb) => {
+          setDb(loadedDb);
+          setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
+        }).catch(err => console.error("Failed to sync DB from other tab", err));
+      }
+    };
+
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === DB_KEY_MAIN && e.newValue !== null) {
-        setCrossTabAlert(true);
+      if ((e.key === DB_KEY_MAIN || e.key === `${DB_KEY_MAIN}_signal`) && e.newValue !== null) {
+        loadDBAsync().then((loadedDb) => {
+          setDb(loadedDb);
+          setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
+        }).catch(err => console.error("Failed to sync DB from other tab", err));
       }
     };
     window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+    
+    return () => {
+      channel.close();
+      window.removeEventListener("storage", handleStorageChange);
+    };
   }, []);
 
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+
   const updateDB = useCallback((updater: (draft: UnifiedDB) => void, meta?: MutationMeta) => {
-    if (!db) return;
+    if (!db) return Promise.resolve();
 
     try {
-      // Capture the previous state before the optimistic update so that a
-      // late-failing async save rolls back to the correct snapshot even if
-      // updateDB is called again before the save completes.
-      const prevDb = db;
-
       // Create a deep clone to act as our draft
       const nextDb = JSON.parse(JSON.stringify(db)) as UnifiedDB;
       updater(nextDb);
@@ -93,49 +106,84 @@ export function AppProviders({ children }: { children: ReactNode }) {
         if (facilityStore) {
           if (!facilityStore.mutationLog) facilityStore.mutationLog = [];
           facilityStore.mutationLog.push(entry);
-          // Cap at MAX_MUTATION_LOG_ENTRIES to prevent unbounded growth
           if (facilityStore.mutationLog.length > MAX_MUTATION_LOG_ENTRIES) {
             facilityStore.mutationLog = facilityStore.mutationLog.slice(-MAX_MUTATION_LOG_ENTRIES);
           }
         }
       }
 
-      // Optimistically update React state immediately so the UI feels instant.
+      // Optimistically update React state immediately.
+      const prevDb = db;
       setDb(nextDb);
       setError(null);
 
-      // Persist asynchronously to IndexedDB (primary store).
-      saveDBAsync(nextDb).catch((err) => {
+      // Sequential Save Queue: Ensure saves happen in order and don't collide.
+      const savePromise = saveQueue.current.then(async () => {
+        try {
+          await saveDBAsync(nextDb);
+          const channel = new BroadcastChannel('ic_console_sync');
+          channel.postMessage({ type: 'DB_UPDATED' });
+          channel.close();
+        } catch (err) {
+          console.error("DB_SAVE_FAILURE", err);
+          window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
+          const msg = err instanceof Error ? err.message : "Failed to save database";
+          setError(msg);
+          setSaveErrorToast(msg);
+          
+          // Robust Rollback: Only roll back if the current state is still the one we just set.
+          // If another updateDB has run in the meantime, rolling back to prevDb would lose data.
+          setDb(current => {
+            if (current === nextDb) return prevDb;
+            return current;
+          });
+          throw err; 
+        }
+      });
+
+      saveQueue.current = savePromise.catch(() => {
+        // Catch queue errors to prevent the chain from breaking permanently
+      });
+
+      return savePromise;
+
+    } catch (err) {
+      console.error("DB_UPDATE_ERROR", err);
+      const msg = err instanceof Error ? err.message : "Failed to update database";
+      setError(msg);
+      setSaveErrorToast(msg);
+      return Promise.reject(err);
+    }
+  }, [db]);
+
+  const setDB = useCallback((newDb: UnifiedDB) => {
+    const prevDb = db;
+    setDb(newDb);
+    setError(null);
+
+    const savePromise = saveQueue.current.then(async () => {
+      try {
+        await saveDBAsync(newDb);
+        const channel = new BroadcastChannel('ic_console_sync');
+        channel.postMessage({ type: 'DB_UPDATED' });
+        channel.close();
+      } catch (err) {
         console.error("DB_SAVE_FAILURE", err);
         window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
         const msg = err instanceof Error ? err.message : "Failed to save database";
         setError(msg);
         setSaveErrorToast(msg);
-        // Roll back to the explicitly captured previous state.
-        setDb(prevDb);
-      });
-    } catch (err) {
-      console.error("DB_SAVE_FAILURE", err);
-      window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
-      const msg = err instanceof Error ? err.message : "Failed to save database";
-      setError(msg);
-      setSaveErrorToast(msg);
-    }
-  }, [db]);
-
-  const setDB = useCallback((newDb: UnifiedDB) => {
-    // Optimistically update React state.
-    setDb(newDb);
-    setError(null);
-
-    saveDBAsync(newDb).catch((err) => {
-      console.error("DB_SAVE_FAILURE", err);
-      window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
-      const msg = err instanceof Error ? err.message : "Failed to save database";
-      setError(msg);
-      setSaveErrorToast(msg);
+        setDb(current => {
+          if (current === newDb) return prevDb || current;
+          return current;
+        });
+        throw err;
+      }
     });
-  }, []);
+
+    saveQueue.current = savePromise.catch(() => {});
+    return savePromise;
+  }, [db]);
 
   const handleRestore = () => {
     restoreFromPrevAsync().then((ok) => {
@@ -257,19 +305,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <DatabaseContext.Provider value={{ db, updateDB, setDB, error }}>
       <FacilityContext.Provider value={{ activeFacilityId, setActiveFacilityId, store }}>
-        {crossTabAlert && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] w-full max-w-md px-4">
-            <div className="bg-amber-50 border border-amber-300 rounded-lg shadow-lg p-4 flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-amber-900">Data changed in another tab</p>
-                <p className="text-xs text-amber-700 mt-1">Another browser tab has modified the database. Reload to get the latest data and avoid overwriting changes.</p>
-              </div>
-              <button onClick={() => window.location.reload()} className="text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 px-2 py-1 rounded shrink-0">Reload</button>
-              <button onClick={() => setCrossTabAlert(false)} className="text-amber-500 hover:text-amber-700 shrink-0"><X className="h-4 w-4" /></button>
-            </div>
-          </div>
-        )}
         {saveErrorToast && (
           <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm">
             <div className="bg-red-50 border border-red-300 rounded-lg shadow-lg p-4 flex items-start gap-3">

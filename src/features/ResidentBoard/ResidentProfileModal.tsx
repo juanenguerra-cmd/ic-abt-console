@@ -131,29 +131,38 @@ export const ResidentProfileModal: React.FC<Props> = ({
     return age;
   };
 
-  const handleSave = () => {
-    updateDB((draft) => {
-      const facility = draft.data.facilityData[activeFacilityId];
-      const r = facility.residents[residentId];
-      if (r) {
-        r.firstName = firstName.trim() || undefined;
-        r.lastName = lastName.trim() || undefined;
-        r.displayName = `${lastName.trim() || ''}, ${firstName.trim() || ''}`.replace(/^, | ,$|^,$/, '').trim() || r.displayName;
-        r.dob = dob || undefined;
-        r.sex = sex || undefined;
-        r.currentUnit = currentUnit.trim() || undefined;
-        r.currentRoom = currentRoom.trim() || undefined;
-        r.status = status;
-        r.payor = payor.trim() || undefined;
-        r.primaryDiagnosis = primaryDiagnosis.trim() || undefined;
-        r.attendingMD = attendingMD.trim() || undefined;
-        r.allergies = allergiesInput.trim() ? allergiesInput.split(",").map(a => a.trim()).filter(a => a) : [];
-        r.cognitiveStatus = cognitiveStatus;
-        r.clinicalDevices = clinicalDevices;
-        r.updatedAt = new Date().toISOString();
-      }
-    }, { action: 'update', entityType: 'Resident', entityId: residentId });
-    setIsEditing(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateDB((draft) => {
+        const facility = draft.data.facilityData[activeFacilityId];
+        const r = facility.residents[residentId];
+        if (r) {
+          r.firstName = firstName.trim() || undefined;
+          r.lastName = lastName.trim() || undefined;
+          r.displayName = `${lastName.trim() || ''}, ${firstName.trim() || ''}`.replace(/^, | ,$|^,$/, '').trim() || r.displayName;
+          r.dob = dob || undefined;
+          r.sex = sex || undefined;
+          r.currentUnit = currentUnit.trim() || undefined;
+          r.currentRoom = currentRoom.trim() || undefined;
+          r.status = status;
+          r.payor = payor.trim() || undefined;
+          r.primaryDiagnosis = primaryDiagnosis.trim() || undefined;
+          r.attendingMD = attendingMD.trim() || undefined;
+          r.allergies = allergiesInput.trim() ? allergiesInput.split(",").map(a => a.trim()).filter(a => a) : [];
+          r.cognitiveStatus = cognitiveStatus;
+          r.clinicalDevices = clinicalDevices;
+          r.updatedAt = new Date().toISOString();
+        }
+      }, { action: 'update', entityType: 'Resident', entityId: residentId });
+      setIsEditing(false);
+    } catch (err) {
+      // Error handled by updateDB
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -176,10 +185,11 @@ export const ResidentProfileModal: React.FC<Props> = ({
             ) : (
               <button 
                 onClick={handleSave}
-                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium"
+                disabled={isSaving}
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                Save
+                {isSaving ? "Saving..." : "Save"}
               </button>
             )}
             <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700 ml-2">

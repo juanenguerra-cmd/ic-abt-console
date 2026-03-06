@@ -126,7 +126,9 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
     }
   }, [existingAbt]);
 
-  const handleSave = () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
     if (!medication.trim()) {
       alert("Medication name is required.");
       return;
@@ -148,57 +150,64 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
       return;
     }
 
-    const newAbtId = uuidv4();
-    updateDB((draft) => {
-      const facility = draft.data.facilityData[activeFacilityId];
-      const now = new Date().toISOString();
-      const abtId = existingAbt?.id || newAbtId;
+    setIsSaving(true);
+    try {
+      const newAbtId = uuidv4();
+      await updateDB((draft) => {
+        const facility = draft.data.facilityData[activeFacilityId];
+        const now = new Date().toISOString();
+        const abtId = existingAbt?.id || newAbtId;
 
-      const residentRef = residentId.startsWith("Q:") 
-        ? { kind: "quarantine" as const, id: residentId }
-        : { kind: "mrn" as const, id: residentId };
+        const residentRef = residentId.startsWith("Q:") 
+          ? { kind: "quarantine" as const, id: residentId }
+          : { kind: "mrn" as const, id: residentId };
 
-      const locationSnapshot = existingAbt?.locationSnapshot || {
-        unit: (resident as any).currentUnit || (resident as any).unitSnapshot,
-        room: (resident as any).currentRoom || (resident as any).roomSnapshot
-      };
+        const locationSnapshot = existingAbt?.locationSnapshot || {
+          unit: (resident as any).currentUnit || (resident as any).unitSnapshot,
+          room: (resident as any).currentRoom || (resident as any).roomSnapshot
+        };
 
-      const diagnostics = {
-        treatmentType: treatmentType || undefined,
-        isDeviceAssociated: isDeviceAssociated || undefined,
-        deviceType: isDeviceAssociated ? deviceType : undefined,
-        bloodWorkResults: bloodWorkResults.trim() || undefined,
-        xrayResults: xrayResults.trim() || undefined,
-        linkedIpEventId: linkedIpEventId || undefined,
-      };
+        const diagnostics = {
+          treatmentType: treatmentType || undefined,
+          isDeviceAssociated: isDeviceAssociated || undefined,
+          deviceType: isDeviceAssociated ? deviceType : undefined,
+          bloodWorkResults: bloodWorkResults.trim() || undefined,
+          xrayResults: xrayResults.trim() || undefined,
+          linkedIpEventId: linkedIpEventId || undefined,
+        };
 
-      facility.abts[abtId] = {
-        id: abtId,
-        residentRef,
-        status,
-        medication: medication.trim(),
-        route: (route === "Other" ? routeOther.trim() || "Other" : route) || undefined,
-        frequency: (frequency === "Other" ? frequencyOther.trim() || "Other" : frequency) || undefined,
-        indication: indication.trim() || undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        medicationClass: medicationClass.trim() || undefined,
-        syndromeCategory: syndromeCategory || undefined,
-        infectionSource: infectionSource || undefined,
-        cultureCollected,
-        cultureCollectionDate: cultureCollected ? cultureCollectionDate : undefined,
-        cultureSource: cultureCollected ? cultureSource.trim() : undefined,
-        organismIdentified: cultureCollected ? organismIdentified.trim() : undefined,
-        sensitivitySummary: cultureCollected ? sensitivitySummary.trim() : undefined,
-        diagnostics,
-        locationSnapshot,
-        notes: notes.trim() || undefined,
-        createdAt: existingAbt?.createdAt || now,
-        updatedAt: now,
-      };
-    }, { action: existingAbt ? 'update' : 'create', entityType: 'ABTCourse', entityId: existingAbt?.id || newAbtId });
+        facility.abts[abtId] = {
+          id: abtId,
+          residentRef,
+          status,
+          medication: medication.trim(),
+          route: (route === "Other" ? routeOther.trim() || "Other" : route) || undefined,
+          frequency: (frequency === "Other" ? frequencyOther.trim() || "Other" : frequency) || undefined,
+          indication: indication.trim() || undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          medicationClass: medicationClass.trim() || undefined,
+          syndromeCategory: syndromeCategory || undefined,
+          infectionSource: infectionSource || undefined,
+          cultureCollected,
+          cultureCollectionDate: cultureCollected ? cultureCollectionDate : undefined,
+          cultureSource: cultureCollected ? cultureSource.trim() : undefined,
+          organismIdentified: cultureCollected ? organismIdentified.trim() : undefined,
+          sensitivitySummary: cultureCollected ? sensitivitySummary.trim() : undefined,
+          diagnostics,
+          locationSnapshot,
+          notes: notes.trim() || undefined,
+          createdAt: existingAbt?.createdAt || now,
+          updatedAt: now,
+        };
+      }, { action: existingAbt ? 'update' : 'create', entityType: 'ABTCourse', entityId: existingAbt?.id || newAbtId });
 
-    onClose();
+      onClose();
+    } catch (err) {
+      // Error handled by updateDB
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -476,9 +485,13 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
           <button onClick={onClose} className="px-4 py-2 border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-100 text-sm font-medium">
             Cancel
           </button>
-          <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium">
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm font-medium disabled:opacity-50"
+          >
             <Save className="w-4 h-4" />
-            Save ABT Course
+            {isSaving ? "Saving..." : "Save ABT Course"}
           </button>
         </div>
       </div>

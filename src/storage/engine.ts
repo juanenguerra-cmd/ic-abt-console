@@ -342,11 +342,12 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
     console.warn(`Storage warning: Database is ${(size / 1024 / 1024).toFixed(1)} MB — consider archiving old data.`);
   }
 
-  // --- IDB atomic swap ---
-  await idbSet(DB_KEY_TMP, serialized);
+  // --- IDB atomic swap with unique TMP key to avoid concurrent collisions ---
+  const uniqueTmpKey = `${DB_KEY_TMP}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  await idbSet(uniqueTmpKey, serialized);
   await new Promise<void>((resolve) => setTimeout(resolve, 0)); // yield to IDB flush
 
-  const tmpVerify = await idbGet<string>(DB_KEY_TMP);
+  const tmpVerify = await idbGet<string>(uniqueTmpKey);
   if (!tmpVerify) {
     // TMP slot is completely absent — genuine write failure.
     throw new StorageError(
@@ -387,7 +388,7 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
   };
 
   await idbSet(DB_KEY_MAIN, JSON.stringify(db));
-  await idbRemove(DB_KEY_TMP).catch(() => {});
+  await idbRemove(uniqueTmpKey).catch(() => {});
 
   // --- Synchronous localStorage backup (best-effort, may fail at 5 MB) ---
   try {

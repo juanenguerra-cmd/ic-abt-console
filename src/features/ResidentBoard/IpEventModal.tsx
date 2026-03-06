@@ -283,7 +283,9 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   }, [infectionCategory, infectionCategoryOther, infectionTags, onsetDate, specimenCollectedDate,
       labResultDate, deviceTypes, notes, isolationTypes, status, store, residentId, existingIp]);
 
-  const handleSave = () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
     if (specimenCollectedDate && labResultDate && labResultDate < specimenCollectedDate) {
       alert("Lab result date cannot be before specimen collected date.");
       return;
@@ -292,107 +294,107 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       alert("Precaution start date cannot be before onset date.");
       return;
     }
-    const newIpId = uuidv4();
-    updateDB((draft) => {
-      const facility = draft.data.facilityData[activeFacilityId];
-      const now = new Date().toISOString();
-      const ipId = existingIp?.id || newIpId;
+    
+    setIsSaving(true);
+    try {
+      const newIpId = uuidv4();
+      await updateDB((draft) => {
+        const facility = draft.data.facilityData[activeFacilityId];
+        const now = new Date().toISOString();
+        const ipId = existingIp?.id || newIpId;
 
-      const residentRef = residentId.startsWith("Q:") 
-        ? { kind: "quarantine" as const, id: residentId }
-        : { kind: "mrn" as const, id: residentId };
+        const residentRef = residentId.startsWith("Q:") 
+          ? { kind: "quarantine" as const, id: residentId }
+          : { kind: "mrn" as const, id: residentId };
 
-      const locationSnapshot = existingIp?.locationSnapshot || {
-        unit: (resident as any).currentUnit || (resident as any).unitSnapshot,
-        room: (resident as any).currentRoom || (resident as any).roomSnapshot
-      };
+        const locationSnapshot = existingIp?.locationSnapshot || {
+          unit: (resident as any).currentUnit || (resident as any).unitSnapshot,
+          room: (resident as any).currentRoom || (resident as any).roomSnapshot
+        };
 
-      const extData = {
-        protocol,
-        deviceTypes,
-        ebpDetailOther,
-        woundLocation,
-        mdroType,
-        sourceOther,
-        labOutcomeNote,
-        onsetDate,
-        eventDetectedDate,
-        precautionStartDate
-      };
-      
-      const finalNotes = notes.trim() 
-        ? notes.trim() + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
-        : `--- EXTENDED DATA ---\n${JSON.stringify(extData)}`;
+        const extData = {
+          protocol,
+          deviceTypes,
+          ebpDetailOther,
+          woundLocation,
+          mdroType,
+          sourceOther,
+          labOutcomeNote,
+          onsetDate,
+          eventDetectedDate,
+          precautionStartDate
+        };
+        
+        const finalNotes = notes.trim() 
+          ? notes.trim() + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
+          : `--- EXTENDED DATA ---\n${JSON.stringify(extData)}`;
 
-      const effectiveCat = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
-      const verdictToBoolean = (v: string | undefined): boolean | null | undefined => {
-        if (!v) return undefined;
-        if (v === 'meets') return true;
-        if (v === 'does_not_meet') return false;
-        return null;
-      };
+        const effectiveCat = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
+        const verdictToBoolean = (v: string | undefined): boolean | null | undefined => {
+          if (!v) return undefined;
+          if (v === 'meets') return true;
+          if (v === 'does_not_meet') return false;
+          return null;
+        };
 
-      facility.infections[ipId] = {
-        id: ipId,
-        residentRef,
-        status,
-        onsetDate: onsetDate || undefined,
-        infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
-        infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
-        sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
-        isolationType: isolationTypes.join(", ") || undefined,
-        deviceTypes: deviceTypes.length > 0 ? deviceTypes : undefined,
-        ebp: protocol === "ebp",
-        organism: infectionTags.join(", ") || undefined,
-        specimenCollectedDate: specimenCollectedDate || undefined,
-        labResultDate: labResultDate || undefined,
-        outbreakId: outbreakId || undefined,
-        locationSnapshot,
-        notes: finalNotes,
-        nhsnCautiMet: (nhsnResult && /uti|cauti/i.test(effectiveCat))
-          ? verdictToBoolean(nhsnResult.verdict)
-          : undefined,
-        nhsnCdiffLabIdMet: (nhsnResult && /\bgi\b|c\.?\s*diff/i.test(effectiveCat))
-          ? verdictToBoolean(nhsnResult.verdict)
-          : undefined,
-        createdAt: existingIp?.createdAt || now,
-        updatedAt: now,
-      };
-    }, { action: existingIp ? 'update' : 'create', entityType: 'IPEvent', entityId: existingIp?.id || newIpId });
+        facility.infections[ipId] = {
+          id: ipId,
+          residentRef,
+          status,
+          onsetDate: onsetDate || undefined,
+          infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
+          infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
+          sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
+          isolationType: isolationTypes.join(", ") || undefined,
+          deviceTypes: deviceTypes.length > 0 ? deviceTypes : undefined,
+          ebp: protocol === "ebp",
+          organism: infectionTags.join(", ") || undefined,
+          specimenCollectedDate: specimenCollectedDate || undefined,
+          labResultDate: labResultDate || undefined,
+          outbreakId: outbreakId || undefined,
+          locationSnapshot,
+          notes: finalNotes,
+          nhsnCautiMet: (nhsnResult && /uti|cauti/i.test(effectiveCat))
+            ? verdictToBoolean(nhsnResult.verdict)
+            : undefined,
+          nhsnCdiffLabIdMet: (nhsnResult && /\bgi\b|c\.?\s*diff/i.test(effectiveCat))
+            ? verdictToBoolean(nhsnResult.verdict)
+            : undefined,
+          createdAt: existingIp?.createdAt || now,
+          updatedAt: now,
+        };
+      }, { action: existingIp ? 'update' : 'create', entityType: 'IPEvent', entityId: existingIp?.id || newIpId });
 
-    // Determine symptom class for GI-related categories
-    const effectiveCatForSync = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
-    const isGiCategory = /\bgi\b|c\.?\s*diff|norovirus/i.test(effectiveCatForSync);
-    const detectedSymptomClass: 'resp' | 'gi' = isGiCategory ? 'gi' : 'resp';
+      // Determine symptom class for GI-related categories
+      const effectiveCatForSync = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
+      const isGiCategory = /\bgi\b|c\.?\s*diff|norovirus/i.test(effectiveCatForSync);
+      const detectedSymptomClass: 'resp' | 'gi' = isGiCategory ? 'gi' : 'resp';
 
-    // Determine linked outbreak ref if any
-    const linkedOutbreak = outbreakId
-      ? activeOutbreaks.find(o => o.id === outbreakId)
-      : undefined;
-    const outbreakRefForSync = linkedOutbreak
-      ? { id: linkedOutbreak.id, name: linkedOutbreak.title ?? linkedOutbreak.pathogen ?? 'Outbreak' }
-      : undefined;
+      // Trigger shift log sync for each applicable hashtag
+      let lineListResult: { suggestsLineList: boolean; symptomClass?: 'resp' | 'gi' } = { suggestsLineList: false };
 
-    // Trigger shift log sync for each applicable hashtag
-    let lineListResult: { suggestsLineList: boolean; symptomClass?: 'resp' | 'gi' } = { suggestsLineList: false };
+      if (status === 'active' && protocol === 'isolation' && isolationTypes.length > 0) {
+        lineListResult = syncHashtagToShiftLog('Isolation');
+      }
+      if (status === 'active' && outbreakId) {
+        lineListResult = syncHashtagToShiftLog('Outbreak', {
+          symptomClassOverride: detectedSymptomClass,
+        });
+      }
+      if (specimenCollectedDate) {
+        const labResult = syncHashtagToShiftLog('LabPending');
+        if (labResult.suggestsLineList) lineListResult = labResult;
+      }
 
-    if (status === 'active' && protocol === 'isolation' && isolationTypes.length > 0) {
-      lineListResult = syncHashtagToShiftLog('Isolation');
-    }
-    if (status === 'active' && outbreakId) {
-      lineListResult = syncHashtagToShiftLog('Outbreak', {
-        symptomClassOverride: detectedSymptomClass,
-      });
-    }
-    if (specimenCollectedDate) {
-      const labResult = syncHashtagToShiftLog('LabPending');
-      if (labResult.suggestsLineList) lineListResult = labResult;
-    }
-
-    if (lineListResult.suggestsLineList) {
-      setShowLineListPrompt({ symptomClass: lineListResult.symptomClass ?? 'resp' });
-    } else {
-      onClose();
+      if (lineListResult.suggestsLineList) {
+        setShowLineListPrompt({ symptomClass: lineListResult.symptomClass ?? 'resp' });
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      // Error is handled by updateDB (toast/error state)
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -770,10 +772,11 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
+              disabled={isSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              Save IP Event
+              {isSaving ? "Saving..." : "Save IP Event"}
             </button>
           </div>
         </div>
