@@ -19,6 +19,8 @@ import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus } from
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
 import { getDeviceDay, normalizeClinicalDevices } from "../../utils/clinicalDevices";
+import { ExportPdfButton } from "../../components/ExportPdfButton";
+import { PdfSpec, DEFAULT_FACILITY } from "../../pdf/exportPdf";
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -43,11 +45,13 @@ const getClinicalDeviceIndicators = (resident: Resident): Array<{ icon: string; 
   }
   if (devices.urinaryCatheter.active) {
     const day = getDeviceDay(devices.urinaryCatheter.insertedDate);
-    indicators.push({ icon: '💧', label: day ? `Foley Day ${day}` : 'Foley' });
+    const dateStr = devices.urinaryCatheter.insertedDate ? ` (${new Date(devices.urinaryCatheter.insertedDate).toLocaleDateString()})` : '';
+    indicators.push({ icon: '💧', label: day ? `Foley Day ${day}${dateStr}` : `Foley${dateStr}` });
   }
   if (devices.indwellingCatheter.active) {
     const day = getDeviceDay(devices.indwellingCatheter.insertedDate);
-    indicators.push({ icon: '💧', label: day ? `Indwelling Day ${day}` : 'Indwelling' });
+    const dateStr = devices.indwellingCatheter.insertedDate ? ` (${new Date(devices.indwellingCatheter.insertedDate).toLocaleDateString()})` : '';
+    indicators.push({ icon: '💧', label: day ? `Indwelling Day ${day}${dateStr}` : `Indwelling${dateStr}` });
   }
   if (devices.midline.active) {
     const day = getDeviceDay(devices.midline.insertedDate);
@@ -281,6 +285,78 @@ export const ResidentBoard: React.FC = () => {
     });
   };
 
+  const buildResidentBoardSpec = (): PdfSpec => {
+    const activeResidents = residents.filter(isActiveCensusResident);
+    
+    // Sort by Unit then Room
+    const sorted = [...activeResidents].sort((a, b) => {
+      const unitA = (a.currentUnit || '').toLowerCase();
+      const unitB = (b.currentUnit || '').toLowerCase();
+      if (unitA !== unitB) return unitA.localeCompare(unitB);
+      const roomA = a.currentRoom || '';
+      const roomB = b.currentRoom || '';
+      return roomA.localeCompare(roomB, undefined, { numeric: true });
+    });
+
+    const rows = sorted.map(r => {
+      const mrn = r.mrn || '';
+      const name = `${r.lastName || ''}, ${r.firstName || ''}${mrn ? `\n(${mrn})` : ''}`;
+      const admDate = r.admissionDate ? new Date(r.admissionDate).toLocaleDateString() : 'N/A';
+      const allergies = r.allergies?.join(', ') || 'None';
+      
+      // Precautions
+      const activePrecs = activeInfections.filter(i => i.residentRef && i.residentRef.kind === 'mrn' && i.residentRef.id === mrn);
+      const precsText = activePrecs.map(p => p.ebp ? 'EBP' : p.isolationType || 'Isolation').join('\n');
+      
+      // ABT / VAX DUE
+      const residentAbts = getActiveABT(activeABTs, mrn);
+      const abtText = residentAbts.map(a => `${a.medication} (Day ${Math.floor((Date.now() - new Date(a.startDate || '').getTime()) / (86400000)) + 1})`).join('\n');
+      
+      const residentVaxDue = getVaxDue(vaxEvents, mrn);
+      const vaxText = residentVaxDue.length > 0 ? `Due: ${residentVaxDue.map(v => v.vaccine).join(', ')}` : '';
+      
+      const abtVaxText = [abtText, vaxText].filter(Boolean).join('\n---\n');
+
+      // Devices
+      const devices = normalizeClinicalDevices(r);
+      const deviceList: string[] = [];
+      if (devices.oxygen.enabled) deviceList.push(`O2 (${devices.oxygen.mode})`);
+      if (devices.urinaryCatheter.active) deviceList.push(`Foley (Day ${getDeviceDay(devices.urinaryCatheter.insertedDate)})`);
+      if (devices.indwellingCatheter.active) deviceList.push(`Indwelling (Day ${getDeviceDay(devices.indwellingCatheter.insertedDate)})`);
+      if (devices.picc.active) deviceList.push(`PICC (Day ${getDeviceDay(devices.picc.insertedDate)})`);
+      if (devices.midline.active) deviceList.push(`Midline (Day ${getDeviceDay(devices.midline.insertedDate)})`);
+      if (devices.piv.active) deviceList.push(`PIV (Day ${getDeviceDay(devices.piv.insertedDate)})`);
+      const devicesText = deviceList.join('\n');
+
+      return [
+        r.currentRoom || 'N/A',
+        name,
+        admDate,
+        allergies,
+        precsText || 'None',
+        abtVaxText || 'None',
+        devicesText || 'None',
+        '', // NOTES
+      ];
+    });
+
+    return {
+      title: 'Resident Board Report',
+      template: 'RESIDENT_BOARD_TEMPLATE_V1',
+      orientation: 'landscape',
+      facilityName: db.data.facilities.byId[activeFacilityId]?.name || DEFAULT_FACILITY,
+      subtitleLines: [
+        `UNIT: ${filterUnit || 'All Units'}`,
+        `DATE: ${new Date().toLocaleDateString()}`,
+      ],
+      sections: [{
+        type: 'table',
+        columns: ['RM. #', "RESIDENT'S NAME", 'ADM. DATE', 'ALLERGIES', 'PRECAUTIONS', 'ABT / VAX DUE', 'DEVICES', 'NOTES'],
+        rows,
+      }],
+    };
+  };
+
   if (view === 'quarantine') {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
@@ -451,6 +527,11 @@ export const ResidentBoard: React.FC = () => {
             <FileText className="w-4 h-4" aria-hidden="true" />
             Shift Report
           </button>
+          <ExportPdfButton 
+            buildSpec={buildResidentBoardSpec}
+            label="Board PDF"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+          />
           <button 
             onClick={() => setShowSettingsModal(true)}
             aria-label="Board settings"

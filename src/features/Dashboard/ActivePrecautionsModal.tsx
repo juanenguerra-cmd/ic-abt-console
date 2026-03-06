@@ -2,6 +2,7 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
+import { normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
 
@@ -60,15 +61,15 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                     template: 'ACTIVE_PRECAUTIONS_TEMPLATE_V1',
                     facilityName,
                     showSignatureLines: true,
-                    subtitleLines: [
-                      `UNIT: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
-                      `DATE: ${new Date().toLocaleDateString()}`,
-                      'SHIFT: Day',
-                      'PREPARED BY: ',
-                    ],
+                      subtitleLines: [
+                        `UNIT: ${selectedUnit === 'all' ? 'All Units' : selectedUnit}`,
+                        `DATE: ${new Date().toLocaleDateString()}`,
+                        'SHIFT: Day',
+                        'PREPARED BY: Juan Enguerra RN',
+                      ],
                     sections: [{
                       type: 'table',
-                      columns: ['RM. #', "RESIDENT’S NAME", 'PRECAUTION/ISOLATION', 'INFECTED SOURCE', 'DURATION'],
+                      columns: ['RM. #', "RESIDENT'S NAME", 'PRECAUTION/ISOLATION', 'INFECTED SOURCE', 'DURATION'],
                       rows: filteredPrecautions.map((ip) => {
                         const resident = getResident(ip.residentRef);
                         const startDate = ip.onsetDate || ip.createdAt;
@@ -76,12 +77,34 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                         const residentWithMrn = resident?.displayName
                           ? `${resident.displayName}${resident.mrn ? ` (${resident.mrn})` : ''}`
                           : 'Unknown';
+                        
+                        let duration = `${days} days and ongoing`;
+                        
+                        // Check for catheter change date if relevant
+                        if (resident?.clinicalDevices) {
+                          const source = (ip.sourceOfInfection || ip.organism || '').toLowerCase();
+                          const isCatheterRelated = source.includes('catheter') || source.includes('foley');
+                          
+                          if (isCatheterRelated) {
+                            const devices = normalizeClinicalDevices(resident);
+                            const catheterDate = devices.indwellingCatheter.active 
+                              ? devices.indwellingCatheter.insertedDate 
+                              : devices.urinaryCatheter.active 
+                                ? devices.urinaryCatheter.insertedDate 
+                                : null;
+                            
+                            if (catheterDate) {
+                              duration += `\n(Changed: ${new Date(catheterDate).toLocaleDateString()})`;
+                            }
+                          }
+                        }
+
                         return [
                           resident?.currentRoom || 'N/A',
                           residentWithMrn,
                           ip.ebp ? 'EBP' : `ISOLATION / ${ip.isolationType || 'N/A'}`,
                           ip.sourceOfInfection || ip.organism || 'N/A',
-                          `${days} days and ongoing`,
+                          duration,
                         ];
                       }),
                     }],

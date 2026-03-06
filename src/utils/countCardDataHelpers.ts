@@ -12,8 +12,10 @@ export const isVaxDueStatus = (status?: string | null): boolean => {
 export const isActiveCensusResident = (resident: Resident): boolean => {
   if (!resident) return false;
   if (resident.isHistorical || resident.backOfficeOnly) return false;
+  const status = normalizeStatus(resident.status);
+  if (status !== 'active') return false;
   const unit = (resident.currentUnit ?? '').trim().toLowerCase();
-  return unit !== 'unassigned';
+  return unit !== '' && unit !== 'unassigned';
 };
 
 export const getActiveABT = (abts: ABTCourse[], residentMrn?: string): ABTCourse[] =>

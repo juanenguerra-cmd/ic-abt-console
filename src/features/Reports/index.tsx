@@ -11,6 +11,7 @@ import { VaxReofferList } from './VaxReofferList';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import { exportPDF } from '../../utils/pdfExport';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
+import { LineListExportButton } from '../../components/LineListExportButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import {
@@ -138,6 +139,90 @@ const ReportsConsole: React.FC = () => {
   );
 };
 
+const CombinedLineList: React.FC = () => {
+  const { store } = useFacilityData();
+  
+  const residentMap = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active');
+    const relevantAbts = (Object.values(store.abts) as ABTCourse[]).filter(abt => {
+      if (abt.status === 'active') return true;
+      if (abt.status === 'completed' && abt.endDate && new Date(abt.endDate) >= sevenDaysAgo) return true;
+      return false;
+    });
+
+    const map = new Map<string, {
+      res: any;
+      infections: IPEvent[];
+      abts: ABTCourse[];
+    }>();
+
+    const getRes = (ref: any) => ref.kind === 'mrn' ? store.residents[ref.id] : store.quarantine[ref.id];
+
+    activeInfections.forEach(ip => {
+      const res = getRes(ip.residentRef);
+      if (!res) return;
+      const key = (res as any).mrn || (res as any).tempId;
+      if (!map.has(key)) {
+        map.set(key, { res, infections: [], abts: [] });
+      }
+      map.get(key)!.infections.push(ip);
+    });
+
+    relevantAbts.forEach(abt => {
+      const res = getRes(abt.residentRef);
+      if (!res) return;
+      const key = (res as any).mrn || (res as any).tempId;
+      if (!map.has(key)) {
+        map.set(key, { res, infections: [], abts: [] });
+      }
+      map.get(key)!.abts.push(abt);
+    });
+
+    return Array.from(map.values());
+  }, [store]);
+
+  return (
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
+        <h3 className="text-lg leading-6 font-bold text-indigo-900">Combined Line List</h3>
+        <p className="text-xs text-indigo-700 mt-1">De-duplicated by resident (Active IP + Recent ABT)</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead className="bg-neutral-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit/Room</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Infection(s)</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">ABT(s)</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-neutral-200">
+            {residentMap.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No active or recent events</td></tr>
+            )}
+            {residentMap.map(({ res, infections, abts }) => (
+              <tr key={(res as any).mrn || (res as any).tempId}>
+                <td className="px-4 py-2 font-medium text-neutral-900">{res.displayName}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any).mrn || (res as any).tempId}</td>
+                <td className="px-4 py-2 text-neutral-500">{(res as any).currentUnit || (res as any).unitSnapshot} / {(res as any).currentRoom || (res as any).roomSnapshot}</td>
+                <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.infectionCategory).join(', ')}</td>
+                <td className="px-4 py-2 text-neutral-500">{abts.map(a => a.medication).join(', ')}</td>
+                <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.organism).join(', ')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const SurveyPacketsReport: React.FC = () => {
   const { store } = useFacilityData();
 
@@ -167,56 +252,61 @@ const SurveyPacketsReport: React.FC = () => {
           title="Line Listing"
           subtitle="Survey-ready active precautions and ABT courses"
           right={
-            <ExportPdfButton
-              label="Export PDF"
-              filename="line-listing"
-              buildSpec={() => ({
-                title: 'Line Listing',
-                orientation: 'landscape',
-                template: 'LANDSCAPE_TEMPLATE_V1',
-                subtitleLines: [
-                  `Precautions: ${activePrecautions.length}`,
-                  `Active ABT: ${activeAbts.length}`,
-                ],
-                sections: [
-                  {
-                    type: 'table',
-                    columns: ['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes'],
-                    rows: [
-                      ...activePrecautions.map(({ ip, res }) => [
-                        'IP Event',
-                        residentLabel(res),
-                        (res as any)?.mrn || '',
-                        ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-                        ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
-                        ip.infectionCategory || '',
-                        ip.isolationType || '',
-                        ip.organism || '',
-                        ip.onsetDate || ip.createdAt?.split('T')[0] || '',
-                        ip.status,
-                        ip.notes || '',
-                      ]),
-                      ...activeAbts.map(({ abt, res }) => [
-                        'ABT Course',
-                        residentLabel(res),
-                        (res as any)?.mrn || '',
-                        abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-                        abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
-                        abt.syndromeCategory || abt.indication || '',
-                        '',
-                        abt.organismIdentified || '',
-                        abt.startDate || '',
-                        abt.status,
-                        abt.notes || '',
-                      ]),
-                    ],
-                  },
-                ],
-              })}
-            />
+            <div className="flex items-center gap-3">
+              <LineListExportButton />
+              <ExportPdfButton
+                label="Export PDF"
+                filename="line-listing"
+                buildSpec={() => ({
+                  title: 'Line Listing',
+                  orientation: 'landscape',
+                  template: 'LANDSCAPE_TEMPLATE_V1',
+                  subtitleLines: [
+                    `Precautions: ${activePrecautions.length}`,
+                    `Active ABT: ${activeAbts.length}`,
+                  ],
+                  sections: [
+                    {
+                      type: 'table',
+                      columns: ['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes'],
+                      rows: [
+                        ...activePrecautions.map(({ ip, res }) => [
+                          'IP Event',
+                          residentLabel(res),
+                          (res as any)?.mrn || '',
+                          ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                          ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                          ip.infectionCategory || '',
+                          ip.isolationType || '',
+                          ip.organism || '',
+                          ip.onsetDate || ip.createdAt?.split('T')[0] || '',
+                          ip.status,
+                          ip.notes || '',
+                        ]),
+                        ...activeAbts.map(({ abt, res }) => [
+                          'ABT Course',
+                          residentLabel(res),
+                          (res as any)?.mrn || '',
+                          abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                          abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                          abt.syndromeCategory || abt.indication || '',
+                          '',
+                          abt.organismIdentified || '',
+                          abt.startDate || '',
+                          abt.status,
+                          abt.notes || '',
+                        ]),
+                      ],
+                    },
+                  ],
+                })}
+              />
+            </div>
           }
         />
       </div>
+
+      <CombinedLineList />
 
       <div className="space-y-6">
         <div className="bg-white shadow rounded-lg overflow-hidden">

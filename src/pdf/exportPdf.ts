@@ -1,5 +1,5 @@
 export type PdfOrientation = 'landscape' | 'portrait';
-export type PdfTemplate = 'LANDSCAPE_TEMPLATE_V1' | 'PORTRAIT_TEMPLATE_V1' | 'ACTIVE_PRECAUTIONS_TEMPLATE_V1';
+export type PdfTemplate = 'LANDSCAPE_TEMPLATE_V1' | 'PORTRAIT_TEMPLATE_V1' | 'ACTIVE_PRECAUTIONS_TEMPLATE_V1' | 'RESIDENT_BOARD_TEMPLATE_V1';
 
 type CellValue = string | number | boolean | null | undefined;
 
@@ -31,7 +31,7 @@ export interface PdfSpec {
   showSignatureLines?: boolean;
 }
 
-const DEFAULT_FACILITY = 'Long Beach Nursing & Rehabilitation Center';
+export const DEFAULT_FACILITY = 'Long Beach Nursing & Rehabilitation Center';
 
 const escapePdfText = (value: string): string =>
   value.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)');
@@ -459,11 +459,10 @@ const buildStandardFormPdf = (spec: PdfSpec): Blob => {
 const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   const width = 792;
   const height = 612;
-  const margin = 12;
-  const tableTop = 500;
+  const margin = 36; // Increased margin for safety
+  const tableTop = 480;
   const headerHeight = 34;
   const rowHeight = 30;
-  const rowsPerPage = Math.floor((tableTop - headerHeight - 120) / rowHeight); // Leave space for footer
 
   const primaryTable = spec.sections.find((section): section is PdfTableSection => section.type === 'table');
   const rows = primaryTable?.rows ?? [];
@@ -479,8 +478,16 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   const shift = subtitleLookup.get('SHIFT') ?? 'Day';
   const preparedBy = subtitleLookup.get('PREPARED BY') ?? '';
 
-  const colWidths = [78, 220, 220, 132, 118];
-  const colHeaders = ['RM. #', "RESIDENT’S NAME", 'PRECAUTION/ISOLATION', 'INFECTED\nSOURCE', 'DURATION'];
+  const availableWidth = width - margin * 2;
+  // Adjusted colWidths to match photo proportions better
+  const colWidths = [
+    availableWidth * 0.10, // RM. #
+    availableWidth * 0.30, // RESIDENT’S NAME
+    availableWidth * 0.20, // PRECAUTION/ISOLATION
+    availableWidth * 0.25, // INFECTED SOURCE
+    availableWidth * 0.15, // DURATION
+  ];
+  const colHeaders = ['RM. #', "RESIDENT'S NAME", 'PRECAUTION/ISOLATION', 'INFECTED\nSOURCE', 'DURATION'];
 
   const objects: string[] = [];
   const xref: number[] = [0];
@@ -504,31 +511,27 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   while (currentRowIdx < rowText.length) {
     const lines: string[] = [];
 
-    // Header Background
-    lines.push('0.5 g');
-    lines.push(`${margin} ${tableTop - headerHeight} ${width - margin * 2} ${headerHeight} re f`);
-    lines.push('0 g 0 G');
-    lines.push('1 w');
-
-    // Header/Row Divider
-    lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
-
-    // Titles
-    lines.push(drawText(width / 2 - 150, 576, spec.facilityName || DEFAULT_FACILITY, 14, true));
+    // Titles (Centered)
+    lines.push(drawText(width / 2 - (spec.facilityName || DEFAULT_FACILITY).length * 4.5, 576, spec.facilityName || DEFAULT_FACILITY, 16, true));
     lines.push(drawText(width / 2 - 138, 548, 'RESIDENTS ON PRECAUTIONS OR ISOLATION', 12, true));
 
-    // Subtitles
-    lines.push(drawText(180, 525, 'UNIT:', 11, true));
-    lines.push(drawText(255, 525, unit, 11, true));
-    lines.push('150 522 m 290 522 l S');
+    // Subtitles (Aligned with underlines)
+    const subY = 520;
+    lines.push(drawText(margin + 140, subY, 'UNIT:', 11, true));
+    lines.push(drawText(margin + 180, subY, unit, 11, false));
+    lines.push(`${margin + 175} ${subY - 2} m ${margin + 280} ${subY - 2} l S`);
 
-    lines.push(drawText(325, 525, 'DATE:', 11, true));
-    lines.push(drawText(390, 525, date, 11, true));
-    lines.push('355 522 m 470 522 l S');
+    lines.push(drawText(width / 2 - 50, subY, 'DATE:', 11, true));
+    lines.push(drawText(width / 2 - 10, subY, date, 11, false));
+    lines.push(`${width / 2 - 15} ${subY - 2} m ${width / 2 + 100} ${subY - 2} l S`);
 
-    lines.push(drawText(500, 525, 'SHIFT:', 11, true));
-    lines.push(drawText(565, 525, shift, 11, true));
-    lines.push('535 522 m 700 522 l S');
+    lines.push(drawText(width - margin - 220, subY, 'SHIFT:', 11, true));
+    lines.push(drawText(width - margin - 170, subY, shift, 11, false));
+    lines.push(`${width - margin - 175} ${subY - 2} m ${width - margin - 60} ${subY - 2} l S`);
+
+    // Header Background (Removed for this template)
+    lines.push('0 g 0 G');
+    lines.push('0.8 w');
 
     // Column Headers
     let cursorX = margin;
@@ -536,20 +539,20 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
       const parts = header.split('\n');
       const cx = cursorX + colWidths[i] / 2;
       if (parts.length === 1) {
-        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 22, parts[0], 10, true));
+        lines.push(drawText(cx - (parts[0].length * 3.2), tableTop - 22, parts[0], 10, true));
       } else {
-        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 18, parts[0], 10, true));
-        lines.push(drawText(cx - (parts[1].length * 2.8), tableTop - 30, parts[1], 10, true));
+        lines.push(drawText(cx - (parts[0].length * 3.2), tableTop - 18, parts[0], 10, true));
+        lines.push(drawText(cx - (parts[1].length * 3.2), tableTop - 30, parts[1], 10, true));
       }
       // Vertical lines for header
-      if (i < colWidths.length - 1) {
-         lines.push(`${cursorX + colWidths[i]} ${tableTop} m ${cursorX + colWidths[i]} ${tableTop - headerHeight} l S`);
-      }
+      lines.push(`${cursorX} ${tableTop} m ${cursorX} ${tableTop - headerHeight} l S`);
       cursorX += colWidths[i];
     });
-
-    // Table Border (Top part)
-    lines.push(`${margin} ${tableTop} ${width - margin * 2} ${headerHeight} re S`);
+    // Last vertical line
+    lines.push(`${width - margin} ${tableTop} m ${width - margin} ${tableTop - headerHeight} l S`);
+    // Horizontal lines for header
+    lines.push(`${margin} ${tableTop} m ${width - margin} ${tableTop} l S`);
+    lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
 
     let currentY = tableTop - headerHeight;
     
@@ -558,12 +561,17 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
       const row = rowText[currentRowIdx];
       const wrappedCells = row.slice(0, 5).map((val, i) => {
         const charsPerLine = Math.floor((colWidths[i] - 8) / 5.5);
-        return wrap(String(val ?? ''), charsPerLine);
+        const text = String(val ?? '');
+        const lines: string[] = [];
+        text.split('\n').forEach(p => {
+          lines.push(...wrap(p, charsPerLine));
+        });
+        return lines;
       });
       
       const rowHeight = Math.max(1, ...wrappedCells.map(c => c.length)) * 11 + 10;
       
-      if (currentY - rowHeight < 60) {
+      if (currentY - rowHeight < 80) { // Leave space for footer
         break;
       }
 
@@ -572,44 +580,201 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
         cellLines.forEach((line, lineIdx) => {
           lines.push(drawText(x + 4, currentY - 14 - lineIdx * 11, line, 9));
         });
-        if (i > 0) lines.push(`${x} ${currentY} m ${x} ${currentY - rowHeight} l S`);
+        // Vertical line for cell
+        lines.push(`${x} ${currentY} m ${x} ${currentY - rowHeight} l S`);
         x += colWidths[i];
       });
+      // Last vertical line for row
+      lines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - rowHeight} l S`);
       
       // Row bottom border
       lines.push(`${margin} ${currentY - rowHeight} m ${width - margin} ${currentY - rowHeight} l S`);
-      // Outer border for this row
-      lines.push(`${margin} ${currentY} m ${margin} ${currentY - rowHeight} l S`);
-      lines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - rowHeight} l S`);
 
       currentY -= rowHeight;
       currentRowIdx++;
     }
 
     // Footer
-    const footerY = 30;
+    const footerY = 80;
     if (spec.showSignatureLines) {
-      lines.push(drawText(12, footerY, 'Prepared by:', 11, true));
-      lines.push(drawText(72, footerY, preparedBy, 11, true));
-      lines.push(`70 ${footerY - 2} m 240 ${footerY - 2} l S`);
+      lines.push(drawText(margin, footerY, 'Prepared by:', 11, true));
+      lines.push(drawText(margin + 72, footerY, preparedBy, 11, false));
+      lines.push(`${margin + 70} ${footerY - 2} m ${margin + 240} ${footerY - 2} l S`);
 
-      lines.push(drawText(400, footerY, 'Title:', 11, true));
-      lines.push(`430 ${footerY - 2} m 610 ${footerY - 2} l S`);
+      lines.push(drawText(width / 2 + 10, footerY, 'Title:', 11, true));
+      lines.push(`${width / 2 + 45} ${footerY - 2} m ${width / 2 + 230} ${footerY - 2} l S`);
 
-      lines.push(drawText(12, footerY - 30, 'Signature:', 11, true));
-      lines.push(`70 ${footerY - 32} m 240 ${footerY - 32} l S`);
+      lines.push(drawText(margin, footerY - 30, 'Signature:', 11, true));
+      lines.push(`${margin + 70} ${footerY - 32} m ${margin + 240} ${footerY - 32} l S`);
 
-      lines.push(drawText(400, footerY - 30, 'Date/Time:', 11, true));
-      lines.push(`460 ${footerY - 32} m 610 ${footerY - 32} l S`);
+      lines.push(drawText(width / 2 + 10, footerY - 30, 'Date/Time:', 11, true));
+      lines.push(`${width / 2 + 75} ${footerY - 32} m ${width / 2 + 230} ${footerY - 32} l S`);
+
+      // Footer Note
+      const note = "* If the patient is known to have an MRSA, VRE or any Multidrug resistant infection or colonization, the health care worker should wear disposable gloves. Depending on the type of contact, a gown should also be worn. Patients must also wash their hands to avoid spreading the bacteria to others.";
+      const wrappedNote = wrap(note, 160);
+      wrappedNote.forEach((line, idx) => {
+        lines.push(drawText(margin, footerY - 55 - idx * 10, line, 8, true));
+      });
     }
 
     // Page Number
-    // Calculate total pages is hard dynamically, so we'll just show "Page X"
-    // Or we can pre-calculate. For now, let's just put Page X.
-    // The original code calculated totalPages.
-    // We can't easily know totalPages without running the simulation twice.
-    // Let's just use a placeholder or omit total if not critical, or use {TOTAL_PAGES} replacement trick.
-    lines.push(drawText(width - 100, 20, `Page ${pageIds.length + 1} of {TOTAL_PAGES}`, 8));
+    lines.push(drawText(width - margin - 100, 20, `Page ${pageIds.length + 1} of {TOTAL_PAGES}`, 8));
+
+    const contentStream = lines.join('\n');
+    const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  }
+
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
+  pageIds.forEach(id => {
+    objects[id - 1] = objects[id - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
+    objects[id - 1] = objects[id - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
+  });
+
+  const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+
+  let body = '%PDF-1.4\n';
+  objects.forEach((obj, i) => {
+    xref[i + 1] = body.length;
+    body += `${i + 1} 0 obj\n${obj}\nendobj\n`;
+  });
+  const xrefStart = body.length;
+  body += `xref\n0 ${objects.length + 1}\n`;
+  body += '0000000000 65535 f \n';
+  for (let i = 1; i <= objects.length; i += 1) {
+    body += `${String(xref[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  body += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+
+  return new Blob([body], { type: 'application/pdf' });
+};
+
+const buildResidentBoardPdf = (spec: PdfSpec): Blob => {
+  const width = 792;
+  const height = 612;
+  const margin = 24;
+  const tableTop = 500;
+  const headerHeight = 34;
+
+  const primaryTable = spec.sections.find((section): section is PdfTableSection => section.type === 'table');
+  const rows = primaryTable?.rows ?? [];
+  const rowText = rows.length ? rows : [['', 'No residents found', '', '', '', '', '', '']];
+
+  const subtitleLookup = new Map(spec.subtitleLines.map((line) => {
+    const idx = line.indexOf(':');
+    return idx > -1 ? [line.slice(0, idx).trim().toUpperCase(), line.slice(idx + 1).trim()] : [line.trim().toUpperCase(), ''];
+  }));
+
+  const unit = subtitleLookup.get('UNIT') ?? 'All Units';
+  const date = subtitleLookup.get('DATE') ?? new Date().toLocaleDateString();
+
+  const availableWidth = width - margin * 2;
+  const colWidths = [
+    40,  // RM. #
+    110, // RESIDENT'S NAME
+    60,  // ADM. DATE
+    80,  // ALLERGIES
+    90,  // PRECAUTIONS
+    110, // ABT / VAX DUE
+    100, // DEVICES
+    availableWidth - 40 - 110 - 60 - 80 - 90 - 110 - 100, // NOTES
+  ];
+  const colHeaders = ['RM. #', "RESIDENT'S NAME", 'ADM. DATE', 'ALLERGIES', 'PRECAUTIONS', 'ABT / VAX DUE', 'DEVICES', 'NOTES'];
+
+  const objects: string[] = [];
+  const xref: number[] = [0];
+  const addObject = (content: string) => {
+    xref.push(0);
+    objects.push(content);
+    return objects.length;
+  };
+
+  const fontRegularId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const fontBoldId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+
+  const drawText = (x: number, y: number, text: string, size = 10, bold = false) => {
+    const safe = escapePdfText(text);
+    return `BT 0 g /${bold ? 'F2' : 'F1'} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
+  };
+
+  const pageIds: number[] = [];
+  let currentRowIdx = 0;
+  
+  while (currentRowIdx < rowText.length) {
+    const lines: string[] = [];
+
+    // Titles (Centered)
+    lines.push(drawText(width / 2 - (spec.facilityName || DEFAULT_FACILITY).length * 4.5, 576, spec.facilityName || DEFAULT_FACILITY, 16, true));
+    lines.push(drawText(width / 2 - 60, 548, 'RESIDENT BOARD', 14, true));
+
+    // Subtitles
+    const subY = 520;
+    lines.push(drawText(margin, subY, `UNIT: ${unit}`, 11, true));
+    lines.push(drawText(width - margin - 120, subY, `DATE: ${date}`, 11, true));
+
+    // Header Background
+    lines.push('0.9 g');
+    lines.push(`${margin} ${tableTop - headerHeight} ${availableWidth} ${headerHeight} re f`);
+    lines.push('0 g 0 G');
+    lines.push('0.5 w');
+
+    // Column Headers
+    let cursorX = margin;
+    colHeaders.forEach((header, i) => {
+      const parts = header.split('\n');
+      const cx = cursorX + colWidths[i] / 2;
+      if (parts.length === 1) {
+        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 22, parts[0], 8, true));
+      } else {
+        lines.push(drawText(cx - (parts[0].length * 2.8), tableTop - 18, parts[0], 8, true));
+        lines.push(drawText(cx - (parts[1].length * 2.8), tableTop - 30, parts[1], 8, true));
+      }
+      lines.push(`${cursorX} ${tableTop} m ${cursorX} ${tableTop - headerHeight} l S`);
+      cursorX += colWidths[i];
+    });
+    lines.push(`${width - margin} ${tableTop} m ${width - margin} ${tableTop - headerHeight} l S`);
+    lines.push(`${margin} ${tableTop} m ${width - margin} ${tableTop} l S`);
+    lines.push(`${margin} ${tableTop - headerHeight} m ${width - margin} ${tableTop - headerHeight} l S`);
+
+    let currentY = tableTop - headerHeight;
+    
+    // Rows
+    while (currentRowIdx < rowText.length) {
+      const row = rowText[currentRowIdx];
+      const wrappedCells = row.slice(0, 8).map((val, i) => {
+        const charsPerLine = Math.floor((colWidths[i] - 6) / 4.5);
+        const text = String(val ?? '');
+        const cellLines: string[] = [];
+        text.split('\n').forEach(p => {
+          cellLines.push(...wrap(p, charsPerLine));
+        });
+        return cellLines;
+      });
+      
+      const rowHeight = Math.max(1, ...wrappedCells.map(c => c.length)) * 9 + 8;
+      
+      if (currentY - rowHeight < 40) {
+        break;
+      }
+
+      let x = margin;
+      wrappedCells.forEach((cellLines, i) => {
+        cellLines.forEach((line, lineIdx) => {
+          lines.push(drawText(x + 3, currentY - 11 - lineIdx * 9, line, 7));
+        });
+        lines.push(`${x} ${currentY} m ${x} ${currentY - rowHeight} l S`);
+        x += colWidths[i];
+      });
+      lines.push(`${width - margin} ${currentY} m ${width - margin} ${currentY - rowHeight} l S`);
+      lines.push(`${margin} ${currentY - rowHeight} m ${width - margin} ${currentY - rowHeight} l S`);
+
+      currentY -= rowHeight;
+      currentRowIdx++;
+    }
+
+    lines.push(drawText(width - margin - 100, 20, `Page ${pageIds.length + 1} of {TOTAL_PAGES}`, 8));
 
     const contentStream = lines.join('\n');
     const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
@@ -646,6 +811,8 @@ export const exportPdfDocument = (spec: PdfSpec): void => {
 
   if (spec.template === 'ACTIVE_PRECAUTIONS_TEMPLATE_V1') {
     blob = buildActivePrecautionsPdf(spec);
+  } else if (spec.template === 'RESIDENT_BOARD_TEMPLATE_V1') {
+    blob = buildResidentBoardPdf(spec);
   } else if (spec.template === 'LANDSCAPE_TEMPLATE_V1' || spec.template === 'PORTRAIT_TEMPLATE_V1') {
     blob = buildMultiPageGraphicalPdf(spec);
   } else {

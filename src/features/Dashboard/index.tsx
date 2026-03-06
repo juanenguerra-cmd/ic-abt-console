@@ -175,7 +175,7 @@ export const Dashboard: React.FC = () => {
 
   const units = useMemo(() => {
     const unitSet = new Set<string>();
-    (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly).forEach(r => {
+    (Object.values(store.residents || {}) as Resident[]).filter(r => r && isActiveCensusResident(r)).forEach(r => {
       if (r.currentUnit?.trim()) unitSet.add(r.currentUnit.trim());
     });
     return Array.from(unitSet).sort();
@@ -185,7 +185,7 @@ export const Dashboard: React.FC = () => {
     if (selectedUnit === "all") return layout;
     const roomsInUnit = new Set(
       (Object.values(store.residents || {}) as Resident[])
-        .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
+        .filter(r => r && isActiveCensusResident(r))
         .filter(r => r.currentUnit === selectedUnit && r.currentRoom)
         .map(r => r.currentRoom!)
     );
@@ -200,7 +200,7 @@ export const Dashboard: React.FC = () => {
   const symptomIndicators = useMemo((): Record<string, SymptomIndicator> => {
     const perRoom: Record<string, SymptomIndicator> = {};
     (Object.values(store.residents || {}) as Resident[])
-      .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
+      .filter(r => r && isActiveCensusResident(r))
       .forEach(res => {
         if (!res.currentRoom) return;
         const sig = perResidentIndicators[res.mrn];
@@ -221,7 +221,7 @@ export const Dashboard: React.FC = () => {
   const roomResidentsMap = useMemo(() => {
     const map: Record<string, Resident[]> = {};
     (Object.values(store.residents || {}) as Resident[])
-      .filter(r => r && !r.isHistorical && !r.backOfficeOnly)
+      .filter(r => r && isActiveCensusResident(r))
       .forEach(r => {
         const room = filteredLayout.rooms.find(rm =>
           rm.label === r.currentRoom ||
@@ -237,8 +237,7 @@ export const Dashboard: React.FC = () => {
 
   // Calculate stats
   const activeResidents = (Object.values(store.residents || {}) as Resident[])
-    .filter(r => r && isActiveCensusResident(r))
-    .filter(r => r && normalizeStatus(r.status) === 'active');
+    .filter(r => r && isActiveCensusResident(r));
   
   const residentCount = activeResidents.length;
   const activePrecautionsCount = (Object.values(store.infections || {}) as any[]).filter(ip => ip && ip.status === 'active' && (ip.isolationType || ip.ebp)).length;
@@ -275,7 +274,7 @@ export const Dashboard: React.FC = () => {
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-  const recentAdmissions = (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly).filter(r => r && r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
+  const recentAdmissions = (Object.values(store.residents || {}) as Resident[]).filter(r => r && isActiveCensusResident(r)).filter(r => r && r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
 
   const residentsNeedingScreeningCount = recentAdmissions.filter(r => {
     if (!r) return false;

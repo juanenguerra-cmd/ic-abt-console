@@ -5,6 +5,7 @@ import { Resident } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
+import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 
 interface Props {
   onClose: () => void;
@@ -16,7 +17,7 @@ export const CensusModal: React.FC<Props> = ({ onClose }) => {
   const navigate = useNavigate();
   const facility = db?.data?.facilities?.byId?.[activeFacilityId];
 
-  const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => r && !r.isHistorical && !r.backOfficeOnly);
+  const residents = (Object.values(store.residents || {}) as Resident[]).filter(r => r && isActiveCensusResident(r));
   const censusByUnit: Record<string, { total: number; male: number; female: number }> = {};
 
   residents.forEach((resident) => {

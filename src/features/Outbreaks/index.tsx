@@ -4,6 +4,7 @@ import { Outbreak, OutbreakCase, OutbreakExposure, OutbreakDailyStatus } from ".
 import { Plus, Users, Activity, FileText, AlertCircle, Calendar } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { LineListReportTab } from "./components/LineListReportTab";
+import { LineListExportButton } from "../../components/LineListExportButton";
 import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
 import { AddOutbreakExposureModal } from "./AddOutbreakExposureModal";
 import { SitrepEditModal } from "./SitrepEditModal";
@@ -45,12 +46,15 @@ export const OutbreakManager: React.FC = () => {
       <div className="w-64 flex-shrink-0 bg-white border-r border-neutral-200 overflow-y-auto">
         <div className="p-4 border-b border-neutral-200 flex justify-between items-center">
           <h2 className="font-semibold text-neutral-900">Outbreaks</h2>
-          <button 
-            onClick={handleCreateOutbreak}
-            className="p-1 hover:bg-neutral-100 rounded-full text-emerald-600 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <LineListExportButton compact label="Global Line List" />
+            <button 
+              onClick={handleCreateOutbreak}
+              className="p-1 hover:bg-neutral-100 rounded-full text-emerald-600 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         <ul className="divide-y divide-neutral-100">
           {outbreaks.map((outbreak) => (
