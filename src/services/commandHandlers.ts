@@ -38,9 +38,13 @@ export const commandHandlers = {
 
   saveDatabase: async (db: UnifiedDB) => {
     await saveDBAsync(db);
-    const channel = new BroadcastChannel('ic_console_sync');
-    channel.postMessage({ type: 'DB_UPDATED' });
-    channel.close();
+    try {
+      const channel = new BroadcastChannel('ic_console_sync');
+      channel.postMessage({ type: 'DB_UPDATED' });
+      channel.close();
+    } catch (err) {
+      console.warn("Failed to broadcast DB update:", err);
+    }
   },
 
   restorePrevious: async () => {

@@ -106,8 +106,11 @@ export interface ABTCourse {
   residentRef: ResidentRef;
   status: "active" | "completed" | "discontinued";
   medication: string;
+  medicationId?: string;
+  enteredMedicationText?: string;
   medicationClass?: string;
   dose?: string;
+  doseUnit?: string;
   route?: string;
   frequency?: string;
   indication?: string;

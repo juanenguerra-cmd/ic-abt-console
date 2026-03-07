@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
@@ -86,8 +86,11 @@ export const ResidentBoard: React.FC = () => {
   const [filterAbtOnly, setFilterAbtOnly] = useState(() => searchParams.get('abtActive') === 'true');
   const [filterUnit, setFilterUnit] = useState<string>(() => searchParams.get('unit') || "");
   const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
+  const [filterPrecautionType, setFilterPrecautionType] = useState<string>(() => searchParams.get('precautionType') || "");
   const [filterLast24h, setFilterLast24h] = useState(() => searchParams.get('last24h') === 'true');
   const [filterNeedsReview, setFilterNeedsReview] = useState(() => searchParams.get('needsReview') === 'true');
+  const [filterAbtReview, setFilterAbtReview] = useState(() => searchParams.get('abtReview') === 'true');
+  const [filterPendingLabs, setFilterPendingLabs] = useState(() => searchParams.get('pendingLabs') === 'true');
   const [filterVaxDueOnly, setFilterVaxDueOnly] = useState(() => searchParams.get('vaxDue') === 'true');
   const [showAllActiveResidents, setShowAllActiveResidents] = useState(false);
   
@@ -227,6 +230,16 @@ export const ResidentBoard: React.FC = () => {
         if (!hasIP) return false;
       }
 
+      if (filterPrecautionType) {
+        const hasType = activeInfections.some(i => {
+          if (i.residentRef.kind !== "mrn" || i.residentRef.id !== r.mrn) return false;
+          if (filterPrecautionType === 'EBP') return i.ebp;
+          if (!i.isolationType) return false;
+          return i.isolationType.includes(filterPrecautionType);
+        });
+        if (!hasType) return false;
+      }
+
       if (filterLast24h) {
         const updatedAt = (r as any).updatedAt || r.admissionDate || '';
         if (!updatedAt || updatedAt < twentyFourHoursAgo) return false;
@@ -235,6 +248,36 @@ export const ResidentBoard: React.FC = () => {
       if (filterNeedsReview) {
         const dueAbt = activeABTs.find(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn && a.reviewDate && a.reviewDate <= today);
         if (!dueAbt) return false;
+      }
+
+      if (filterAbtReview) {
+        const threeDaysFromNow = new Date();
+        threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+        const threeDaysIso = threeDaysFromNow.toISOString().split('T')[0];
+        
+        const hasUpcomingAbt = activeABTs.some(a => {
+            if (a.residentRef.kind !== "mrn" || a.residentRef.id !== r.mrn) return false;
+            if (!a.endDate) return false;
+            return a.endDate <= threeDaysIso;
+        });
+        if (!hasUpcomingAbt) return false;
+      }
+
+      if (filterPendingLabs) {
+        const hasPendingAbtLab = activeABTs.some(a => 
+            a.residentRef.kind === "mrn" && 
+            a.residentRef.id === r.mrn && 
+            a.cultureCollected && 
+            (!a.organismIdentified || a.organismIdentified.toLowerCase().includes('pending'))
+        );
+        const hasPendingIpLab = activeInfections.some(i => 
+            i.residentRef.kind === "mrn" && 
+            i.residentRef.id === r.mrn && 
+            i.specimenCollectedDate && 
+            !i.labResultDate
+        );
+        
+        if (!hasPendingAbtLab && !hasPendingIpLab) return false;
       }
 
       if (filterVaxDueOnly) {
@@ -246,7 +289,7 @@ export const ResidentBoard: React.FC = () => {
 
       // Default signal filter: when no explicit toggle is active and showAllActiveResidents is OFF,
       // only show residents who have at least one IC-relevant signal.
-      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterLast24h && !filterNeedsReview && !filterVaxDueOnly && !filterUnit) {
+      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterPrecautionType && !filterLast24h && !filterNeedsReview && !filterAbtReview && !filterPendingLabs && !filterVaxDueOnly && !filterUnit) {
         const sigs = signalMap[r.mrn];
         if (sigs && !sigs.hasActivePrecaution && !sigs.hasEbp && !sigs.hasActiveAbt && !sigs.hasDueVax && !sigs.hasRecentSymptoms96h) {
           return false;
@@ -255,7 +298,7 @@ export const ResidentBoard: React.FC = () => {
 
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterLast24h, filterNeedsReview, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
+  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterPrecautionType, filterLast24h, filterNeedsReview, filterAbtReview, filterPendingLabs, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
 
   // Group by Unit
   const units = useMemo(() => {
@@ -444,6 +487,29 @@ export const ResidentBoard: React.FC = () => {
           >
             On Precautions
           </button>
+          
+          <div className="relative">
+            <select
+              value={filterPrecautionType}
+              onChange={(e) => {
+                setFilterPrecautionType(e.target.value);
+                updateFilters({ precautionType: e.target.value || null });
+              }}
+              className={`appearance-none pl-2.5 pr-6 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 ${
+                filterPrecautionType 
+                  ? 'bg-amber-100 border-amber-400 text-amber-800' 
+                  : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              <option value="">Type: Any</option>
+              <option value="Contact">Contact</option>
+              <option value="Droplet">Droplet</option>
+              <option value="Airborne">Airborne</option>
+              <option value="EBP">EBP</option>
+            </select>
+            <ChevronDown className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none ${filterPrecautionType ? 'text-amber-800' : 'text-neutral-500'}`} />
+          </div>
+
           <button
             onClick={() => { const v = !filterLast24h; setFilterLast24h(v); updateFilters({ last24h: v ? 'true' : null }); }}
             className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterLast24h ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
@@ -457,6 +523,20 @@ export const ResidentBoard: React.FC = () => {
             aria-pressed={filterAbtOnly}
           >
             ABT Active
+          </button>
+          <button
+            onClick={() => { const v = !filterAbtReview; setFilterAbtReview(v); updateFilters({ abtReview: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterAbtReview ? 'bg-teal-100 border-teal-400 text-teal-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterAbtReview}
+          >
+            ABT Review Due
+          </button>
+          <button
+            onClick={() => { const v = !filterPendingLabs; setFilterPendingLabs(v); updateFilters({ pendingLabs: v ? 'true' : null }); }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterPendingLabs ? 'bg-rose-100 border-rose-400 text-rose-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterPendingLabs}
+          >
+            Pending Labs
           </button>
           <button
             onClick={() => { const v = !filterNeedsReview; setFilterNeedsReview(v); updateFilters({ needsReview: v ? 'true' : null }); }}
@@ -496,15 +576,18 @@ export const ResidentBoard: React.FC = () => {
               </button>
             </div>
           )}
-          {(filterOnPrecautions || filterLast24h || filterAbtOnly || filterNeedsReview || filterVaxDueOnly || filterActiveOnly || filterUnit) && (
+          {(filterOnPrecautions || filterPrecautionType || filterLast24h || filterAbtOnly || filterNeedsReview || filterVaxDueOnly || filterActiveOnly || filterUnit || filterPendingLabs || filterAbtReview) && (
             <button
               onClick={() => {
                 setFilterOnPrecautions(false);
+                setFilterPrecautionType("");
                 setFilterLast24h(false);
                 setFilterAbtOnly(false);
                 setFilterNeedsReview(false);
                 setFilterActiveOnly(false);
                 setFilterVaxDueOnly(false);
+                setFilterPendingLabs(false);
+                setFilterAbtReview(false);
                 setFilterUnit("");
                 setSearchParams({}, { replace: true });
               }}
@@ -801,11 +884,34 @@ export const ResidentBoard: React.FC = () => {
           onEditIp={(id) => { setEditingIpId(id); setShowIpModal(true); }}
           onEditVax={(id) => { setEditingVaxId(id); setShowVaxModal(true); }}
           onDeleteAbt={(id) => {
+            console.log("Attempting to delete ABT from profile:", id);
             if (!confirm("Delete this antibiotic course? An undo option will appear briefly after deletion.")) return;
             const snapshot = db.data.facilityData[activeFacilityId]?.abts?.[id];
-            if (!snapshot) return;
-            updateDB(draft => { delete draft.data.facilityData[activeFacilityId].abts[id]; }, { action: 'delete', entityType: 'ABTCourse', entityId: id });
-            showUndo({ message: "ABT course deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].abts[id] = snapshot; }) });
+            if (!snapshot) {
+                console.error("Snapshot not found for ABT:", id);
+                return;
+            }
+            updateDB(draft => { 
+                const fid = draft.data.facilities.activeFacilityId;
+                const facility = draft.data.facilityData[fid];
+                if (facility && facility.abts) {
+                    delete facility.abts[id]; 
+                }
+            }, { action: 'delete', entityType: 'ABTCourse', entityId: id });
+            try {
+                showUndo({ 
+                    message: "ABT course deleted", 
+                    onUndo: () => updateDB(draft => { 
+                        const fid = draft.data.facilities.activeFacilityId;
+                        const facility = draft.data.facilityData[fid];
+                        if (facility && facility.abts) {
+                            facility.abts[id] = snapshot; 
+                        }
+                    }) 
+                });
+            } catch (err) {
+                console.warn("Failed to show undo toast:", err);
+            }
           }}
           onDeleteIp={(id) => {
             if (!confirm("Delete this infection/precaution event? An undo option will appear briefly after deletion.")) return;
@@ -869,6 +975,39 @@ export const ResidentBoard: React.FC = () => {
             setShowAbtModal(false);
             setEditingAbtId(null);
           }} 
+          onDelete={editingAbtId ? () => {
+            console.log("Attempting to delete ABT:", editingAbtId);
+            if (!confirm("Delete this antibiotic course? An undo option will appear briefly after deletion.")) return;
+            const id = editingAbtId;
+            const snapshot = db.data.facilityData[activeFacilityId]?.abts?.[id];
+            if (!snapshot) {
+                console.error("Snapshot not found for ABT:", id);
+                return;
+            }
+            updateDB(draft => { 
+                const fid = draft.data.facilities.activeFacilityId;
+                const facility = draft.data.facilityData[fid];
+                if (facility && facility.abts) {
+                    delete facility.abts[id]; 
+                }
+            }, { action: 'delete', entityType: 'ABTCourse', entityId: id });
+            try {
+                showUndo({ 
+                    message: "ABT course deleted", 
+                    onUndo: () => updateDB(draft => { 
+                        const fid = draft.data.facilities.activeFacilityId;
+                        const facility = draft.data.facilityData[fid];
+                        if (facility && facility.abts) {
+                            facility.abts[id] = snapshot; 
+                        }
+                    }) 
+                });
+            } catch (err) {
+                console.warn("Failed to show undo toast:", err);
+            }
+            setShowAbtModal(false);
+            setEditingAbtId(null);
+          } : undefined}
         />
       )}
 

@@ -44,11 +44,18 @@ export const ResidentTimeline: React.FC<Props> = ({
     // ABTs
     Object.values(store.abts).forEach((abt) => {
       if (abt.residentRef.kind === 'mrn' && abt.residentRef.id === residentId) {
+        const details = [
+            abt.dose,
+            abt.doseUnit,
+            abt.route,
+            abt.frequency
+        ].filter(Boolean).join(' ');
+
         allEvents.push({
           id: abt.id,
           date: abt.startDate || abt.createdAt,
           type: 'ABT',
-          title: `Antibiotic: ${abt.medication}`,
+          title: `Antibiotic: ${abt.medication} ${details}`,
           description: `${abt.indication || 'No indication'} • ${abt.status}`,
           icon: Activity,
           colorClass: 'text-emerald-600',
@@ -175,7 +182,7 @@ export const ResidentTimeline: React.FC<Props> = ({
               </span>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1">
                 {event.type === 'Infection' && onStartContactTrace && (
                   <button
                     onClick={handleTrace}
