@@ -168,9 +168,21 @@ const AppShell = () => {
   const [isLocked, setIsLocked] = React.useState(true);
 
   React.useEffect(() => {
-    const status = alertService.getBackupStatus();
-    setShowBackupBanner(status.needsBackup);
-    setLastBackupLabel(status.label);
+    const updateBackupStatus = () => {
+      const status = alertService.getBackupStatus();
+      setShowBackupBanner(status.needsBackup);
+      setLastBackupLabel(status.label);
+    };
+    
+    updateBackupStatus();
+    
+    window.addEventListener('backup-completed', updateBackupStatus);
+    const interval = setInterval(updateBackupStatus, 60000); // Update every minute
+    
+    return () => {
+      window.removeEventListener('backup-completed', updateBackupStatus);
+      clearInterval(interval);
+    };
   }, []);
 
   // G6: Idle PIN lock — re-engage lock screen on route change when user has been idle

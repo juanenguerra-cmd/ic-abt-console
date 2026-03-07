@@ -27,8 +27,9 @@ interface InvalidRow {
 
 interface CollisionReviewStepProps {
   collisions: CollisionEntry[];
-  choices: Record<string, 'keep' | 'apply'>;
-  onChoiceChange: (mrn: string, choice: 'keep' | 'apply') => void;
+  choices: Record<string, 'skip' | 'merge' | 'replace'>;
+  onChoiceChange: (mrn: string, choice: 'skip' | 'merge' | 'replace') => void;
+  onSetAllChoices: (choice: 'skip' | 'merge' | 'replace') => void;
   parserMode: 'census' | 'listing';
 }
 
@@ -38,7 +39,7 @@ const getCensusDiffFields = (parsed: ParsedRow, existing: Resident): { field: st
   { field: 'Status', current: existing.status || '',         imported: parsed.status || '' },
   { field: 'Payor',  current: existing.payor || '',          imported: parsed.payor || '' },
   { field: 'DOB',    current: existing.dob || '',            imported: parsed.dob || '' },
-].filter(f => f.imported && f.current !== f.imported);
+].filter(f => f.current !== f.imported);
 
 const getListingDiffFields = (parsed: ParsedRow, existing: Resident): { field: string; current: string; imported: string }[] => [
   { field: 'Sex',                current: existing.sex || '',              imported: parsed.gender || '' },
@@ -46,13 +47,20 @@ const getListingDiffFields = (parsed: ParsedRow, existing: Resident): { field: s
   { field: 'Attending MD',       current: existing.attendingMD || '',      imported: parsed.primaryMD || '' },
   { field: 'Primary Diagnosis',  current: existing.primaryDiagnosis || '', imported: parsed.primaryDiagnosis || '' },
   { field: 'Allergies',          current: (existing.allergies || []).join(', '), imported: parsed.allergies || '' },
-].filter(f => f.imported && f.current !== f.imported);
+].filter(f => f.current !== f.imported);
 
-const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, choices, onChoiceChange, parserMode }) => (
+const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, choices, onChoiceChange, onSetAllChoices, parserMode }) => (
   <div className="space-y-4">
-    <div className="flex items-center gap-2 text-amber-800 bg-amber-50 p-3 rounded-md border border-amber-300">
-      <AlertTriangle className="w-5 h-5 shrink-0" />
-      <p className="text-sm font-semibold">{collisions.length} MRN collision{collisions.length > 1 ? 's' : ''} detected — choose an action for each</p>
+    <div className="flex items-center justify-between flex-wrap gap-2 text-amber-800 bg-amber-50 p-3 rounded-md border border-amber-300">
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="w-5 h-5 shrink-0" />
+        <p className="text-sm font-semibold">{collisions.length} MRN collision{collisions.length > 1 ? 's' : ''} detected — choose an action for each</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onSetAllChoices('skip')} className="text-xs px-2 py-1 bg-white border border-amber-300 rounded hover:bg-amber-100 text-amber-900 font-medium">Skip All</button>
+        <button onClick={() => onSetAllChoices('merge')} className="text-xs px-2 py-1 bg-white border border-amber-300 rounded hover:bg-amber-100 text-amber-900 font-medium">Merge All</button>
+        <button onClick={() => onSetAllChoices('replace')} className="text-xs px-2 py-1 bg-white border border-amber-300 rounded hover:bg-amber-100 text-amber-900 font-medium">Replace All</button>
+      </div>
     </div>
     <div className="space-y-4 overflow-y-auto max-h-[50vh]">
       {collisions.map(({ parsed, existing }) => {
@@ -71,23 +79,34 @@ const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, c
                   <input
                     type="radio"
                     name={`collision-${mrn}`}
-                    value="keep"
-                    checked={choices[mrn] === 'keep'}
-                    onChange={() => onChoiceChange(mrn, 'keep')}
+                    value="skip"
+                    checked={choices[mrn] === 'skip'}
+                    onChange={() => onChoiceChange(mrn, 'skip')}
                     className="text-neutral-600 focus:ring-neutral-500"
                   />
-                  Keep Existing
+                  Skip
+                </label>
+                <label className="flex items-center gap-1.5 text-sm text-indigo-700 cursor-pointer font-medium">
+                  <input
+                    type="radio"
+                    name={`collision-${mrn}`}
+                    value="merge"
+                    checked={choices[mrn] === 'merge'}
+                    onChange={() => onChoiceChange(mrn, 'merge')}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Merge
                 </label>
                 <label className="flex items-center gap-1.5 text-sm text-amber-700 cursor-pointer font-medium">
                   <input
                     type="radio"
                     name={`collision-${mrn}`}
-                    value="apply"
-                    checked={choices[mrn] === 'apply'}
-                    onChange={() => onChoiceChange(mrn, 'apply')}
+                    value="replace"
+                    checked={choices[mrn] === 'replace'}
+                    onChange={() => onChoiceChange(mrn, 'replace')}
                     className="text-amber-600 focus:ring-amber-500"
                   />
-                  Apply Import
+                  Replace
                 </label>
               </div>
             </div>
@@ -98,16 +117,28 @@ const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, c
                     <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Field</th>
                     <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Current Value</th>
                     <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Imported Value</th>
+                    <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Result ({choices[mrn] || 'pending'})</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {diffFields.map(f => (
-                    <tr key={f.field} className="bg-yellow-50">
-                      <td className="px-4 py-1.5 font-medium text-neutral-700">{f.field}</td>
-                      <td className="px-4 py-1.5 text-neutral-500">{f.current || <em className="text-neutral-400">empty</em>}</td>
-                      <td className="px-4 py-1.5 text-amber-800 font-medium">{f.imported}</td>
-                    </tr>
-                  ))}
+                  {diffFields.map(f => {
+                    const choice = choices[mrn];
+                    let result = f.current;
+                    if (choice === 'replace') {
+                      result = f.imported;
+                    } else if (choice === 'merge') {
+                      result = f.imported || f.current;
+                    }
+                    
+                    return (
+                      <tr key={f.field} className="bg-white">
+                        <td className="px-4 py-1.5 font-medium text-neutral-700">{f.field}</td>
+                        <td className="px-4 py-1.5 text-neutral-500">{f.current || <em className="text-neutral-400">empty</em>}</td>
+                        <td className="px-4 py-1.5 text-neutral-500">{f.imported || <em className="text-neutral-400">empty</em>}</td>
+                        <td className="px-4 py-1.5 font-medium text-indigo-700 bg-indigo-50/50">{result || <em className="text-neutral-400 font-normal">empty</em>}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
@@ -133,7 +164,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
   const [newRows, setNewRows] = useState<ParsedRow[]>([]);
   const [collisions, setCollisions] = useState<CollisionEntry[]>([]);
   const [invalidRows, setInvalidRows] = useState<InvalidRow[]>([]);
-  const [collisionChoices, setCollisionChoices] = useState<Record<string, 'keep' | 'apply'>>({});
+  const [collisionChoices, setCollisionChoices] = useState<Record<string, 'skip' | 'merge' | 'replace'>>({});
 
   // ---- bucket parsed rows into new / collision / invalid ----
   const bucketRows = (rows: ParsedRow[]) => {
@@ -144,7 +175,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
     const nextNew: ParsedRow[] = [];
     const nextCollisions: CollisionEntry[] = [];
     const nextInvalid: InvalidRow[] = [];
-    const nextChoices: Record<string, 'keep' | 'apply'> = {};
+    const nextChoices: Record<string, 'skip' | 'merge' | 'replace'> = {};
 
     rows.forEach((row, idx) => {
       const mrnRaw = (row.mrn || '').trim();
@@ -156,7 +187,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
       const existing = mrnToResident.get(mrnLower);
       if (existing) {
         nextCollisions.push({ rowIndex: idx + 1, parsed: row, existing });
-        nextChoices[mrnRaw] = 'keep'; // default: keep existing
+        // No default choice - user must explicitly select
       } else {
         nextNew.push(row);
       }
@@ -316,13 +347,13 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
   const allCollisionsResolved = collisions.every(c => collisionChoices[c.parsed.mrn] !== undefined);
 
-  const commitWithChoices = (choices: Record<string, 'keep' | 'apply'>) => {
+  const commitWithChoices = (choices: Record<string, 'skip' | 'merge' | 'replace'>) => {
     if (!results) return;
 
-    // Rows to actually upsert = newRows + collisions where choice is 'apply'
+    // Rows to actually upsert = newRows + collisions where choice is 'merge' or 'replace'
     const applyMrns = new Set(
       collisions
-        .filter(c => choices[c.parsed.mrn] === 'apply')
+        .filter(c => choices[c.parsed.mrn] === 'merge' || choices[c.parsed.mrn] === 'replace')
         .map(c => c.parsed.mrn)
     );
     const rowsToUpsert = results.filter(p => {
@@ -363,11 +394,20 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
           if (p.mrn) {
             if (facility.residents[p.mrn]) {
-              if (p.room) facility.residents[p.mrn].currentRoom = p.room;
-              if (p.unit) facility.residents[p.mrn].currentUnit = p.unit;
-              if (p.status) facility.residents[p.mrn].status = validStatus;
-              if (p.payor) facility.residents[p.mrn].payor = p.payor;
-              if (p.dob) facility.residents[p.mrn].dob = p.dob;
+              const choice = choices[p.mrn] || 'merge';
+              if (choice === 'merge') {
+                if (p.room) facility.residents[p.mrn].currentRoom = p.room;
+                if (p.unit) facility.residents[p.mrn].currentUnit = p.unit;
+                if (p.status) facility.residents[p.mrn].status = validStatus;
+                if (p.payor) facility.residents[p.mrn].payor = p.payor;
+                if (p.dob) facility.residents[p.mrn].dob = p.dob;
+              } else if (choice === 'replace') {
+                facility.residents[p.mrn].currentRoom = p.room || undefined;
+                facility.residents[p.mrn].currentUnit = p.unit || undefined;
+                facility.residents[p.mrn].status = validStatus;
+                facility.residents[p.mrn].payor = p.payor || undefined;
+                facility.residents[p.mrn].dob = p.dob || undefined;
+              }
               facility.residents[p.mrn].updatedAt = now;
             } else {
               facility.residents[p.mrn] = {
@@ -393,14 +433,25 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
         } else {
           if (p.mrn) {
             if (facility.residents[p.mrn]) {
-              if (p.gender) facility.residents[p.mrn].sex = p.gender;
-              if (p.admissionDate) facility.residents[p.mrn].admissionDate = p.admissionDate;
-              if (p.primaryMD) facility.residents[p.mrn].attendingMD = p.primaryMD;
-              if (p.primaryDiagnosis) facility.residents[p.mrn].primaryDiagnosis = p.primaryDiagnosis;
-              if (p.allergies) {
-                facility.residents[p.mrn].allergies = p.allergies === "No Known Allergies"
-                  ? []
-                  : p.allergies.split(",").map((a: string) => a.trim());
+              const choice = choices[p.mrn] || 'merge';
+              if (choice === 'merge') {
+                if (p.gender) facility.residents[p.mrn].sex = p.gender;
+                if (p.admissionDate) facility.residents[p.mrn].admissionDate = p.admissionDate;
+                if (p.primaryMD) facility.residents[p.mrn].attendingMD = p.primaryMD;
+                if (p.primaryDiagnosis) facility.residents[p.mrn].primaryDiagnosis = p.primaryDiagnosis;
+                if (p.allergies) {
+                  facility.residents[p.mrn].allergies = p.allergies === "No Known Allergies"
+                    ? []
+                    : p.allergies.split(",").map((a: string) => a.trim());
+                }
+              } else if (choice === 'replace') {
+                facility.residents[p.mrn].sex = p.gender || undefined;
+                facility.residents[p.mrn].admissionDate = p.admissionDate || undefined;
+                facility.residents[p.mrn].attendingMD = p.primaryMD || undefined;
+                facility.residents[p.mrn].primaryDiagnosis = p.primaryDiagnosis || undefined;
+                facility.residents[p.mrn].allergies = p.allergies && p.allergies !== "No Known Allergies"
+                  ? p.allergies.split(",").map((a: string) => a.trim())
+                  : [];
               }
               facility.residents[p.mrn].updatedAt = now;
             } else {
@@ -447,7 +498,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
   const handleImportAll = () => {
     const allApplyChoices = Object.fromEntries(
-      collisions.map(c => [c.parsed.mrn, 'apply' as const])
+      collisions.map(c => [c.parsed.mrn, 'merge' as const])
     );
     commitWithChoices(allApplyChoices);
   };
@@ -544,6 +595,13 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                   collisions={collisions}
                   choices={collisionChoices}
                   onChoiceChange={(mrn, choice) => setCollisionChoices(prev => ({ ...prev, [mrn]: choice }))}
+                  onSetAllChoices={(choice) => {
+                    const newChoices: Record<string, 'skip' | 'merge' | 'replace'> = {};
+                    collisions.forEach(c => {
+                      newChoices[c.parsed.mrn] = choice;
+                    });
+                    setCollisionChoices(newChoices);
+                  }}
                   parserMode={parserMode}
                 />
               )}

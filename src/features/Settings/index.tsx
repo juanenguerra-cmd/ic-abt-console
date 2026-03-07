@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
 import { UserRole } from "../../types/roles";
-import { restoreFromPrevAsync, hardResetStorageAsync } from "../../storage/engine";
+import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
@@ -59,6 +59,11 @@ const validateUnifiedDB = (db: unknown): { valid: boolean; error?: string } => {
   return { valid: true };
 };
 
+import { VersionHistory } from "./VersionHistory";
+import { RestorePreviewModal } from "./RestorePreviewModal";
+
+import { alertService } from "../../services/alertService";
+
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -72,6 +77,9 @@ export const SettingsConsole: React.FC = () => {
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [isUnitRoomConfigModalOpen, setIsUnitRoomConfigModalOpen] = useState(false);
   const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
+  const [previewDB, setPreviewDB] = useState<UnifiedDB | null>(null);
+  const [previewMetadata, setPreviewMetadata] = useState<any>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   
   // Global floor tile size (1–10, default 5)
   const [tileSize, setTileSize] = useState(5);
@@ -127,7 +135,18 @@ export const SettingsConsole: React.FC = () => {
   const usageColor = usagePercent > 80 ? "bg-red-500" : usagePercent > 50 ? "bg-amber-500" : "bg-emerald-500";
 
   const handleExport = () => {
-    const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
+    const backupData = {
+      ...db,
+      backupMetadata: {
+        exportedAt: new Date().toISOString(),
+        exportedBy: auditorName || "Unknown User",
+        facilityId: activeFacilityId,
+        facilityName: facilityName || "Unknown Facility",
+        appVersion: "1.0.0",
+        sizeBytes: dbSize
+      }
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -136,6 +155,12 @@ export const SettingsConsole: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString());
+    
+    // Update the last saved state to reflect the backup
+    const status = alertService.getBackupStatus();
+    setLastSaved(db.updatedAt);
+    // Force a re-render of the badge by dispatching a custom event or just letting the interval handle it
+    window.dispatchEvent(new Event('backup-completed'));
   };
 
   const handleRestorePrev = () => {
@@ -179,11 +204,16 @@ export const SettingsConsole: React.FC = () => {
         let text = "";
         try {
           text = e.target?.result as string;
-          const parsed = JSON.parse(text) as UnifiedDB;
-          if (parsed.schemaVersion !== "UNIFIED_DB_V2") {
-            alert("Invalid backup file: Schema version does not match.");
-            return;
+          const rawParsed = JSON.parse(text) as Record<string, unknown>;
+          
+          // Strip backup metadata if present
+          let metadata = null;
+          if ('backupMetadata' in rawParsed) {
+            metadata = rawParsed.backupMetadata;
+            delete rawParsed.backupMetadata;
           }
+
+          const parsed = runMigrations(rawParsed);
 
           const validation = validateUnifiedDB(parsed);
           if (!validation.valid) {
@@ -193,9 +223,9 @@ export const SettingsConsole: React.FC = () => {
           }
 
           if (restoreConfirm === "RESTORE") {
-            setDB(parsed);
-            alert("Backup restored successfully.");
-            setRestoreConfirm("");
+            setPreviewDB(parsed);
+            setPreviewMetadata(metadata);
+            setIsPreviewModalOpen(true);
           } else {
             alert("Please type RESTORE to confirm.");
           }
@@ -533,6 +563,31 @@ export const SettingsConsole: React.FC = () => {
           </p>
         </div>
       </div>
+
+      <VersionHistory />
+
+      <RestorePreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => {
+          setIsPreviewModalOpen(false);
+          setPreviewDB(null);
+          setPreviewMetadata(null);
+        }}
+        onConfirm={() => {
+          if (previewDB) {
+            setDB(previewDB);
+            alert("Backup restored successfully.");
+            setRestoreConfirm("");
+            setIsPreviewModalOpen(false);
+            setPreviewDB(null);
+            setPreviewMetadata(null);
+          }
+        }}
+        currentDB={db}
+        backupDB={previewDB}
+        backupMetadata={previewMetadata}
+      />
+
       {pendingRole && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"

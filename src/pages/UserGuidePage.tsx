@@ -3,6 +3,7 @@ import MarkdownViewer from "../components/MarkdownViewer";
 import userGuideScreensDoc from "../../docs/user-guide-screens.md?raw";
 import dataFieldReferenceDoc from "../../docs/data-field-reference.md?raw";
 import processFlowsDoc from "../../docs/process-flows.md?raw";
+import { VersionHistory } from "../features/Settings/VersionHistory";
 
 const sections = [
   {
@@ -70,7 +71,7 @@ const sections = [
   },
 ];
 
-type GuideTab = "overview" | "walkthrough" | "dataReference" | "processFlows";
+type GuideTab = "overview" | "walkthrough" | "dataReference" | "processFlows" | "versionHistory";
 
 export default function UserGuidePage() {
   const [activeTab, setActiveTab] = useState<GuideTab>("overview");
@@ -84,6 +85,7 @@ export default function UserGuidePage() {
     if (activeTab === "walkthrough") return <MarkdownViewer content={userGuideScreensDoc} />;
     if (activeTab === "dataReference") return <MarkdownViewer content={dataFieldReferenceDoc} />;
     if (activeTab === "processFlows") return <MarkdownViewer content={processFlowsDoc} />;
+    if (activeTab === "versionHistory") return <VersionHistory />;
 
     return (
       <section className="grid gap-4 md:grid-cols-2">
@@ -153,6 +155,13 @@ export default function UserGuidePage() {
           className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "dataReference" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
         >
           Data Field Reference
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("versionHistory")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "versionHistory" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Version History
         </button>
       </nav>
 
