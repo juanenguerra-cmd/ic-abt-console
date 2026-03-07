@@ -1,6 +1,7 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
 import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
+import { StorageRepository } from "./repository";
 export { DB_KEY_MAIN };
 
 // localStorage fallback thresholds (kept for the sync backup path).
@@ -393,7 +394,9 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     const raw = await idbGet<string>(DB_KEY_MAIN);
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      return runMigrations(parsed);
+      const migrated = runMigrations(parsed);
+      await StorageRepository.mergeSlicesIntoDB(migrated);
+      return migrated;
     }
   } catch (e) {
     console.warn("IDB load failed, falling back to localStorage:", e);
@@ -405,6 +408,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     if (lsRaw) {
       const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
       const migrated = runMigrations(parsed);
+      await StorageRepository.mergeSlicesIntoDB(migrated);
       // Persist to IDB so future loads come from IDB.
       const packed = packV3(migrated);
       await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
@@ -621,6 +625,17 @@ export async function restoreFromPrevAsync(): Promise<boolean> {
     const prev = await idbGet<string>(DB_KEY_PREV);
     if (!prev) return restoreFromPrev(); // fall through to localStorage
     await idbSet(DB_KEY_MAIN, prev);
+
+    try {
+      const parsed = JSON.parse(prev);
+      const activeFacilityId = parsed?.data?.facilities?.activeFacilityId;
+      if (activeFacilityId) {
+        await StorageRepository.restoreAllSlicesFromPrev(activeFacilityId);
+      }
+    } catch (e) {
+      console.warn("Failed to restore slices from PREV:", e);
+    }
+
     // Also sync to localStorage best-effort
     try { localStorage.setItem(DB_KEY_MAIN, prev); } catch {}
     return true;

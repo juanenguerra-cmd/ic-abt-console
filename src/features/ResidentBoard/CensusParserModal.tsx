@@ -714,7 +714,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                   <div className="text-xs text-red-700 font-mono bg-white/50 p-2 rounded max-h-32 overflow-y-auto">
                     {invalidRows.map((r, i) => (
                       <div key={i} className="border-b border-red-100 last:border-0 py-1">
-                        Line {r.lineIndex + 1}: {r.raw.substring(0, 80)}... ({r.reason})
+                        Line {r.row}: ({r.reason})
                       </div>
                     ))}
                   </div>
@@ -763,23 +763,17 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
               {/* Collisions */}
               {filteredCollisions.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-neutral-900 mb-2 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                    Updates / Collisions ({filteredCollisions.length})
-                  </h3>
-                  <div className="space-y-3">
-                    {filteredCollisions.map((c) => (
-                      <CollisionReviewRow
-                        key={c.parsed.mrn}
-                        collision={c}
-                        choice={collisionChoices[c.parsed.mrn] || 'merge'}
-                        onChoiceChange={(choice) => setCollisionChoices(prev => ({ ...prev, [c.parsed.mrn]: choice }))}
-                        parserMode={parserMode}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <CollisionReviewStep
+                  collisions={filteredCollisions}
+                  choices={collisionChoices}
+                  onChoiceChange={(mrn, choice) => setCollisionChoices(prev => ({ ...prev, [mrn]: choice }))}
+                  onSetAllChoices={(choice) => {
+                    const nextChoices = { ...collisionChoices };
+                    filteredCollisions.forEach(c => nextChoices[c.parsed.mrn] = choice);
+                    setCollisionChoices(nextChoices);
+                  }}
+                  parserMode={parserMode}
+                />
               )}
 
               <div className="flex justify-end gap-3 pt-2">
