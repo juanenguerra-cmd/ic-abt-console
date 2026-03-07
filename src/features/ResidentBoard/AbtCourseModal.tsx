@@ -5,7 +5,7 @@ import { ABTCourse, IPEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import { detectMedicationClass, MEDICATION_CLASS_OPTIONS } from "../../utils/medicationClassMap";
-import { resolveMedication, MedicationMatch } from "../../utils/medicationLibrary";
+import { resolveMedication, MedicationMatch, MEDICATION_LIBRARY } from "../../utils/medicationLibrary";
 import { parseAbtString, ParsedABT } from "../../utils/abtParser";
 
 interface Props {
@@ -298,11 +298,15 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
           linkedIpEventId: linkedIpEventId || undefined,
         };
 
+        const canonicalName = medicationId 
+            ? MEDICATION_LIBRARY.find(m => m.id === medicationId)?.name || medication.trim()
+            : medication.trim();
+
         facility.abts[abtId] = {
           id: abtId,
           residentRef,
           status,
-          medication: medication.trim(),
+          medication: canonicalName,
           medicationId: medicationId || undefined,
           enteredMedicationText: enteredMedicationText || (existingAbt ? existingAbt.medication : medication.trim()),
           dose: dose || undefined,
@@ -449,7 +453,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
                 </div>
                 {medicationId && (
                   <p className="text-xs text-emerald-600 mt-1 flex items-center">
-                    Matched: {medicationId}
+                    Matched: {MEDICATION_LIBRARY.find(m => m.id === medicationId)?.name || medicationId}
                   </p>
                 )}
                 {showParseWarning && (

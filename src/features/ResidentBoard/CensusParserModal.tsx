@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Upload, AlertCircle, AlertTriangle } from "lucide-react";
+import { X, Upload, AlertCircle, AlertTriangle, Search } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
@@ -71,8 +71,13 @@ const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, c
         return (
           <div key={mrn} className="border border-neutral-200 rounded-lg overflow-hidden">
             <div className="px-4 py-2 bg-neutral-50 border-b border-neutral-200 flex items-center justify-between flex-wrap gap-2">
-              <span className="text-sm font-semibold text-neutral-800">
+              <span className="text-sm font-semibold text-neutral-800 flex items-center gap-2">
                 MRN <span className="font-mono">{mrn}</span> — {existing.displayName}
+                {existing.status !== "Active" && (
+                    <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+                        REACTIVATION
+                    </span>
+                )}
               </span>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-1.5 text-sm text-neutral-700 cursor-pointer">
@@ -165,6 +170,8 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
   const [collisions, setCollisions] = useState<CollisionEntry[]>([]);
   const [invalidRows, setInvalidRows] = useState<InvalidRow[]>([]);
   const [collisionChoices, setCollisionChoices] = useState<Record<string, 'skip' | 'merge' | 'replace'>>({});
+  const [duplicateCount, setDuplicateCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // ---- bucket parsed rows into new / collision / invalid ----
   const bucketRows = (rows: ParsedRow[]) => {
@@ -186,8 +193,14 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
       const mrnLower = mrnRaw.toLowerCase();
       const existing = mrnToResident.get(mrnLower);
       if (existing) {
+        // Auto-detect reactivation: if existing is Discharged/Deceased and new is Active (or implied Active)
+        const newStatus = ["Active", "Discharged", "Deceased"].includes(row.status) ? row.status : "Active";
+        const isReactivation = existing.status !== "Active" && newStatus === "Active";
+        
         nextCollisions.push({ rowIndex: idx + 1, parsed: row, existing });
-        // No default choice - user must explicitly select
+        if (isReactivation) {
+            nextChoices[row.mrn] = 'merge'; // Default to merge for reactivations
+        }
       } else {
         nextNew.push(row);
       }
@@ -238,28 +251,55 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
         continue;
       }
 
+      let room = "";
+      let nameAndMrn = "";
+      let dob = "";
+      let status = "";
+      let payor = "";
+
+      // Strategy 1: Column Split (Tab or 2+ Spaces)
       let parts = trimmed.split('\t');
       if (parts.length < 5) {
         parts = trimmed.split(/\s{2,}/);
       }
 
       if (parts.length >= 4) {
-        const room = parts[0].trim();
-        const nameAndMrn = parts[1].trim();
-        const dob = parts[2].trim();
-        const status = parts[3].trim();
-        
+        room = parts[0].trim();
+        nameAndMrn = parts[1].trim();
+        dob = parts[2].trim();
+        status = parts[3].trim();
+        if (parts.length >= 7) {
+            payor = parts[6].trim();
+        }
+      }
+
+      // Strategy 2: Regex Fallback (if split failed to produce a valid MRN-containing string)
+      // Matches: Room | Name (MRN) | DOB | Status ...
+      if (!nameAndMrn.match(/\(.*\)/)) {
+        // Relaxed regex:
+        // 1. Room: non-whitespace
+        // 2. Name+MRN: lazy match until DOB
+        // 3. DOB: Date format
+        // 4. Status: Word (Active, etc)
+        // 5. Rest: Anything
+        const regex = /^([A-Z0-9-]+)\s+(.+?\(.*?\))\s+(\d{1,2}\/\d{1,2}\/\d{2,4})\s+([A-Za-z]+)(?:.*)/;
+        const match = trimmed.match(regex);
+        if (match) {
+            room = match[1].trim();
+            nameAndMrn = match[2].trim();
+            dob = match[3].trim();
+            status = match[4].trim();
+            // Payor extraction is unreliable in regex fallback, skip for now or improve later
+        }
+      }
+
+      if (room && nameAndMrn) {
         const mrnMatch = nameAndMrn.match(/(.*?)\s*\((.*?)\)/);
         let name = nameAndMrn;
         let mrn = "";
         if (mrnMatch) {
           name = mrnMatch[1].trim();
           mrn = mrnMatch[2].trim();
-        }
-
-        let payor = "";
-        if (parts.length >= 7) {
-          payor = parts[6].trim();
         }
 
         parsed.push({
@@ -273,8 +313,26 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
         });
       }
     }
-    setResults(parsed);
-    bucketRows(parsed);
+    const deduped: ParsedRow[] = [];
+    const seenMrns = new Set<string>();
+    let dups = 0;
+
+    for (const p of parsed) {
+        if (!p.mrn) {
+            deduped.push(p);
+            continue;
+        }
+        if (seenMrns.has(p.mrn)) {
+            dups++;
+            continue;
+        }
+        seenMrns.add(p.mrn);
+        deduped.push(p);
+    }
+
+    setDuplicateCount(dups);
+    setResults(deduped);
+    bucketRows(deduped);
   };
 
   const parseListing = () => {
@@ -341,8 +399,27 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
         status: "Active"
       });
     }
-    setResults(parsed);
-    bucketRows(parsed);
+
+    const deduped: ParsedRow[] = [];
+    const seenMrns = new Set<string>();
+    let dups = 0;
+
+    for (const p of parsed) {
+        if (!p.mrn) {
+            deduped.push(p);
+            continue;
+        }
+        if (seenMrns.has(p.mrn)) {
+            dups++;
+            continue;
+        }
+        seenMrns.add(p.mrn);
+        deduped.push(p);
+    }
+
+    setDuplicateCount(dups);
+    setResults(deduped);
+    bucketRows(deduped);
   };
 
   const allCollisionsResolved = collisions.every(c => collisionChoices[c.parsed.mrn] !== undefined);
@@ -511,22 +588,46 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
     setCollisionChoices({});
   };
 
+  // Filter results by search query
+  const filteredNew = newRows.filter(r => 
+    !searchQuery || 
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    r.mrn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.room.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const filteredCollisions = collisions.filter(c => 
+    !searchQuery || 
+    c.parsed.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.parsed.mrn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.parsed.room.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
             <Upload className="w-5 h-5 text-indigo-600" />
-            Update Census
+            Import Census
           </h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700">
+          <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600">
             <X className="w-6 h-6" />
           </button>
         </div>
-        
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-4">
+
+        <div className="flex-1 overflow-y-auto p-6">
           {!results ? (
-            <>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+                <p className="font-medium mb-1">Instructions:</p>
+                <ul className="list-disc list-inside space-y-1 opacity-90">
+                  <li>Copy your census table from Excel or the EMR.</li>
+                  <li>Paste it directly into the box below.</li>
+                  <li>Ensure columns include: <strong>Room, Name (MRN), DOB, Status</strong>.</li>
+                  <li>The system will automatically detect new residents and updates.</li>
+                </ul>
+              </div>
               <div className="flex items-center gap-4 mb-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 cursor-pointer">
                   <input 
@@ -549,18 +650,13 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                   Resident Listing (Clinical/Allergies)
                 </label>
               </div>
-              <p className="text-sm text-neutral-600">
-                {parserMode === "census" 
-                  ? "Paste your Census Report below. This is the authoritative source for census count and occupancy. Updates: Unit, Room, Status, Payor, and DOB."
-                  : "Paste your Resident Listing Report below. This is the authoritative source for clinical fields. Updates: Attending MD, Diagnosis, Admission Date, Sex, and Allergies. Does not affect census count."}
-              </p>
               <textarea
-                value={rawText}
-                onChange={e => setRawText(e.target.value)}
+                className="w-full h-64 p-4 border border-neutral-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder={parserMode === "census" 
                   ? "Unit: Unit 2   Bed Certification: All\n250-A\tCARRIGAN, PATRICIA (LON202356)\t12/15/1929\tActive\tMLCB1\tSTD\tMedicare A\tPrivate\tOCCUPIED"
                   : "CARRIGAN, PATRICIA (LON202356) \tF \t1/26/2026 \tNo Known Allergies \tDr. Nenad Grlic \tI69.322"}
-                className="flex-1 min-h-[300px] p-3 border border-neutral-300 rounded-md font-mono text-xs whitespace-pre focus:ring-indigo-500 focus:border-indigo-500"
+                value={rawText}
+                onChange={e => setRawText(e.target.value)}
               />
               <div className="flex justify-end pt-2">
                 <button
@@ -571,100 +667,121 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                   Parse Data
                 </button>
               </div>
-            </>
+            </div>
           ) : (
-            <>
+            <div className="space-y-6">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+                <input 
+                    type="text" 
+                    placeholder="Search results..." 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-emerald-700">{newRows.length}</div>
+                  <div className="text-xs font-medium text-emerald-800 uppercase tracking-wide">New Records</div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-amber-700">{collisions.length}</div>
+                  <div className="text-xs font-medium text-amber-800 uppercase tracking-wide">Updates / Collisions</div>
+                </div>
+                <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-rose-700">{invalidRows.length}</div>
+                  <div className="text-xs font-medium text-rose-800 uppercase tracking-wide">Invalid Rows</div>
+                </div>
+              </div>
+
               {/* Invalid rows banner */}
+              {duplicateCount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded-md text-sm flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Removed {duplicateCount} duplicate record{duplicateCount !== 1 ? 's' : ''} from import.</span>
+                </div>
+              )}
               {invalidRows.length > 0 && (
                 <div className="bg-red-50 border border-red-300 rounded-md p-3 space-y-1">
                   <div className="flex items-center gap-2 text-red-800">
-                    <AlertTriangle className="w-5 h-5 shrink-0" />
-                    <p className="text-sm font-semibold">{invalidRows.length} invalid row{invalidRows.length > 1 ? 's' : ''} — will be skipped</p>
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="font-bold text-sm">Skipped {invalidRows.length} invalid rows</span>
                   </div>
-                  <ul className="text-xs text-red-700 pl-7 list-disc space-y-0.5">
+                  <div className="text-xs text-red-700 font-mono bg-white/50 p-2 rounded max-h-32 overflow-y-auto">
                     {invalidRows.map((r, i) => (
-                      <li key={i}>Row {r.row}: {r.reason}</li>
+                      <div key={i} className="border-b border-red-100 last:border-0 py-1">
+                        Line {r.lineIndex + 1}: {r.raw.substring(0, 80)}... ({r.reason})
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               )}
 
-              {/* Collision review step */}
-              {collisions.length > 0 && (
-                <CollisionReviewStep
-                  collisions={collisions}
-                  choices={collisionChoices}
-                  onChoiceChange={(mrn, choice) => setCollisionChoices(prev => ({ ...prev, [mrn]: choice }))}
-                  onSetAllChoices={(choice) => {
-                    const newChoices: Record<string, 'skip' | 'merge' | 'replace'> = {};
-                    collisions.forEach(c => {
-                      newChoices[c.parsed.mrn] = choice;
-                    });
-                    setCollisionChoices(newChoices);
-                  }}
-                  parserMode={parserMode}
-                />
+              {/* New Residents */}
+              {filteredNew.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900 mb-2 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    New Residents ({filteredNew.length})
+                  </h3>
+                  <div className="border border-neutral-200 rounded-lg overflow-hidden">
+                    <table className="min-w-full divide-y divide-neutral-200">
+                      <thead className="bg-neutral-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Name (MRN)</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">DOB</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-neutral-200">
+                        {filteredNew.map((r, i) => (
+                          <tr key={i} className="hover:bg-neutral-50">
+                            <td className="px-4 py-2 text-sm text-neutral-900 font-mono">{r.room}</td>
+                            <td className="px-4 py-2 text-sm text-neutral-900 font-medium">
+                              {r.name} <span className="text-neutral-500 font-normal">({r.mrn})</span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-neutral-500">{r.dob}</td>
+                            <td className="px-4 py-2 text-sm text-neutral-500">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                    {r.status}
+                                </span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-neutral-500">{r.unit || "Unassigned"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
 
-              {/* Summary of new records */}
-              <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 p-3 rounded-md border border-emerald-200">
-                <AlertCircle className="w-5 h-5" />
-                <p className="text-sm font-medium">
-                  {newRows.length} new record{newRows.length !== 1 ? 's' : ''} to import
-                  {collisions.length > 0 ? `, ${collisions.length} collision${collisions.length !== 1 ? 's' : ''} require resolution` : ''}.
-                </p>
-              </div>
+              {/* Collisions */}
+              {filteredCollisions.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900 mb-2 flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    Updates / Collisions ({filteredCollisions.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {filteredCollisions.map((c) => (
+                      <CollisionReviewRow
+                        key={c.parsed.mrn}
+                        collision={c}
+                        choice={collisionChoices[c.parsed.mrn] || 'merge'}
+                        onChoiceChange={(choice) => setCollisionChoices(prev => ({ ...prev, [c.parsed.mrn]: choice }))}
+                        parserMode={parserMode}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              {/* Preview table */}
-              <div className="flex-1 overflow-y-auto border border-neutral-200 rounded-md">
-                <table className="min-w-full divide-y divide-neutral-200 text-sm">
-                  <thead className="bg-neutral-50 sticky top-0">
-                    <tr>
-                      {parserMode === "census" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Unit</th>}
-                      {parserMode === "census" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Room</th>}
-                      <th className="px-4 py-2 text-left font-medium text-neutral-500">Name</th>
-                      <th className="px-4 py-2 text-left font-medium text-neutral-500">MRN</th>
-                      <th className="px-4 py-2 text-left font-medium text-neutral-500">Status</th>
-                      {parserMode === "census" && <th className="px-4 py-2 text-left font-medium text-neutral-500">DOB</th>}
-                      {parserMode === "census" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Payor</th>}
-                      {parserMode === "listing" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Gender</th>}
-                      {parserMode === "listing" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Admission Date</th>}
-                      {parserMode === "listing" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Allergies</th>}
-                      {parserMode === "listing" && <th className="px-4 py-2 text-left font-medium text-neutral-500">MD</th>}
-                      {parserMode === "listing" && <th className="px-4 py-2 text-left font-medium text-neutral-500">Diagnosis</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-neutral-200">
-                    {results.map((r, i) => {
-                      const isInvalid = invalidRows.some(inv => inv.row === i + 1);
-                      const isCollision = collisions.some(c => c.parsed.mrn === r.mrn);
-                      const rowClass = isInvalid
-                        ? 'bg-red-50 opacity-60'
-                        : isCollision
-                          ? 'bg-amber-50'
-                          : '';
-                      return (
-                        <tr key={i} className={rowClass}>
-                          {parserMode === "census" && <td className="px-4 py-2 text-neutral-900">{r.unit}</td>}
-                          {parserMode === "census" && <td className="px-4 py-2 text-neutral-900">{r.room}</td>}
-                          <td className="px-4 py-2 text-neutral-900">{r.name}</td>
-                          <td className="px-4 py-2 text-neutral-500 font-mono">{r.mrn || <span className="text-red-600 font-bold">Missing</span>}</td>
-                          <td className="px-4 py-2 text-neutral-500 text-xs">
-                            {isInvalid ? <span className="text-red-600 font-semibold">Skip</span> : isCollision ? <span className="text-amber-600 font-semibold">Collision</span> : <span className="text-emerald-600">New</span>}
-                          </td>
-                          {parserMode === "census" && <td className="px-4 py-2 text-neutral-500">{r.dob}</td>}
-                          {parserMode === "census" && <td className="px-4 py-2 text-neutral-500">{r.payor}</td>}
-                          {parserMode === "listing" && <td className="px-4 py-2 text-neutral-500">{r.gender}</td>}
-                          {parserMode === "listing" && <td className="px-4 py-2 text-neutral-500">{r.admissionDate}</td>}
-                          {parserMode === "listing" && <td className="px-4 py-2 text-neutral-500 truncate max-w-[200px]" title={r.allergies}>{r.allergies}</td>}
-                          {parserMode === "listing" && <td className="px-4 py-2 text-neutral-500">{r.primaryMD}</td>}
-                          {parserMode === "listing" && <td className="px-4 py-2 text-neutral-500">{r.primaryDiagnosis}</td>}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   onClick={handleBack}
@@ -689,7 +806,7 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                   Confirm Import
                 </button>
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

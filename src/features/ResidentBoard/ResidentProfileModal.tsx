@@ -175,6 +175,24 @@ export const ResidentProfileModal: React.FC<Props> = ({
           <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
             <User className="w-5 h-5 text-indigo-600" />
             Resident Profile
+            {resident.status === "Discharged" && !isEditing && (
+                <button
+                    onClick={() => {
+                        if (confirm(`Reactivate ${resident.displayName}? This will set their status to Active.`)) {
+                            updateDB(draft => {
+                                const r = draft.data.facilityData[activeFacilityId].residents[residentId];
+                                if (r) {
+                                    r.status = "Active";
+                                    r.updatedAt = new Date().toISOString();
+                                }
+                            }, { action: 'update', entityType: 'Resident', entityId: residentId });
+                        }
+                    }}
+                    className="ml-2 text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded border border-emerald-200 hover:bg-emerald-200 font-medium"
+                >
+                    Reactivate
+                </button>
+            )}
           </h2>
           <div className="flex items-center gap-2">
             {!isEditing ? (

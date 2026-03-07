@@ -83,6 +83,7 @@ export const ResidentBoard: React.FC = () => {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterActiveOnly, setFilterActiveOnly] = useState(true);
+  const [filterDischargedOnly, setFilterDischargedOnly] = useState(false);
   const [filterAbtOnly, setFilterAbtOnly] = useState(() => searchParams.get('abtActive') === 'true');
   const [filterUnit, setFilterUnit] = useState<string>(() => searchParams.get('unit') || "");
   const [filterOnPrecautions, setFilterOnPrecautions] = useState(() => searchParams.get('onPrecautions') === 'true');
@@ -219,6 +220,7 @@ export const ResidentBoard: React.FC = () => {
 
       // Toggles
       if (filterActiveOnly && normalizeStatus(r.status) !== "active") return false;
+      if (filterDischargedOnly && normalizeStatus(r.status) !== "discharged") return false;
       
       if (filterAbtOnly) {
         const hasAbt = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn);
@@ -289,7 +291,7 @@ export const ResidentBoard: React.FC = () => {
 
       // Default signal filter: when no explicit toggle is active and showAllActiveResidents is OFF,
       // only show residents who have at least one IC-relevant signal.
-      if (!showAllActiveResidents && !filterActiveOnly && !filterAbtOnly && !filterOnPrecautions && !filterPrecautionType && !filterLast24h && !filterNeedsReview && !filterAbtReview && !filterPendingLabs && !filterVaxDueOnly && !filterUnit) {
+      if (!showAllActiveResidents && !filterActiveOnly && !filterDischargedOnly && !filterAbtOnly && !filterOnPrecautions && !filterPrecautionType && !filterLast24h && !filterNeedsReview && !filterAbtReview && !filterPendingLabs && !filterVaxDueOnly && !filterUnit) {
         const sigs = signalMap[r.mrn];
         if (sigs && !sigs.hasActivePrecaution && !sigs.hasEbp && !sigs.hasActiveAbt && !sigs.hasDueVax && !sigs.hasRecentSymptoms96h) {
           return false;
@@ -298,7 +300,7 @@ export const ResidentBoard: React.FC = () => {
 
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterAbtOnly, filterOnPrecautions, filterPrecautionType, filterLast24h, filterNeedsReview, filterAbtReview, filterPendingLabs, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
+  }, [residents, searchQuery, filterActiveOnly, filterDischargedOnly, filterAbtOnly, filterOnPrecautions, filterPrecautionType, filterLast24h, filterNeedsReview, filterAbtReview, filterPendingLabs, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
 
   // Group by Unit
   const units = useMemo(() => {
@@ -461,6 +463,14 @@ export const ResidentBoard: React.FC = () => {
     return <ShiftReport onBack={() => setView('board')} />;
   }
 
+  // Calculate unassigned active residents (ignoring current board filters)
+  const unassignedActiveCount = useMemo(() => {
+    return residents.filter(r => 
+      isActiveCensusResident(r) && 
+      (!r.currentUnit || r.currentUnit.trim() === '' || r.currentUnit.toLowerCase() === 'unassigned')
+    ).length;
+  }, [residents]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
       {/* Top Bar */}
@@ -553,11 +563,26 @@ export const ResidentBoard: React.FC = () => {
             VAX Due
           </button>
           <button
-            onClick={() => { const v = !filterActiveOnly; setFilterActiveOnly(v); }}
+            onClick={() => { 
+                const v = !filterActiveOnly; 
+                setFilterActiveOnly(v); 
+                if (v) setFilterDischargedOnly(false); 
+            }}
             className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterActiveOnly ? 'bg-sky-100 border-sky-400 text-sky-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
             aria-pressed={filterActiveOnly}
           >
             Active Only
+          </button>
+          <button
+            onClick={() => { 
+                const v = !filterDischargedOnly; 
+                setFilterDischargedOnly(v); 
+                if (v) setFilterActiveOnly(false); 
+            }}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${filterDischargedOnly ? 'bg-slate-100 border-slate-400 text-slate-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={filterDischargedOnly}
+          >
+            Discharged
           </button>
           <div className="w-px h-5 bg-neutral-300 mx-1" aria-hidden="true" />
           <button
@@ -576,7 +601,7 @@ export const ResidentBoard: React.FC = () => {
               </button>
             </div>
           )}
-          {(filterOnPrecautions || filterPrecautionType || filterLast24h || filterAbtOnly || filterNeedsReview || filterVaxDueOnly || filterActiveOnly || filterUnit || filterPendingLabs || filterAbtReview) && (
+          {(filterOnPrecautions || filterPrecautionType || filterLast24h || filterAbtOnly || filterNeedsReview || filterVaxDueOnly || filterActiveOnly || filterDischargedOnly || filterUnit || filterPendingLabs || filterAbtReview) && (
             <button
               onClick={() => {
                 setFilterOnPrecautions(false);
@@ -585,6 +610,7 @@ export const ResidentBoard: React.FC = () => {
                 setFilterAbtOnly(false);
                 setFilterNeedsReview(false);
                 setFilterActiveOnly(false);
+                setFilterDischargedOnly(false);
                 setFilterVaxDueOnly(false);
                 setFilterPendingLabs(false);
                 setFilterAbtReview(false);
@@ -638,6 +664,35 @@ export const ResidentBoard: React.FC = () => {
         </div>
       </div>
 
+      {/* Unassigned Residents Banner */}
+      {unassignedActiveCount > 0 && (
+        <div className="bg-rose-50 border-b border-rose-200 px-6 py-2 flex items-center gap-3 shrink-0 text-sm text-rose-800 animate-pulse">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="font-bold">Action Required:</span>
+          <span>{unassignedActiveCount} active resident{unassignedActiveCount !== 1 ? 's' : ''} have no unit assigned.</span>
+          <button 
+            onClick={() => {
+                // Clear filters to ensure they are visible
+                setFilterOnPrecautions(false);
+                setFilterPrecautionType("");
+                setFilterLast24h(false);
+                setFilterAbtOnly(false);
+                setFilterNeedsReview(false);
+                setFilterActiveOnly(true); // Keep active only
+                setFilterDischargedOnly(false);
+                setFilterVaxDueOnly(false);
+                setFilterPendingLabs(false);
+                setFilterAbtReview(false);
+                setFilterUnit(""); // Clear unit filter
+                setSearchParams({}, { replace: true });
+            }}
+            className="ml-auto flex items-center gap-1 text-xs text-rose-700 hover:text-rose-900 font-bold underline bg-white/50 px-2 py-0.5 rounded"
+          >
+            Show Unassigned
+          </button>
+        </div>
+      )}
+
       {/* Link-out banners */}
       {filterOnPrecautions && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 flex items-center gap-3 shrink-0 text-sm text-amber-800">
@@ -681,6 +736,10 @@ export const ResidentBoard: React.FC = () => {
           )}
           {(Object.entries(units) as [string, Resident[]][])
             .sort(([unitNameA], [unitNameB]) => {
+              // Force Unassigned to the front
+              if (unitNameA === 'Unassigned') return -1;
+              if (unitNameB === 'Unassigned') return 1;
+
               const order = ['Unit 2', 'Unit 3', 'Unit 4'];
               const indexA = order.indexOf(unitNameA);
               const indexB = order.indexOf(unitNameB);

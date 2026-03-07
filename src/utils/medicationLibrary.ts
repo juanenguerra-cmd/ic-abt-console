@@ -74,27 +74,83 @@ export interface MedicationMatch {
   originalTerm: string;
 }
 
+
+// Levenshtein distance for fuzzy matching
+function levenshtein(a: string, b: string): number {
+  const matrix = [];
+
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1 // deletion
+          )
+        );
+      }
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
 export function resolveMedication(term: string): MedicationMatch | null {
   const normalized = term.trim().toLowerCase();
-  if (!normalized) return null;
+  if (!normalized || normalized.length < 3) return null; // Ignore very short terms
 
   // 1. Exact canonical match
   const exact = MEDICATION_LIBRARY.find(m => m.name.toLowerCase() === normalized);
   if (exact) return { medication: exact, confidence: 'exact', originalTerm: term };
 
-  // 2. Alias match
+  // 2. Exact Alias match (Brand names, etc.)
   const alias = MEDICATION_LIBRARY.find(m => m.aliases.some(a => a.toLowerCase() === normalized));
   if (alias) return { medication: alias, confidence: 'alias', originalTerm: term };
 
-  // 3. Substring/Fuzzy match (simple implementation)
-  // Check if the term is contained in the name or aliases, or vice versa
-  const fuzzy = MEDICATION_LIBRARY.find(m => {
-    const nameMatch = m.name.toLowerCase().includes(normalized) || normalized.includes(m.name.toLowerCase());
-    const aliasMatch = m.aliases.some(a => a.toLowerCase().includes(normalized) || normalized.includes(a.toLowerCase()));
-    return nameMatch || aliasMatch;
-  });
+  // 3. StartsWith match (Canonical or Alias) - Prioritize matches that start with the term
+  const startsWith = MEDICATION_LIBRARY.find(m => 
+    m.name.toLowerCase().startsWith(normalized) || 
+    m.aliases.some(a => a.toLowerCase().startsWith(normalized))
+  );
+  if (startsWith) return { medication: startsWith, confidence: 'fuzzy', originalTerm: term };
 
-  if (fuzzy) return { medication: fuzzy, confidence: 'fuzzy', originalTerm: term };
+  // 4. Strict Fuzzy match (Levenshtein distance)
+  // Allow 1 edit for length < 5, 2 edits for length >= 5
+  const maxDistance = normalized.length < 5 ? 1 : 2;
+  
+  let bestMatch: MedicationEntry | null = null;
+  let minDistance = Infinity;
+
+  for (const med of MEDICATION_LIBRARY) {
+    // Check canonical name
+    const nameDist = levenshtein(normalized, med.name.toLowerCase());
+    if (nameDist <= maxDistance && nameDist < minDistance) {
+      minDistance = nameDist;
+      bestMatch = med;
+    }
+
+    // Check aliases
+    for (const alias of med.aliases) {
+      const aliasDist = levenshtein(normalized, alias.toLowerCase());
+      if (aliasDist <= maxDistance && aliasDist < minDistance) {
+        minDistance = aliasDist;
+        bestMatch = med;
+      }
+    }
+  }
+
+  if (bestMatch) return { medication: bestMatch, confidence: 'fuzzy', originalTerm: term };
 
   return null;
 }
