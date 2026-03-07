@@ -12,6 +12,7 @@ export interface PdfTableSection {
 export interface ExportPdfOptions {
   title: string;
   orientation?: PdfOrientation;
+  template?: PdfTemplate;
   columns?: string[];
   rows?: CellValue[][];
   filters?: Record<string, string | number | boolean | null | undefined>;
@@ -32,6 +33,7 @@ const mapFiltersToSubtitle = (filters?: ExportPdfOptions['filters']): string[] =
 export const exportPDF = ({
   title,
   orientation = 'landscape',
+  template,
   columns,
   rows,
   filters,
@@ -61,13 +63,13 @@ export const exportPDF = ({
     sections.push({ type: 'text', title: 'Notes', lines: [footerNote] });
   }
 
-  const template: PdfTemplate = orientation === 'portrait' ? 'PORTRAIT_TEMPLATE_V1' : 'LANDSCAPE_TEMPLATE_V1';
+  const resolvedTemplate: PdfTemplate = template ?? (orientation === 'portrait' ? 'PORTRAIT_TEMPLATE_V1' : 'LANDSCAPE_TEMPLATE_V1');
 
   exportPdfDocument({
     title,
     orientation,
     subtitleLines: mapFiltersToSubtitle(filters),
     sections,
-    template,
+    template: resolvedTemplate,
   });
 };

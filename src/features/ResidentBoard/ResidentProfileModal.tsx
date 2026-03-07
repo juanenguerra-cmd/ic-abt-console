@@ -6,6 +6,7 @@ import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices } from '../../utils/clinicalDevices';
 import { ResidentTimeline } from './ResidentTimeline';
 import { useResidentAlerts } from "../../hooks/useResidentAlerts";
+import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
 
 interface Props {
   residentId: string;
@@ -201,8 +202,15 @@ export const ResidentProfileModal: React.FC<Props> = ({
         </div>
         
         <div className="p-6 overflow-y-auto flex-1 space-y-8">
-          {/* Clinical Alerts */}
-          {alerts.length > 0 && (
+          {/* Clinical Snapshot */}
+          {!isEditing && (
+            <ResidentClinicalSnapshot residentId={residentId} />
+          )}
+
+          {/* Clinical Alerts - Keep as secondary or remove if snapshot covers it. 
+              The snapshot covers it with action badges, but the full alerts might be useful too.
+              I'll keep them for now but maybe reduce their prominence if needed. */}
+          {alerts.length > 0 && !isEditing && (
             <section className="space-y-2">
               {alerts.map((alert, idx) => (
                 <div key={idx} className={`p-3 rounded-lg border flex items-start gap-3 ${alert.category === 'ABT_STEWARDSHIP' ? 'bg-orange-50 border-orange-200 text-orange-800' : 'bg-red-50 border-red-200 text-red-800'}`}>

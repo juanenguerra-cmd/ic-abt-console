@@ -1,16 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
-import { UnifiedDB, FacilityStore, MutationLogEntry } from "../domain/models";
-import { loadDBAsync, saveDBAsync, restoreFromPrevAsync, StorageError, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
+import { UnifiedDB, FacilityStore } from "../domain/models";
+import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
-
-const MAX_MUTATION_LOG_ENTRIES = 500;
-
-interface MutationMeta {
-  action: MutationLogEntry['action'];
-  entityType: string;
-  entityId: string;
-  who?: string;
-}
+import { commandHandlers, MutationMeta } from "../services/commandHandlers";
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -88,29 +80,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     if (!db) return Promise.resolve();
 
     try {
-      // Create a deep clone to act as our draft
-      const nextDb = JSON.parse(JSON.stringify(db)) as UnifiedDB;
-      updater(nextDb);
-
-      // G8: Append mutation log entry to every active facility store.
-      if (meta) {
-        const entry: MutationLogEntry = {
-          timestamp: new Date().toISOString(),
-          who: meta.who ?? 'unknown',
-          action: meta.action,
-          entityType: meta.entityType,
-          entityId: meta.entityId,
-        };
-        const activeFacilityId = nextDb.data.facilities.activeFacilityId;
-        const facilityStore = nextDb.data.facilityData[activeFacilityId];
-        if (facilityStore) {
-          if (!facilityStore.mutationLog) facilityStore.mutationLog = [];
-          facilityStore.mutationLog.push(entry);
-          if (facilityStore.mutationLog.length > MAX_MUTATION_LOG_ENTRIES) {
-            facilityStore.mutationLog = facilityStore.mutationLog.slice(-MAX_MUTATION_LOG_ENTRIES);
-          }
-        }
-      }
+      const nextDb = commandHandlers.applyMutation(db, updater, meta);
 
       // Optimistically update React state immediately.
       const prevDb = db;
@@ -120,10 +90,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       // Sequential Save Queue: Ensure saves happen in order and don't collide.
       const savePromise = saveQueue.current.then(async () => {
         try {
-          await saveDBAsync(nextDb);
-          const channel = new BroadcastChannel('ic_console_sync');
-          channel.postMessage({ type: 'DB_UPDATED' });
-          channel.close();
+          await commandHandlers.saveDatabase(nextDb);
         } catch (err) {
           console.error("DB_SAVE_FAILURE", err);
           window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
@@ -163,10 +130,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     const savePromise = saveQueue.current.then(async () => {
       try {
-        await saveDBAsync(newDb);
-        const channel = new BroadcastChannel('ic_console_sync');
-        channel.postMessage({ type: 'DB_UPDATED' });
-        channel.close();
+        await commandHandlers.saveDatabase(newDb);
       } catch (err) {
         console.error("DB_SAVE_FAILURE", err);
         window.dispatchEvent(new CustomEvent("DB_SAVE_FAILURE", { detail: err }));
@@ -186,20 +150,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [db]);
 
   const handleRestore = () => {
-    restoreFromPrevAsync().then((ok) => {
-      if (ok) {
-        window.location.reload();
-      } else {
-        alert("No previous healthy snapshot found to restore.");
-      }
-    });
+    commandHandlers.restorePrevious();
   };
 
   const handleHardReset = () => {
-    if (confirm("Are you absolutely sure? This will wipe all data and reset the application.")) {
-      localStorage.clear();
-      window.location.reload();
-    }
+    commandHandlers.hardReset();
   };
 
   if (isMigrationRequired) {

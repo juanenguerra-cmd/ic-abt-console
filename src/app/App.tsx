@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNaviga
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
 import { RoleProvider, useRole } from "../context/RoleContext";
 import { RoleGuard, NotAuthorisedPage } from "./guards/RoleGuard";
-import { LS_LAST_ACTIVE_TS, IDLE_THRESHOLD_MS, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ResidentBoard } from "../features/ResidentBoard";
 import { OutbreakManager } from "../features/Outbreaks";
@@ -150,6 +149,10 @@ const SidebarSection = ({ title, children }: { title: string, children: React.Re
   </div>
 );
 
+import { sessionService } from "../services/sessionService";
+import { alertService } from "../services/alertService";
+import { facilityService } from "../services/facilityService";
+
 const AppShell = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -165,59 +168,25 @@ const AppShell = () => {
   const [isLocked, setIsLocked] = React.useState(true);
 
   React.useEffect(() => {
-    const lastBackupTimestamp = localStorage.getItem(LS_LAST_BACKUP_TS);
-    if (lastBackupTimestamp) {
-      const lastBackupDate = new Date(parseInt(lastBackupTimestamp, 10));
-      const oneDayAgo = new Date();
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-      if (lastBackupDate < oneDayAgo) {
-        setShowBackupBanner(true);
-      }
-      // Format a human-readable label for the header badge
-      const diffMs = Date.now() - lastBackupDate.getTime();
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      if (diffHours < 24) {
-        setLastBackupLabel(`Backup: ${diffHours}h ago`);
-      } else {
-        const diffDays = Math.floor(diffHours / 24);
-        setLastBackupLabel(`Backup: ${diffDays}d ago`);
-      }
-    } else {
-      // If no backup has ever been made, show the banner
-      setShowBackupBanner(true);
-      setLastBackupLabel('No backup');
-    }
+    const status = alertService.getBackupStatus();
+    setShowBackupBanner(status.needsBackup);
+    setLastBackupLabel(status.label);
   }, []);
 
   // G6: Idle PIN lock — re-engage lock screen on route change when user has been idle
   React.useEffect(() => {
     if (isLocked) return;
-    const lastActiveStr = localStorage.getItem(LS_LAST_ACTIVE_TS);
-    if (lastActiveStr) {
-      const lastActiveMs = parseInt(lastActiveStr, 10);
-      if (!isNaN(lastActiveMs)) {
-        const elapsed = Date.now() - lastActiveMs;
-        if (elapsed > IDLE_THRESHOLD_MS) {
-          setIsLocked(true);
-          return;
-        }
-      }
+    if (sessionService.isIdle()) {
+      setIsLocked(true);
+      return;
     }
     // Reset the activity timestamp on each route navigation
-    localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
+    sessionService.updateActivity();
   }, [location, isLocked]);
 
   // G6: Track user activity (clicks/keystrokes) to reset the idle timer
   React.useEffect(() => {
-    const updateActivity = () => {
-      localStorage.setItem(LS_LAST_ACTIVE_TS, Date.now().toString());
-    };
-    window.addEventListener("click", updateActivity, { passive: true });
-    window.addEventListener("keydown", updateActivity, { passive: true });
-    return () => {
-      window.removeEventListener("click", updateActivity);
-      window.removeEventListener("keydown", updateActivity);
-    };
+    return sessionService.setupActivityTracking();
   }, []);
 
   React.useEffect(() => {
@@ -231,9 +200,9 @@ const AppShell = () => {
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [isFacilitySwitcherOpen]);
 
-  const facilities = Object.values(db?.data?.facilities?.byId || {}) as any[];
-  const activeFacility = db?.data?.facilities?.byId?.[activeFacilityId];
-  const quarantineCount = (Object.values(store?.quarantine || {}) as any[]).filter((q: any) => !q.resolvedToMrn).length;
+  const facilities = facilityService.getFacilities(db);
+  const activeFacility = facilityService.getActiveFacility(db, activeFacilityId);
+  const quarantineCount = facilityService.getQuarantineCount(store);
 
   if (isLocked) {
     return (

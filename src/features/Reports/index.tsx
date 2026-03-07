@@ -13,6 +13,7 @@ import { exportPDF } from '../../utils/pdfExport';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { LineListExportButton } from '../../components/LineListExportButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
+import { ReportViewer } from './ReportViewer';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import {
@@ -110,6 +111,12 @@ const ReportsConsole: React.FC = () => {
             Symptom Watch
           </button>
           <button
+            data-testid="clinical-tab-button"
+            onClick={() => handleTabChange('clinical')}
+            className={`${activeTab === 'clinical' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Clinical Reports
+          </button>
+          <button
             data-testid="vax-coverage-tab-button"
             onClick={() => handleTabChange('vaxcoverage')}
             className={`${activeTab === 'vaxcoverage' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
@@ -133,6 +140,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'qapi' && <QapiRollup />}
         {activeTab === 'ondemand' && <OnDemandReport />}
         {activeTab === 'symptomwatch' && <SymptomWatchReport />}
+        {activeTab === 'clinical' && <ClinicalReports />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
         {activeTab === 'vaxreoffer' && <VaxReofferList />}
       </div>
@@ -140,112 +148,54 @@ const ReportsConsole: React.FC = () => {
   );
 };
 
-const CombinedLineList: React.FC = () => {
-  const { store } = useFacilityData();
-  
-  const residentMap = useMemo(() => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active');
-    const relevantAbts = (Object.values(store.abts) as ABTCourse[]).filter(abt => {
-      if (abt.status === 'active') return true;
-      if (abt.status === 'completed' && abt.endDate && new Date(abt.endDate) >= sevenDaysAgo) return true;
-      return false;
-    });
-
-    const map = new Map<string, {
-      res: any;
-      infections: IPEvent[];
-      abts: ABTCourse[];
-    }>();
-
-    const getRes = (ref: any) => ref.kind === 'mrn' ? store.residents[ref.id] : store.quarantine[ref.id];
-
-    activeInfections.forEach(ip => {
-      const res = getRes(ip.residentRef);
-      if (!res) return;
-      const key = (res as any).mrn || (res as any).tempId;
-      if (!map.has(key)) {
-        map.set(key, { res, infections: [], abts: [] });
-      }
-      map.get(key)!.infections.push(ip);
-    });
-
-    relevantAbts.forEach(abt => {
-      const res = getRes(abt.residentRef);
-      if (!res) return;
-      const key = (res as any).mrn || (res as any).tempId;
-      if (!map.has(key)) {
-        map.set(key, { res, infections: [], abts: [] });
-      }
-      map.get(key)!.abts.push(abt);
-    });
-
-    return Array.from(map.values());
-  }, [store]);
-
+const ClinicalReports: React.FC = () => {
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="px-4 py-5 sm:px-6 bg-indigo-50 border-b border-indigo-200">
-        <h3 className="text-lg leading-6 font-bold text-indigo-900">Combined Line List</h3>
-        <p className="text-xs text-indigo-700 mt-1">De-duplicated by resident (Active IP + Recent ABT)</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit/Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Infection(s)</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">ABT(s)</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {residentMap.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No active or recent events</td></tr>
-            )}
-            {residentMap.map(({ res, infections, abts }) => (
-              <tr key={(res as any).mrn || (res as any).tempId}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{res.displayName}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any).mrn || (res as any).tempId}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any).currentUnit || (res as any).unitSnapshot} / {(res as any).currentRoom || (res as any).roomSnapshot}</td>
-                <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.infectionCategory).join(', ')}</td>
-                <td className="px-4 py-2 text-neutral-500">{abts.map(a => {
-                  const days = getAbtDays(a.startDate, a.endDate);
-                  return days ? `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : a.medication;
-                }).join(', ')}</td>
-                <td className="px-4 py-2 text-neutral-500">{infections.map(i => i.organism).join(', ')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-6">
+      <ReportViewer 
+        reportId="mdro-tracking" 
+        headerColorClass="bg-purple-50" 
+        textColorClass="text-purple-900" 
+      />
+      <ReportViewer 
+        reportId="device-associated" 
+        headerColorClass="bg-blue-50" 
+        textColorClass="text-blue-900" 
+      />
+      <ReportViewer 
+        reportId="infection-types" 
+        headerColorClass="bg-emerald-50" 
+        textColorClass="text-emerald-900" 
+      />
+      <ReportViewer 
+        reportId="top-antibiotics" 
+        headerColorClass="bg-amber-50" 
+        textColorClass="text-amber-900" 
+      />
     </div>
+  );
+};
+
+const CombinedLineList: React.FC = () => {
+  return (
+    <ReportViewer 
+      reportId="combined-line-list" 
+      headerColorClass="bg-indigo-50" 
+      textColorClass="text-indigo-900" 
+    />
   );
 };
 
 const SurveyPacketsReport: React.FC = () => {
   const { store } = useFacilityData();
 
-  const activePrecautions = useMemo(() =>
-    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType)
-      .map(ip => {
-        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
-        return { ip, res };
-      }),
-    [store.infections, store.residents, store.quarantine]
+  const activePrecautionsCount = useMemo(() =>
+    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType).length,
+    [store.infections]
   );
 
-  const activeAbts = useMemo(() =>
-    getActiveABT(Object.values(store.abts) as ABTCourse[])
-      .map(a => {
-        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
-        return { abt: a, res };
-      }),
-    [store.abts, store.residents, store.quarantine]
+  const activeAbtsCount = useMemo(() =>
+    getActiveABT(Object.values(store.abts) as ABTCourse[]).length,
+    [store.abts]
   );
 
   return (
@@ -266,40 +216,46 @@ const SurveyPacketsReport: React.FC = () => {
                   orientation: 'landscape',
                   template: 'LANDSCAPE_TEMPLATE_V1',
                   subtitleLines: [
-                    `Precautions: ${activePrecautions.length}`,
-                    `Active ABT: ${activeAbts.length}`,
+                    `Precautions: ${activePrecautionsCount}`,
+                    `Active ABT: ${activeAbtsCount}`,
                   ],
                   sections: [
                     {
                       type: 'table',
                       columns: ['Type', 'Resident', 'MRN', 'Unit', 'Room', 'Syndrome/Category', 'Isolation Type', 'Organism', 'Onset/Start Date', 'Status', 'Notes'],
                       rows: [
-                        ...activePrecautions.map(({ ip, res }) => [
-                          'IP Event',
-                          residentLabel(res),
-                          (res as any)?.mrn || '',
-                          ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-                          ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
-                          ip.infectionCategory || '',
-                          ip.isolationType || '',
-                          ip.organism || '',
-                          ip.onsetDate || ip.createdAt?.split('T')[0] || '',
-                          ip.status,
-                          ip.notes || '',
-                        ]),
-                        ...activeAbts.map(({ abt, res }) => [
-                          'ABT Course',
-                          residentLabel(res),
-                          (res as any)?.mrn || '',
-                          abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
-                          abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
-                          abt.syndromeCategory || abt.indication || '',
-                          '',
-                          abt.organismIdentified || '',
-                          abt.startDate || '',
-                          abt.status,
-                          abt.notes || '',
-                        ]),
+                        ...(Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType).map(ip => {
+                          const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+                          return [
+                            'IP Event',
+                            residentLabel(res),
+                            (res as any)?.mrn || '',
+                            ip.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                            ip.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                            ip.infectionCategory || '',
+                            ip.isolationType || '',
+                            ip.organism || '',
+                            ip.onsetDate || ip.createdAt?.split('T')[0] || '',
+                            ip.status,
+                            ip.notes || '',
+                          ];
+                        }),
+                        ...getActiveABT(Object.values(store.abts) as ABTCourse[]).map(abt => {
+                          const res = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
+                          return [
+                            'ABT Course',
+                            residentLabel(res),
+                            (res as any)?.mrn || '',
+                            abt.locationSnapshot?.unit || (res as any)?.currentUnit || '',
+                            abt.locationSnapshot?.room || (res as any)?.currentRoom || '',
+                            abt.syndromeCategory || abt.indication || '',
+                            '',
+                            abt.organismIdentified || '',
+                            abt.startDate || '',
+                            abt.status,
+                            abt.notes || '',
+                          ];
+                        }),
                       ],
                     },
                   ],
@@ -313,81 +269,17 @@ const SurveyPacketsReport: React.FC = () => {
       <CombinedLineList />
 
       <div className="space-y-6">
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
-          <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List</h3>
-          <p className="text-xs text-red-700 mt-1">Survey-Ready: Isolation Roster</p>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Isolation Type</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {activePrecautions.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-400">No active precautions</td></tr>
-            )}
-            {activePrecautions.map(({ ip, res }) => (
-              <tr key={ip.id}>
-                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{ip.infectionCategory || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{ip.isolationType || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{ip.organism || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ReportViewer 
+          reportId="active-precautions" 
+          headerColorClass="bg-red-50" 
+          textColorClass="text-red-900" 
+        />
+        <ReportViewer 
+          reportId="active-abts" 
+          headerColorClass="bg-amber-50" 
+          textColorClass="text-amber-900" 
+        />
       </div>
-
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
-          <h3 className="text-lg leading-6 font-bold text-amber-900">Active Antibiotic Courses</h3>
-          <p className="text-xs text-amber-700 mt-1">Survey-Ready: ABT Utilization Roster</p>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-neutral-500 uppercase">Culture</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {activeAbts.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-6 text-center text-sm text-neutral-400">No active antibiotic courses</td></tr>
-            )}
-            {activeAbts.map(({ abt, res }) => (
-              <tr key={abt.id}>
-                <td className="px-4 py-3 text-sm font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} / {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">
-                  {(() => {
-                    const days = getAbtDays(abt.startDate, abt.endDate);
-                    return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
-                  })()}
-                </td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{abt.indication || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{abt.startDate || '—'}</td>
-                <td className="px-4 py-3 text-sm text-neutral-500">{abt.cultureCollected ? `Yes${abt.cultureCollectionDate ? ' (' + abt.cultureCollectionDate + ')' : ''}` : 'No'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
     </div>
   );
 };
@@ -398,39 +290,22 @@ const DailyReport: React.FC = () => {
   const reportDateObj = useMemo(() => new Date(reportDate + 'T00:00:00'), [reportDate]);
   const threeDaysBeforeReport = useMemo(() => { const d = new Date(reportDateObj); d.setDate(d.getDate() - 3); return d; }, [reportDateObj]);
 
-  const activePrecautions = useMemo(() =>
-    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType && new Date(ip.createdAt) <= reportDateObj)
-      .map(ip => {
-        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
-        return { ip, res };
-      })
-      .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
-    [store.infections, store.residents, store.quarantine, reportDateObj]
+  const activePrecautionsCount = useMemo(() =>
+    (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType && new Date(ip.createdAt) <= reportDateObj).length,
+    [store.infections, reportDateObj]
   );
 
-  const activeAbts = useMemo(() =>
+  const activeAbtsCount = useMemo(() =>
     getActiveABT(Object.values(store.abts) as ABTCourse[])
-      .filter(a => (!a.startDate || new Date(a.startDate) <= reportDateObj))
-      .map(a => {
-        const res = a.residentRef.kind === 'mrn' ? store.residents[a.residentRef.id] : store.quarantine[a.residentRef.id];
-        return { abt: a, res };
-      })
-      .sort((a, b) => ((a.res as any)?.currentUnit || '').localeCompare((b.res as any)?.currentUnit || '')),
-    [store.abts, store.residents, store.quarantine, reportDateObj]
+      .filter(a => (!a.startDate || new Date(a.startDate) <= reportDateObj)).length,
+    [store.abts, reportDateObj]
   );
 
-  const recentAdmissions = useMemo(() =>
+  const recentAdmissionsCount = useMemo(() =>
     (Object.values(store.residents) as Resident[])
       .filter(r => !r.isHistorical && !r.backOfficeOnly)
-      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysBeforeReport && new Date(r.admissionDate) <= reportDateObj)
-      .map((r: Resident) => {
-        const hasScreening = (Object.values(store.notes) as ResidentNote[]).some(n =>
-          n.residentRef.kind === 'mrn' && n.residentRef.id === r.mrn && n.title?.includes('Admission Screening')
-        );
-        return { res: r, hasScreening };
-      })
-      .sort((a, b) => (a.res.admissionDate || '').localeCompare(b.res.admissionDate || '')),
-    [store.residents, store.notes, threeDaysBeforeReport, reportDateObj]
+      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysBeforeReport && new Date(r.admissionDate) <= reportDateObj).length,
+    [store.residents, threeDaysBeforeReport, reportDateObj]
   );
 
   return (
@@ -448,18 +323,49 @@ const DailyReport: React.FC = () => {
                 template: 'LANDSCAPE_TEMPLATE_V1',
                 subtitleLines: [
                   `Date: ${reportDate}`,
-                  `Precautions: ${activePrecautions.length}`,
-                  `Active ABT: ${activeAbts.length}`,
-                  `Recent Admissions: ${recentAdmissions.length}`,
+                  `Precautions: ${activePrecautionsCount}`,
+                  `Active ABT: ${activeAbtsCount}`,
+                  `Recent Admissions: ${recentAdmissionsCount}`,
                 ],
                 sections: [
-                  { type: 'table', title: 'Active Precautions', columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], rows: activePrecautions.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.locationSnapshot?.room || (res as any)?.currentRoom || '-', ip.infectionCategory || '-', ip.isolationType || '-', ip.organism || '-']) },
-                  { type: 'table', title: 'Active ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], rows: activeAbts.map(({ abt, res }) => {
-                    const days = getAbtDays(abt.startDate, abt.endDate);
-                    const med = days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
-                    return [residentLabel(res), (res as any)?.mrn || '-', med || '-', abt.indication || '-', abt.startDate || '-', abt.status];
-                  }) },
-                  { type: 'table', title: 'Recent Admissions (Last 72h)', columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], rows: recentAdmissions.map(({ res, hasScreening }) => [res.displayName, res.mrn, res.admissionDate || '-', hasScreening ? 'Completed' : 'Missing']) },
+                  { 
+                    type: 'table', 
+                    title: 'Active Precautions', 
+                    columns: ['Resident', 'MRN', 'Unit', 'Room', 'Category', 'Isolation', 'Organism'], 
+                    rows: (Object.values(store.infections) as IPEvent[])
+                      .filter(ip => ip.status === 'active' && ip.isolationType && new Date(ip.createdAt) <= reportDateObj)
+                      .map(ip => {
+                        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+                        return [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.locationSnapshot?.room || (res as any)?.currentRoom || '-', ip.infectionCategory || '-', ip.isolationType || '-', ip.organism || '-'];
+                      })
+                  },
+                  { 
+                    type: 'table', 
+                    title: 'Active ABT Courses', 
+                    columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], 
+                    rows: getActiveABT(Object.values(store.abts) as ABTCourse[])
+                      .filter(a => (!a.startDate || new Date(a.startDate) <= reportDateObj))
+                      .map(abt => {
+                        const res = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
+                        const days = getAbtDays(abt.startDate, abt.endDate);
+                        const med = days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
+                        return [residentLabel(res), (res as any)?.mrn || '-', med || '-', abt.indication || '-', abt.startDate || '-', abt.status];
+                      }) 
+                  },
+                  { 
+                    type: 'table', 
+                    title: 'Recent Admissions (Last 72h)', 
+                    columns: ['Resident', 'MRN', 'Admission Date', 'Screening Note'], 
+                    rows: (Object.values(store.residents) as Resident[])
+                      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+                      .filter((r: Resident) => r.admissionDate && new Date(r.admissionDate) > threeDaysBeforeReport && new Date(r.admissionDate) <= reportDateObj)
+                      .map((r: Resident) => {
+                        const hasScreening = (Object.values(store.notes) as ResidentNote[]).some(n =>
+                          n.residentRef.kind === 'mrn' && n.residentRef.id === r.mrn && n.title?.includes('Admission Screening')
+                        );
+                        return [r.displayName, r.mrn, r.admissionDate || '-', hasScreening ? 'Completed' : 'Missing'];
+                      })
+                  },
                 ],
               })}
             />
@@ -477,123 +383,25 @@ const DailyReport: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
-          <h3 className="text-lg leading-6 font-bold text-red-900">Active Precautions Line List ({activePrecautions.length})</h3>
-          <p className="text-xs text-red-700 mt-1">Sortable by unit for floor nurses</p>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Organism</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">EBP</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {activePrecautions.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active precautions today</td></tr>
-            )}
-            {activePrecautions.map(({ ip, res }) => (
-              <tr key={ip.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.isolationType || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.organism || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{ip.ebp ? 'Yes' : 'No'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ReportViewer 
+          reportId="active-precautions" 
+          initialFilters={{ reportDate }} 
+          headerColorClass="bg-red-50" 
+          textColorClass="text-red-900" 
+        />
+        <ReportViewer 
+          reportId="active-abts" 
+          initialFilters={{ reportDate }} 
+          headerColorClass="bg-amber-50" 
+          textColorClass="text-amber-900" 
+        />
+        <ReportViewer 
+          reportId="recent-admissions" 
+          initialFilters={{ reportDate }} 
+          headerColorClass="bg-emerald-50" 
+          textColorClass="text-emerald-900" 
+        />
       </div>
-
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
-          <h3 className="text-lg leading-6 font-bold text-amber-900">Active Antibiotic Courses ({activeAbts.length})</h3>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Culture</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {activeAbts.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-neutral-400">No active antibiotic courses</td></tr>
-            )}
-            {activeAbts.map(({ abt, res }) => (
-              <tr key={abt.id}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">
-                  {(() => {
-                    const days = getAbtDays(abt.startDate, abt.endDate);
-                    return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
-                  })()}
-                </td>
-                <td className="px-4 py-2 text-neutral-500">{abt.startDate || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.indication || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{abt.cultureCollected ? 'Yes' : 'No'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <div className="px-4 py-5 sm:px-6 bg-emerald-50 border-b border-emerald-200">
-          <h3 className="text-lg leading-6 font-bold text-emerald-900">Admission Screening Due (&lt;72h) ({recentAdmissions.filter(r => !r.hasScreening).length})</h3>
-        </div>
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Admission Date</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Room</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Screening</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {recentAdmissions.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-neutral-400">No recent admissions in the last 72 hours</td></tr>
-            )}
-            {recentAdmissions.map(({ res, hasScreening }) => (
-              <tr key={res.mrn}>
-                <td className="px-4 py-2 font-medium text-neutral-900">{res.displayName}</td>
-                <td className="px-4 py-2 text-neutral-500">{res.mrn}</td>
-                <td className="px-4 py-2 text-neutral-500">{res.admissionDate || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{res.currentUnit || '—'}</td>
-                <td className="px-4 py-2 text-neutral-500">{res.currentRoom || '—'}</td>
-                <td className="px-4 py-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${hasScreening ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {hasScreening ? 'Done' : 'Pending'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
     </div>
   );
 };
@@ -612,307 +420,144 @@ const WeeklyReport: React.FC = () => {
   const startObj = useMemo(() => new Date(startDate + 'T00:00:00'), [startDate]);
   const endObj = useMemo(() => new Date(endDate + 'T23:59:59'), [endDate]);
 
-  const newInfections = useMemo(() =>
+  const newInfectionsCount = useMemo(() =>
     (Object.values(store.infections) as IPEvent[])
       .filter(ip => {
         const d = new Date(ip.onsetDate || ip.createdAt);
         return d >= startObj && d <= endObj;
-      })
-      .map(ip => {
-        const res = ip.residentRef.kind === 'mrn'
-          ? store.residents[ip.residentRef.id]
-          : store.quarantine[ip.residentRef.id];
-        return { ip, res };
-      })
-      .sort((a, b) =>
-        (b.ip.onsetDate || b.ip.createdAt).localeCompare(a.ip.onsetDate || a.ip.createdAt)
-      ),
-    [store.infections, store.residents, store.quarantine, startObj, endObj]
+      }).length,
+    [store.infections, startObj, endObj]
   );
 
-  const newAbts = useMemo(() =>
+  const newAbtsCount = useMemo(() =>
     (Object.values(store.abts) as ABTCourse[])
       .filter(a => {
         const d = new Date(a.startDate || a.createdAt);
         return d >= startObj && d <= endObj;
-      })
-      .map(a => {
-        const res = a.residentRef.kind === 'mrn'
-          ? store.residents[a.residentRef.id]
-          : store.quarantine[a.residentRef.id];
-        return { abt: a, res };
-      })
-      .sort((a, b) => (b.abt.startDate || '').localeCompare(a.abt.startDate || '')),
-    [store.abts, store.residents, store.quarantine, startObj, endObj]
+      }).length,
+    [store.abts, startObj, endObj]
   );
 
-  const vaxActivity = useMemo(() =>
+  const vaxActivityCount = useMemo(() =>
     (Object.values(store.vaxEvents) as VaxEvent[])
       .filter(v => {
         const d = new Date(v.administeredDate || v.dateGiven || v.createdAt);
         return d >= startObj && d <= endObj;
-      })
-      .map(v => {
-        const res = v.residentRef.kind === 'mrn'
-          ? store.residents[v.residentRef.id]
-          : store.quarantine[v.residentRef.id];
-        return { vax: v, res };
-      })
-      .sort((a, b) =>
-        (b.vax.administeredDate || b.vax.dateGiven || b.vax.createdAt)
-          .localeCompare(a.vax.administeredDate || a.vax.dateGiven || a.vax.createdAt)
-      ),
-    [store.vaxEvents, store.residents, store.quarantine, startObj, endObj]
+      }).length,
+    [store.vaxEvents, startObj, endObj]
   );
-
-  const weekStart = new Date(startDate + 'T00:00:00').toLocaleDateString();
-  const weekEnd = new Date(endDate + 'T00:00:00').toLocaleDateString();
 
 
   return (
-    <>
-      {/* Controls */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 mb-6 space-y-3">
+    <div className="space-y-6">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-3">
         <DrilldownHeader
-          title="Weekly Report (Standard of Care Report)"
-          subtitle="Weekly infections, ABT starts, and vaccination activity"
+          title="Weekly Activity Report"
+          subtitle="Summary of new clinical events and interventions"
           right={
             <ExportPdfButton
               filename="weekly-report"
               buildSpec={() => ({
-                title: `Weekly Report - ${startDate} to ${endDate}`,
+                title: `Weekly Activity Report: ${startDate} to ${endDate}`,
                 orientation: 'landscape',
                 template: 'LANDSCAPE_TEMPLATE_V1',
                 subtitleLines: [
-                  `Start: ${startDate}`,
-                  `End: ${endDate}`,
-                  `Infections: ${newInfections.length}`,
-                  `ABT: ${newAbts.length}`,
-                  `Vax: ${vaxActivity.length}`,
+                  `Period: ${startDate} to ${endDate}`,
+                  `New Infections: ${newInfectionsCount}`,
+                  `New ABT Courses: ${newAbtsCount}`,
+                  `Vaccination Activity: ${vaxActivityCount}`,
                 ],
                 sections: [
-                  { type: 'table', title: 'New Infections', columns: ['Resident', 'MRN', 'Unit', 'Category', 'Onset Date', 'Status'], rows: newInfections.map(({ ip, res }) => [residentLabel(res), (res as any)?.mrn || '-', ip.locationSnapshot?.unit || (res as any)?.currentUnit || '-', ip.infectionCategory || '-', ip.onsetDate || ip.createdAt?.split('T')[0] || '-', ip.status]) },
-                  { type: 'table', title: 'New ABT Courses', columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Syndrome', 'Start Date', 'Status'], rows: newAbts.map(({ abt, res }) => {
-                    const days = getAbtDays(abt.startDate, abt.endDate);
-                    const med = days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
-                    return [residentLabel(res), (res as any)?.mrn || '-', med || '-', abt.indication || '-', abt.syndromeCategory || '-', abt.startDate || '-', abt.status];
-                  }) },
-                  { type: 'table', title: 'Vaccination Activity', columns: ['Resident', 'MRN', 'Vaccine', 'Status', 'Date', 'Decline Reason'], rows: vaxActivity.map(({ vax, res }) => [residentLabel(res), (res as any)?.mrn || '-', vax.vaccine || '-', normalizeVaxStatusDisplay(vax.status), getVaxDate(vax), vax.declineReason || '-']) },
+                  { 
+                    type: 'table', 
+                    title: 'New Infections', 
+                    columns: ['Resident', 'MRN', 'Onset/Start', 'Category', 'Isolation', 'Status'], 
+                    rows: (Object.values(store.infections) as IPEvent[])
+                      .filter(ip => {
+                        const d = new Date(ip.onsetDate || ip.createdAt);
+                        return d >= startObj && d <= endObj;
+                      })
+                      .map(ip => {
+                        const res = ip.residentRef.kind === 'mrn' ? store.residents[ip.residentRef.id] : store.quarantine[ip.residentRef.id];
+                        return [residentLabel(res), (res as any)?.mrn || '-', ip.onsetDate || ip.createdAt.split('T')[0], ip.infectionCategory || '-', ip.isolationType || '-', ip.status];
+                      })
+                  },
+                  { 
+                    type: 'table', 
+                    title: 'New ABT Courses', 
+                    columns: ['Resident', 'MRN', 'Medication', 'Indication', 'Start Date', 'Status'], 
+                    rows: (Object.values(store.abts) as ABTCourse[])
+                      .filter(a => {
+                        const d = new Date(a.startDate || a.createdAt);
+                        return d >= startObj && d <= endObj;
+                      })
+                      .map(abt => {
+                        const res = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
+                        return [residentLabel(res), (res as any)?.mrn || '-', abt.medication, abt.indication || '-', abt.startDate || '-', abt.status];
+                      })
+                  },
+                  { 
+                    type: 'table', 
+                    title: 'Vaccination Activity', 
+                    columns: ['Resident', 'MRN', 'Vaccine', 'Date Given', 'Dose', 'Status'], 
+                    rows: (Object.values(store.vaxEvents) as VaxEvent[])
+                      .filter(v => {
+                        const d = new Date(v.administeredDate || v.dateGiven || v.createdAt);
+                        return d >= startObj && d <= endObj;
+                      })
+                      .map(v => {
+                        const res = v.residentRef.kind === 'mrn' ? store.residents[v.residentRef.id] : store.quarantine[v.residentRef.id];
+                        return [residentLabel(res), (res as any)?.mrn || '-', v.vaccine, v.administeredDate || v.dateGiven || '-', v.dose || '-', v.status];
+                      })
+                  },
                 ],
               })}
             />
           }
         />
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
-          />
-          <span className="text-indigo-500 text-sm">–</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white"
-          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-indigo-700 uppercase">From</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-indigo-700 uppercase">To</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="border border-indigo-300 rounded-md px-2 py-1 text-sm text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Screen content */}
       <div className="space-y-6">
-        {/* Summary counts */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-            <div className="text-2xl font-bold text-red-700">{newInfections.length}</div>
-            <div className="text-xs text-neutral-500 mt-1">New Infections</div>
-          </div>
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-            <div className="text-2xl font-bold text-amber-700">{newAbts.length}</div>
-            <div className="text-xs text-neutral-500 mt-1">New ABT Courses</div>
-          </div>
-          <div className="bg-white rounded-lg border border-neutral-200 p-4 text-center">
-            <div className="text-2xl font-bold text-blue-700">{vaxActivity.length}</div>
-            <div className="text-xs text-neutral-500 mt-1">Vax Events</div>
-          </div>
-        </div>
-
-        {/* New Infections Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 bg-red-50 border-b border-red-200">
-            <h3 className="text-lg leading-6 font-bold text-red-900">
-              New Infections — {weekStart} to {weekEnd} ({newInfections.length})
-            </h3>
-          </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead className="bg-neutral-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Isolation</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Onset Date</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
-              {newInfections.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-neutral-400">
-                    No new infections in this date range
-                  </td>
-                </tr>
-              )}
-              {newInfections.map(({ ip, res }) => (
-                <tr key={ip.id}>
-                  <td className="px-4 py-2 font-medium text-neutral-900">{residentLabel(res)}</td>
-                  <td className="px-4 py-2 text-neutral-500">{(res as any)?.mrn || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500">
-                    {ip.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
-                    {ip.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500">{ip.infectionCategory || '—'}</td>
-                  <td className="px-4 py-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      ip.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                    }`}>
-                      {ip.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500">{ip.isolationType || 'None'}</td>
-                  <td className="px-4 py-2 text-neutral-500">
-                    {new Date(ip.onsetDate || ip.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 bg-amber-50 border-b border-amber-200">
-            <h3 className="text-lg leading-6 font-bold text-amber-900">
-              New Antibiotic Starts — {weekStart} to {weekEnd} ({newAbts.length})
-            </h3>
-          </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead className="bg-neutral-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Resident</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">MRN</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Unit / Room</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Medication</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Indication</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Category</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Start Date</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-neutral-200">
-              {newAbts.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-6 text-center text-neutral-400">
-                    No new antibiotic courses in this date range
-                  </td>
-                </tr>
-              )}
-              {newAbts.map(({ abt, res }) => (
-                <tr key={abt.id}>
-                  <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{residentLabel(res)}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{(res as any)?.mrn || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">
-                    {abt.locationSnapshot?.unit || (res as any)?.currentUnit || '—'} /{' '}
-                    {abt.locationSnapshot?.room || (res as any)?.currentRoom || '—'}
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">
-                    {(() => {
-                      const days = getAbtDays(abt.startDate, abt.endDate);
-                      return days ? `${abt.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : abt.medication;
-                    })()}
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.indication || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.syndromeCategory || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{abt.startDate || '—'}</td>
-                  <td className="px-4 py-2 print:border print:border-black print:p-1">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      abt.status === 'active'
-                        ? 'bg-amber-100 text-amber-800'
-                        : abt.status === 'completed'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-neutral-100 text-neutral-800'
-                    } print:bg-transparent print:text-black print:p-0`}>
-                      {abt.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="print-page-break" />
-
-        <div className="bg-white shadow rounded-lg overflow-hidden print:shadow-none print:rounded-none print:border-2 print:border-black">
-          <div className="px-4 py-5 sm:px-6 bg-blue-50 border-b border-blue-200 print:bg-neutral-100 print:border-black print:py-2">
-            <h3 className="text-lg leading-6 font-bold text-blue-900 print:text-black print:text-base print:uppercase">
-              Vaccination Activity — {weekStart} to {weekEnd} ({vaxActivity.length})
-            </h3>
-          </div>
-          <table className="min-w-full divide-y divide-neutral-200 text-sm print:divide-black print:border-collapse">
-            <thead className="bg-neutral-50 print:bg-neutral-100">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Resident</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">MRN</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Vaccine</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Status</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Date Given</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-neutral-500 uppercase print:text-black print:border print:border-black print:p-1">Decline Reason</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-neutral-200 print:divide-black">
-              {vaxActivity.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-neutral-400 print:border print:border-black">
-                    No vaccination activity in this date range
-                  </td>
-                </tr>
-              )}
-              {vaxActivity.map(({ vax, res }) => (
-                <tr key={vax.id}>
-                  <td className="px-4 py-2 font-medium text-neutral-900 print:text-black print:border print:border-black print:p-1">{residentLabel(res)}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{(res as any)?.mrn || '—'}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{vax.vaccine}</td>
-                  <td className="px-4 py-2 print:border print:border-black print:p-1">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      vax.status === 'given'
-                        ? 'bg-green-100 text-green-800'
-                        : normalizeVaxStatus(vax.status) === 'declined'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-neutral-100 text-neutral-800'
-                    } print:bg-transparent print:text-black print:p-0`}>
-                      {normalizeVaxStatusDisplay(vax.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{getVaxDate(vax)}</td>
-                  <td className="px-4 py-2 text-neutral-500 print:text-black print:border print:border-black print:p-1">{vax.declineReason || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <footer className="mt-auto pt-12 hidden print:block">
-          <div className="grid grid-cols-2 gap-x-12 gap-y-4 text-sm">
-            <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Prepared by:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold">Title:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold">Signature:</label><span className="border-b border-black flex-1"></span></div>
-            <div className="flex items-end gap-2"><label className="font-bold whitespace-nowrap">Date/Time:</label><span className="border-b border-black flex-1"></span></div>
-          </div>
-        </footer>
+        <ReportViewer 
+          reportId="new-infections" 
+          initialFilters={{ startDate, endDate }} 
+          headerColorClass="bg-red-50" 
+          textColorClass="text-red-900" 
+        />
+        <ReportViewer 
+          reportId="new-abts" 
+          initialFilters={{ startDate, endDate }} 
+          headerColorClass="bg-amber-50" 
+          textColorClass="text-amber-900" 
+        />
+        <ReportViewer 
+          reportId="vax-activity" 
+          initialFilters={{ startDate, endDate }} 
+          headerColorClass="bg-blue-50" 
+          textColorClass="text-blue-900" 
+        />
       </div>
-    </>
+    </div>
   );
 };
 const OnDemandReport: React.FC = () => {

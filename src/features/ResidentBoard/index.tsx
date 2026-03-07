@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
 import { AbtCourseModal } from "./AbtCourseModal";
@@ -97,6 +98,12 @@ export const ResidentBoard: React.FC = () => {
   const [view, setView] = useState<'board' | 'report' | 'quarantine'>('board');
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [expandedSnapshots, setExpandedSnapshots] = useState<Record<string, boolean>>({});
+
+  const toggleSnapshot = (mrn: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedSnapshots(prev => ({ ...prev, [mrn]: !prev[mrn] }));
+  };
 
   const [linkingQuarantineId, setLinkingQuarantineId] = useState<string | null>(null);
 
@@ -656,6 +663,13 @@ export const ResidentBoard: React.FC = () => {
                           </h4>
                           <div className="flex items-center gap-1">
                             <button
+                              onClick={(e) => toggleSnapshot(resident.mrn, e)}
+                              className={`p-1 rounded transition-colors ${expandedSnapshots[resident.mrn] ? 'bg-indigo-100 text-indigo-700' : 'text-neutral-400 hover:bg-neutral-100'}`}
+                              title="Toggle Quick Snapshot"
+                            >
+                              {expandedSnapshots[resident.mrn] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedResidentId(resident.mrn);
@@ -702,6 +716,13 @@ export const ResidentBoard: React.FC = () => {
                           <span className="text-xs text-neutral-500 font-mono">{resident.mrn}</span>
                           <span className="text-xs text-neutral-500">{getAge(resident.dob)} yrs</span>
                         </div>
+
+                        {expandedSnapshots[resident.mrn] && (
+                          <div className="mb-3" onClick={e => e.stopPropagation()}>
+                            <ResidentClinicalSnapshot residentId={resident.mrn} compact />
+                          </div>
+                        )}
+
                         {operationalIndicators.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mb-2">
                             {operationalIndicators.map((indicator, idx) => (
