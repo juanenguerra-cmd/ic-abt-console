@@ -62,15 +62,107 @@ function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
   };
 }
 
+const DICT_KEYS = new Set([
+  "currentUnit",
+  "currentRoom",
+  "lastKnownUnit",
+  "lastKnownRoom",
+  "unit",
+  "room",
+  "medication",
+  "organismIdentified",
+  "organism",
+  "vaccine",
+  "category",
+  "status",
+  "payor",
+  "attendingMD",
+  "primaryDiagnosis",
+  "infectionCategory",
+  "syndromeCategory",
+  "type",
+  "role",
+  "department",
+  "gender",
+  "sex"
+]);
+
+export function packV3(db: UnifiedDB): Record<string, unknown> {
+  const dict: string[] = [];
+  const dictMap = new Map<string, number>();
+
+  function getDictId(val: string): number {
+    let id = dictMap.get(val);
+    if (id === undefined) {
+      id = dict.length;
+      dict.push(val);
+      dictMap.set(val, id);
+    }
+    return id;
+  }
+
+  function walk(obj: any): any {
+    if (obj === null || typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) {
+      return obj.map(walk);
+    }
+    const copy: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val === "string" && DICT_KEYS.has(key)) {
+        copy[key] = getDictId(val);
+      } else {
+        copy[key] = walk(val);
+      }
+    }
+    return copy;
+  }
+
+  const packedData = walk(db.data);
+  
+  return {
+    ...db,
+    schemaVersion: "UNIFIED_DB_V3",
+    data: packedData,
+    dictionary: dict
+  };
+}
+
+function unpackV3(raw: Record<string, unknown>): Record<string, unknown> {
+  const dict = (raw.dictionary as string[]) || [];
+
+  function walk(obj: any): any {
+    if (obj === null || typeof obj !== "object") return obj;
+    if (Array.isArray(obj)) {
+      return obj.map(walk);
+    }
+    const copy: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (typeof val === "number" && DICT_KEYS.has(key)) {
+        copy[key] = dict[val] ?? String(val);
+      } else {
+        copy[key] = walk(val);
+      }
+    }
+    return copy;
+  }
+
+  const unpackedData = walk(raw.data);
+
+  const result = {
+    ...raw,
+    schemaVersion: "UNIFIED_DB_V3",
+    data: unpackedData
+  };
+  delete (result as any).dictionary;
+  return result;
+}
+
 /**
- * Upgrade a raw (potentially old-schema) DB object to the current UNIFIED_DB_V2
- * shape. Any unknown version that is NOT already V2 is treated as a pre-V2
- * ("V1 or unversioned") record and receives the V1→V2 field back-fill.
- *
- * When a future V3 is introduced:
- *   1. Bump schemaVersion to "UNIFIED_DB_V3" in domain/models.ts
- *   2. Add a migrateV2toV3(raw) helper below
- *   3. Chain it here: raw = migrateV2toV3(raw)
+ * Upgrade a raw (potentially old-schema) DB object to the current UNIFIED_DB_V3
+ * shape. Any unknown version that is NOT already V3 is treated as a pre-V2
+ * ("V1 or unversioned") record and receives the V1→V2 field back-fill, then V2→V3.
  *
  * @throws SchemaMigrationError if the version is unrecognisable and cannot be
  *   safely migrated.
@@ -78,19 +170,28 @@ function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
 export function runMigrations(raw: Record<string, unknown>): UnifiedDB {
   if (!raw || typeof raw !== "object") return createEmptyDB();
 
-  const version = typeof raw.schemaVersion === "string" ? raw.schemaVersion : "unknown";
-
-  // Already current — return as-is.
-  if (version === "UNIFIED_DB_V2") return raw as unknown as UnifiedDB;
+  let version = typeof raw.schemaVersion === "string" ? raw.schemaVersion : "unknown";
 
   // Pre-V2 (original launch, unversioned, or "UNIFIED_DB_V1").
   if (version === "UNIFIED_DB_V1" || version === "unknown") {
     raw = migratePreV2toV2(raw);
+    version = "UNIFIED_DB_V2";
   }
 
-  // After all migrations the version must be V2.
+  if (version === "UNIFIED_DB_V2") {
+    raw.schemaVersion = "UNIFIED_DB_V3";
+    version = "UNIFIED_DB_V3";
+  }
+
+  if (version === "UNIFIED_DB_V3") {
+    if ('dictionary' in raw) {
+      raw = unpackV3(raw);
+    }
+  }
+
+  // After all migrations the version must be V3.
   const finalVersion = typeof raw.schemaVersion === "string" ? raw.schemaVersion : "unknown";
-  if (finalVersion !== "UNIFIED_DB_V2") {
+  if (finalVersion !== "UNIFIED_DB_V3") {
     throw new SchemaMigrationError(finalVersion);
   }
 
@@ -254,7 +355,7 @@ export function createEmptyDB(): UnifiedDB {
 
   return {
     schemaName: "UNIFIED_DB",
-    schemaVersion: "UNIFIED_DB_V2",
+    schemaVersion: "UNIFIED_DB_V3",
     createdAt: now,
     updatedAt: now,
     integrity: {},
@@ -305,7 +406,8 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
       const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
       const migrated = runMigrations(parsed);
       // Persist to IDB so future loads come from IDB.
-      await idbSet(DB_KEY_MAIN, JSON.stringify(migrated)).catch((err) =>
+      const packed = packV3(migrated);
+      await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
         console.warn("IDB migration write failed:", err)
       );
       return migrated;
@@ -333,7 +435,8 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
   validateCommitGate(db);
 
   db.updatedAt = new Date().toISOString();
-  const serialized = JSON.stringify(db);
+  const packed = packV3(db);
+  const serialized = JSON.stringify(packed);
   const size = serialized.length;
 
   // Warn when exceeding 60 MB (practical IDB comfort zone for this app).
@@ -386,19 +489,23 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
     lastGoodWriteAt: db.updatedAt,
     lastGoodBytes: size,
   };
+  
+  // Need to update packed object with integrity as well
+  packed.integrity = db.integrity;
+  const finalSerialized = JSON.stringify(packed);
 
-  await idbSet(DB_KEY_MAIN, JSON.stringify(db));
+  await idbSet(DB_KEY_MAIN, finalSerialized);
   await idbRemove(uniqueTmpKey).catch(() => {});
 
   // --- Synchronous localStorage backup (best-effort, may fail at 5 MB) ---
   try {
-    const lsSize = serialized.length;
+    const lsSize = finalSerialized.length;
     const usageRatio = lsSize / MAX_STORAGE_CHARS;
     if (usageRatio < BLOCK_THRESHOLD) {
       if (usageRatio >= WARN_THRESHOLD) {
         console.warn(`localStorage backup: at ${(usageRatio * 100).toFixed(1)}% of 5 MB limit. Primary store is IDB.`);
       }
-      localStorage.setItem(DB_KEY_MAIN, JSON.stringify(db));
+      localStorage.setItem(DB_KEY_MAIN, finalSerialized);
     }
   } catch {
     // localStorage backup failure is non-fatal — IDB is the source of truth.
@@ -443,7 +550,8 @@ export function saveDB(db: UnifiedDB): void {
   validateCommitGate(db);
 
   db.updatedAt = new Date().toISOString();
-  const serialized = JSON.stringify(db);
+  const packed = packV3(db);
+  const serialized = JSON.stringify(packed);
   const size = serialized.length;
 
   const usageRatio = size / MAX_STORAGE_CHARS;
@@ -492,7 +600,8 @@ export function saveDB(db: UnifiedDB): void {
     lastGoodBytes: size,
   };
 
-  const finalSerialized = JSON.stringify(db);
+  packed.integrity = db.integrity;
+  const finalSerialized = JSON.stringify(packed);
 
   try {
     localStorage.setItem(DB_KEY_MAIN, finalSerialized);

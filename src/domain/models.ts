@@ -630,7 +630,7 @@ export interface FacilityStore {
 
 export interface UnifiedDB {
   schemaName: "UNIFIED_DB";
-  schemaVersion: "UNIFIED_DB_V2";
+  schemaVersion: "UNIFIED_DB_V3";
   createdAt: ISO;
   updatedAt: ISO;
   integrity: { lastGoodWriteAt?: ISO; lastGoodBytes?: number };

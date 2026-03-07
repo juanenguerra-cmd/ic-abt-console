@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
 import { UserRole } from "../../types/roles";
-import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations } from "../../storage/engine";
+import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations, packV3 } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
@@ -125,7 +125,8 @@ export const SettingsConsole: React.FC = () => {
 
   useEffect(() => {
     if (db) {
-      const serialized = JSON.stringify(db);
+      const packed = packV3(db);
+      const serialized = JSON.stringify(packed);
       setDbSize(serialized.length);
       setLastSaved(db.updatedAt);
     }
@@ -135,8 +136,9 @@ export const SettingsConsole: React.FC = () => {
   const usageColor = usagePercent > 80 ? "bg-red-500" : usagePercent > 50 ? "bg-amber-500" : "bg-emerald-500";
 
   const handleExport = () => {
+    const packed = packV3(db);
     const backupData = {
-      ...db,
+      ...packed,
       backupMetadata: {
         exportedAt: new Date().toISOString(),
         exportedBy: auditorName || "Unknown User",

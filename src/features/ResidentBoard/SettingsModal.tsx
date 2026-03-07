@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2 } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
+import { runMigrations, packV3 } from "../../storage/engine";
 
 interface Props {
   onClose: () => void;
@@ -65,7 +66,8 @@ export const SettingsModal: React.FC<Props> = ({ onClose }) => {
   };
 
   const handleExport = () => {
-    const dataStr = JSON.stringify(db, null, 2);
+    const packed = packV3(db);
+    const dataStr = JSON.stringify(packed, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -84,7 +86,8 @@ export const SettingsModal: React.FC<Props> = ({ onClose }) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
+        const rawParsed = JSON.parse(event.target?.result as string) as Record<string, unknown>;
+        const json = runMigrations(rawParsed);
         if (json && json.data && json.data.facilities) {
           if (confirm('Are you sure you want to import this database? This will overwrite all current data.')) {
             setDB(json);
