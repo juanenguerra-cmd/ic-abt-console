@@ -1,12 +1,13 @@
 # IC Nurse Console — Infection Control & Antibiotic Stewardship Console
 
-A comprehensive, browser-based management console for Infection Control (IC) nurses in long-term care (LTC) facilities. It provides tools for resident and staff tracking, outbreak management, audit documentation, AI-powered note generation, and customizable reporting — all running locally with browser-native IndexedDB persistence.
+A comprehensive, browser-based management console for Infection Control (IC) nurses in long-term care (LTC) facilities. It provides tools for resident and staff tracking, outbreak management, audit documentation, AI-powered note generation, and customizable reporting. It runs locally with browser-native IndexedDB persistence and supports real-time data synchronization across multiple devices powered by Firebase.
 
 ---
 
 ## Features
 
 - **Dashboard** — At-a-glance overview of key infection control metrics
+- **Multi-Device Sync** — Real-time data synchronization across multiple devices, powered by Firebase.
 - **Resident Board** — Track residents' infection statuses and isolation precautions
 - **Staff Management** — Manage staff records and assignments
 - **Shift Log** — Per-shift notes and communication log
@@ -32,7 +33,7 @@ A comprehensive, browser-based management console for Infection Control (IC) nur
 | Animations | [Motion](https://motion.dev) |
 | Icons | [Lucide React](https://lucide.dev) |
 | AI / LLM | [Google Gemini API](https://ai.google.dev) (`@google/genai`) |
-| Persistence | IndexedDB (primary) + localStorage (fallback / migration) |
+| Persistence | IndexedDB (primary) + Firebase (for multi-device sync) |
 | Date Picker | [react-datepicker](https://reactdatepicker.com) |
 
 ---
