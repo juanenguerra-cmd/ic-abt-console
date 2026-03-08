@@ -59,8 +59,7 @@ export class StorageRepository {
   static async saveSlice(facilityId: string, slice: StorageSlice, data: any): Promise<void> {
     const user = await getCurrentUser();
     if (!user) {
-      console.warn(`[Sync] Attempted to save slice '${slice}' without an authenticated user. Skipping.`);
-      return;
+      throw new Error(`[Sync] Cannot save slice '${slice}': user is not authenticated.`);
     }
 
     // Facility-scoped Firestore path — facilityId is explicit in the hierarchy.
