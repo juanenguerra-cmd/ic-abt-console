@@ -94,10 +94,23 @@ const SyncStatusIndicator: React.FC = () => {
   const { Icon, text, className } = getIndicator();
 
   return (
-    <div className={`flex items-center gap-2 text-sm font-medium ${className}`}>
-      <Icon size={16} />
-      <span>{text}</span>
-    </div>
+    <>
+      {/* Top indicator bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 z-50 bg-transparent">
+        <div className={`h-full transition-all duration-500 ease-in-out ${
+          syncState === 'synced' ? 'w-full bg-emerald-500' :
+          syncState === 'syncing' ? 'w-2/3 bg-blue-500 animate-pulse' :
+          syncState === 'pending' ? 'w-1/3 bg-amber-500' :
+          syncState === 'local' ? 'w-full bg-blue-400' :
+          'w-full bg-red-500'
+        }`} />
+      </div>
+
+      <div className={`flex items-center gap-2 text-sm font-medium ${className}`}>
+        <Icon size={16} />
+        <span>{text}</span>
+      </div>
+    </>
   );
 };
 

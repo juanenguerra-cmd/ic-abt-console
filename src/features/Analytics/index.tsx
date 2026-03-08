@@ -26,7 +26,7 @@ const parseLocalDate = (raw: string): Date =>
   /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw);
 
 // ─── Component ────────────────────────────────────────────────────────────────
-const AnalyticsDashboard: React.FC = () => {
+export const AnalyticsDashboard: React.FC = () => {
   const { store } = useFacilityData();
 
   // ── 1. Monthly Historical Data (Last 6 Months) ─────────────────────────────
@@ -576,5 +576,3 @@ const AnalyticsDashboard: React.FC = () => {
     </div>
   );
 };
-
-export default AnalyticsDashboard;

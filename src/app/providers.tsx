@@ -1,11 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { UnifiedDB, FacilityStore } from "../domain/models";
-import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN, reconcileWithRemoteAsync } from "../storage/engine";
+import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
-import { commandHandlers, MutationMeta, SESSION_ID } from "../services/commandHandlers";
-import { onSnapshot, doc as fsDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth, db as firestoreDb } from "../services/firebase";
+import { commandHandlers, MutationMeta } from "../services/commandHandlers";
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -51,178 +48,78 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   // Multi-tab sync: detect when another tab writes to the database
   useEffect(() => {
-    // This feature is disabled in development to prevent HMR issues.
-    if (import.meta.env.PROD) {
-      const channel = new BroadcastChannel('ic_console_sync');
-      channel.onmessage = async (event) => {
-        if (event.data.type === 'DB_UPDATED') {
-          const { changedSlices, mainChanged } = event.data;
-          
-          try {
-            if (!mainChanged && changedSlices && changedSlices.length > 0) {
-              // Only specific slices changed, we can load just those slices and merge them
-              // into our current state, avoiding a full database reload.
-              const { StorageRepository } = await import('../storage/repository');
-              
-              // We need activeFacilityId, but we don't want to add it to deps.
-              // We can get it from the current state using setDb.
-              let currentFacilityId: string | null = null;
-              setDb(currentDb => {
-                if (currentDb) {
-                  currentFacilityId = currentDb.data.facilities.activeFacilityId;
-                }
-                return currentDb;
-              });
-              
-              if (!currentFacilityId) return;
-              
-              // Async load the changed slices
-              const newSlices: any = {};
-              for (const slice of changedSlices) {
-                const data = await StorageRepository.loadSlice(currentFacilityId, slice);
-                if (data) newSlices[slice] = data;
+    const channel = new BroadcastChannel('ic_console_sync');
+    channel.onmessage = async (event) => {
+      if (event.data.type === 'DB_UPDATED') {
+        const { changedSlices, mainChanged } = event.data;
+        
+        try {
+          if (!mainChanged && changedSlices && changedSlices.length > 0) {
+            // Only specific slices changed, we can load just those slices and merge them
+            // into our current state, avoiding a full database reload.
+            const { StorageRepository } = await import('../storage/repository');
+            
+            // We need activeFacilityId, but we don't want to add it to deps.
+            // We can get it from the current state using setDb.
+            let currentFacilityId: string | null = null;
+            setDb(currentDb => {
+              if (currentDb) {
+                currentFacilityId = currentDb.data.facilities.activeFacilityId;
               }
-              
-              // Apply the loaded slices to the state
-              setDb(currentDb => {
-                if (!currentDb) return currentDb;
-                const nextDb = JSON.parse(JSON.stringify(currentDb));
-                const store = nextDb.data.facilityData[currentFacilityId!];
-                if (store) {
-                  for (const slice of changedSlices) {
-                    if (newSlices[slice]) {
-                      store[slice] = newSlices[slice];
-                    }
+              return currentDb;
+            });
+            
+            if (!currentFacilityId) return;
+            
+            // Async load the changed slices
+            const newSlices: any = {};
+            for (const slice of changedSlices) {
+              const data = await StorageRepository.loadSlice(currentFacilityId, slice);
+              if (data) newSlices[slice] = data;
+            }
+            
+            // Apply the loaded slices to the state
+            setDb(currentDb => {
+              if (!currentDb) return currentDb;
+              const nextDb = JSON.parse(JSON.stringify(currentDb));
+              const store = nextDb.data.facilityData[currentFacilityId!];
+              if (store) {
+                for (const slice of changedSlices) {
+                  if (newSlices[slice]) {
+                    store[slice] = newSlices[slice];
                   }
                 }
-                return nextDb;
-              });
-              
-            } else {
-              // Full reload required
-              const loadedDb = await loadDBAsync();
-              setDb(loadedDb);
-              setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
-            }
-          } catch (err) {
-            console.error("Failed to sync DB from other tab", err);
-          }
-        }
-      };
-
-      const handleStorageChange = (e: StorageEvent) => {
-        if ((e.key === DB_KEY_MAIN || e.key === `${DB_KEY_MAIN}_signal`) && e.newValue !== null) {
-          loadDBAsync().then((loadedDb) => {
+              }
+              return nextDb;
+            });
+            
+          } else {
+            // Full reload required
+            const loadedDb = await loadDBAsync();
             setDb(loadedDb);
             setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
-          }).catch(err => console.error("Failed to sync DB from other tab", err));
+          }
+        } catch (err) {
+          console.error("Failed to sync DB from other tab", err);
         }
-      };
-      window.addEventListener("storage", handleStorageChange);
-      
-      return () => {
-        channel.close();
-        window.removeEventListener("storage", handleStorageChange);
-      };
-    }
-  }, []);
-
-  // Remote reconciliation: apply a newer DB delivered by the background sync.
-  useEffect(() => {
-    const handleRemoteReconcile = (event: Event) => {
-      const remoteDb = (event as CustomEvent<UnifiedDB>).detail;
-      if (!remoteDb) return;
-      console.log("[Providers] Applying remote DB from background reconciliation.");
-      setDb(remoteDb);
-      setActiveFacilityId(remoteDb.data.facilities.activeFacilityId);
-    };
-    window.addEventListener('db-reconciled-from-remote', handleRemoteReconcile);
-    return () => window.removeEventListener('db-reconciled-from-remote', handleRemoteReconcile);
-  }, []);
-
-  // Stable helper that reads the current in-memory DB via the functional-updater
-  // form of setDb (avoids stale closures) and kicks off an async reconciliation.
-  // When reconciliation finds the remote is newer it dispatches the
-  // `db-reconciled-from-remote` event handled above, which actually updates state.
-  const triggerReconciliation = useCallback((reason: string) => {
-    setDb(current => {
-      if (!current) return current;
-      console.log(`[Providers] Triggering remote reconciliation: ${reason}`);
-      reconcileWithRemoteAsync(current).catch((e) =>
-        console.warn(`[Providers] Reconciliation failed (${reason}):`, e)
-      );
-      return current;
-    });
-  }, []); // empty deps — setDb is stable; reconcileWithRemoteAsync has no captured state
-
-  // Realtime cross-device sync: subscribe to a Firestore signal document that
-  // Device A writes after each successful save.  When Device B receives the
-  // snapshot and the write originated from a different session, it triggers a
-  // reconciliation so the UI reflects the remote changes without requiring a
-  // manual page refresh, focus event, or reconnection.
-  useEffect(() => {
-    let unsubscribeSnapshot: (() => void) | null = null;
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      // Always tear down the previous listener when auth state changes.
-      if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-        unsubscribeSnapshot = null;
       }
-
-      if (!user) return;
-
-      // Listen to users/{uid}/meta/sync — written by every device on save.
-      const signalRef = fsDoc(firestoreDb, 'users', user.uid, 'meta', 'sync');
-      unsubscribeSnapshot = onSnapshot(
-        signalRef,
-        (snapshot) => {
-          // Skip writes that are still pending confirmation (i.e. our own write
-          // before Firestore has acknowledged it).
-          if (snapshot.metadata.hasPendingWrites) return;
-          if (!snapshot.exists()) return;
-
-          const data = snapshot.data();
-          // Skip signals that this tab/session wrote — no reconciliation needed.
-          if (data?.sessionId === SESSION_ID) return;
-
-          console.log('[Providers] Cross-device change detected via Firestore listener. Triggering reconciliation.');
-          triggerReconciliation('firestore-signal');
-        },
-        (err) => {
-          console.warn('[Providers] Firestore sync signal listener error:', err);
-        },
-      );
-    });
-
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
     };
-  }, [triggerReconciliation]);
 
-  // Retry outbox + reconcile on: window focus, coming back online, auth transitions.
-  useEffect(() => {
-    const handleFocus = () => triggerReconciliation('window-focus');
-    const handleOnline = () => triggerReconciliation('online');
-
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('online', handleOnline);
-
-    // Auth transition: when the user logs in during an active session, replay
-    // the outbox and reconcile so any local-only changes are pushed to remote.
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        triggerReconciliation('auth-state-change');
+    const handleStorageChange = (e: StorageEvent) => {
+      if ((e.key === DB_KEY_MAIN || e.key === `${DB_KEY_MAIN}_signal`) && e.newValue !== null) {
+        loadDBAsync().then((loadedDb) => {
+          setDb(loadedDb);
+          setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
+        }).catch(err => console.error("Failed to sync DB from other tab", err));
       }
-    });
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('online', handleOnline);
-      unsubscribeAuth();
     };
-  }, [triggerReconciliation]); // triggerReconciliation is stable (useCallback with empty deps)
+    window.addEventListener("storage", handleStorageChange);
+    
+    return () => {
+      channel.close();
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
 

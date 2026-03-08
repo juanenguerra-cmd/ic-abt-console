@@ -45,7 +45,9 @@ if (typeof (global as any).window === 'undefined') {
 
 vi.mock('../storage/engine', () => ({
   saveDBAsync: vi.fn().mockResolvedValue(undefined),
-  restoreFromPrevAsync: vi.fn().mockResolvedValue(true),
+  restoreFromPrevAsync: vi.fn().mockResolvedValue({
+    data: { facilities: { activeFacilityId: 'fac-1' }, facilityData: { 'fac-1': {} } }
+  }),
   validateCommitGate: vi.fn(),
 }));
 

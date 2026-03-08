@@ -1,3 +1,4 @@
+// IC-ABT Console — Version 1.0.0 | © 2026 Juan Enguerra
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
@@ -24,7 +25,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
-import AnalyticsPage from '../features/Analytics';
+import { AnalyticsDashboard } from '../features/Analytics';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -399,12 +400,12 @@ const AppShell = () => {
                 <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
+                <Route path="/analytics" element={<PageTransition><AnalyticsDashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
                 <Route path="/heatmap" element={<Navigate to="/floor-map" replace />} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
-                <Route path="/analytics" element={<PageTransition><AnalyticsPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ShiftLogPage /></RoleGuard></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><NoteGenerator /></RoleGuard></PageTransition>} />

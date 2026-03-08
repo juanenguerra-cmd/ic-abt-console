@@ -1,4 +1,5 @@
-import { test, expect, describe } from 'vitest';
+import test from 'node:test';
+import assert from 'node:assert/strict';
 import { computeResidentSignals } from './residentSignals';
 import { getActiveABT, getVaxDue, isActiveCensusResident } from './countCardDataHelpers';
 import { FacilityStore, Resident } from '../domain/models';
@@ -35,8 +36,8 @@ test('getActiveABT is resilient to mixed case and padded statuses', () => {
     },
   ] as any);
 
-  expect(active.length).toBe(1);
-  expect(active[0].id).toBe('a1');
+  assert.equal(active.length, 1);
+  assert.equal(active[0].id, 'a1');
 });
 
 test('getVaxDue matches due and overdue despite casing/whitespace', () => {
@@ -67,26 +68,14 @@ test('getVaxDue matches due and overdue despite casing/whitespace', () => {
     },
   ] as any);
 
-  expect(due.map(v => v.id)).toEqual(['v1', 'v2']);
+  assert.deepEqual(due.map(v => v.id), ['v1', 'v2']);
 });
 
-test('active census helper: active status resident is included', () => {
-  expect(isActiveCensusResident(makeResident({ currentUnit: 'Unit 1' }))).toBe(true);
-});
-
-test('active census helper: historical resident is excluded', () => {
-  expect(isActiveCensusResident(makeResident({ currentUnit: '', isHistorical: true }))).toBe(false);
-});
-
-test('active census helper: back-office-only resident is excluded', () => {
-  expect(isActiveCensusResident(makeResident({ currentUnit: 'Unit 2', backOfficeOnly: true }))).toBe(false);
-});
-
-test('active census helper: resident with "unassigned" unit and active status is included', () => {
-  // isActiveCensusResident checks status, isHistorical, and backOfficeOnly only.
-  // A resident with currentUnit ' unassigned ' but status 'Active' is currently
-  // included because the function does not filter by unit value.
-  expect(isActiveCensusResident(makeResident({ currentUnit: ' unassigned ' }))).toBe(true);
+test('active census helper excludes unassigned, historical, and back-office residents', () => {
+  assert.equal(isActiveCensusResident(makeResident({ currentUnit: 'Unit 1' })), true);
+  assert.equal(isActiveCensusResident(makeResident({ currentUnit: ' unassigned ' })), false);
+  assert.equal(isActiveCensusResident(makeResident({ currentUnit: '', isHistorical: true })), false);
+  assert.equal(isActiveCensusResident(makeResident({ currentUnit: 'Unit 2', backOfficeOnly: true })), false);
 });
 
 test('computeResidentSignals uses normalized ABT/VAX helper rules', () => {
@@ -132,6 +121,6 @@ test('computeResidentSignals uses normalized ABT/VAX helper rules', () => {
   } as any;
 
   const signals = computeResidentSignals('R1', store, Date.now(), { R1: { respiratory: false, gi: false } });
-  expect(signals.hasActiveAbt).toBe(true);
-  expect(signals.hasDueVax).toBe(true);
+  assert.equal(signals.hasActiveAbt, true);
+  assert.equal(signals.hasDueVax, true);
 });

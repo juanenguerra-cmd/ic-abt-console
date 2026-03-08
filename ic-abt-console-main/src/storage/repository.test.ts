@@ -46,7 +46,7 @@ vi.mock('./idb', () => ({
 import { StorageRepository, STORAGE_SLICES } from './repository';
 import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { getCurrentUser } from '../services/firebase';
-import { eventBus } from '@/src/services/eventBus';
+import { eventBus } from '../services/eventBus';
 
 // ---------------------------------------------------------------------------
 // Typed mock helpers
@@ -689,7 +689,7 @@ describe('StorageRepository.writeSyncSignal', () => {
     await StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID);
 
     const [, dataArg] = mockSetDoc.mock.calls[0];
-    expect(dataArg.lastUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect((dataArg as any).lastUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   test('does nothing when user is not authenticated', async () => {
@@ -714,6 +714,6 @@ describe('StorageRepository.writeSyncSignal', () => {
     await StorageRepository.writeSyncSignal(FACILITY_A, slices, SESSION_ID);
 
     const [, dataArg] = mockSetDoc.mock.calls[0];
-    expect(dataArg.changedSlices).toEqual(slices);
+    expect((dataArg as any).changedSlices).toEqual(slices);
   });
 });

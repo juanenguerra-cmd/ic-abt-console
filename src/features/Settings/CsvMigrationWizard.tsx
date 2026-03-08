@@ -14,8 +14,6 @@ import {
 import { AbtCsvStagingRow, evaluateAbtStagingRow, parseAbtCsvToStaging } from "../../parsers/abtCsvParser";
 import { parseRawAbtOrderListing, RawAbtStagingRow, ResolutionLevel } from "../../parsers/rawAbtOrderListingParser";
 import { parseRawVaxList, RawVaxStagingRow } from "../../parsers/rawVaxListParser";
-import { ref, uploadBytes } from "firebase/storage";
-import { storage } from "../../services/firebase";
 
 const DATASET_LABELS: Record<MigrationDatasetType, string> = {
   ABT: "ABT",
@@ -227,20 +225,6 @@ export const CsvMigrationWizard: React.FC = () => {
   };
 
   const handleFileUpload = (file: File) => {
-    // --- Upload to Firebase Storage ---
-    // Create a storage reference with a dedicated folder
-    const storageRef = ref(storage, `historical_residents_csv/${file.name}`);
-
-    // 'file' comes from the Blob or File API
-    uploadBytes(storageRef, file).then((snapshot) => {
-      console.log('Uploaded the file to Firebase Storage!', snapshot);
-      alert('File successfully uploaded to cloud storage.');
-    }).catch((error) => {
-      console.error("Upload to Firebase Storage failed", error);
-      alert(`File upload to cloud storage failed: ${error.message}`);
-    });
-    // --- End of Firebase Upload ---
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = (event.target?.result as string) || "";
