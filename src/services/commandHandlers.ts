@@ -82,10 +82,16 @@ export const commandHandlers = {
         await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
       }
     } else {
-      // Only slices changed
+      // Only slices changed — save those slices to Firestore, then update the
+      // local IDB snapshot so it stays fresh for startup reconciliation.
       if (store) {
         await StorageRepository.saveSlices(activeFacilityId, store, changedSlices);
       }
+      // Persist the updated DB to IDB (local only) so the IDB snapshot stays
+      // consistent with what is now in Firestore and timestamps reflect the
+      // latest mutation. skipRemote avoids a duplicate write to the unified
+      // remote document since slices were already pushed above.
+      await saveDBAsync(db, { skipRemote: true });
     }
 
     try {
