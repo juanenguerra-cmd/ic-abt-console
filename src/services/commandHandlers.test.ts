@@ -50,9 +50,11 @@ vi.mock('../storage/engine', () => ({
 }));
 
 const mockSaveSlices = vi.fn();
+const mockWriteSyncSignal = vi.fn().mockResolvedValue(undefined);
 vi.mock('../storage/repository', () => ({
   StorageRepository: {
     saveSlices: (...args: any[]) => mockSaveSlices(...args),
+    writeSyncSignal: (...args: any[]) => mockWriteSyncSignal(...args),
   },
   STORAGE_SLICES: [
     'residents', 'abts', 'infections', 'vaxEvents',
@@ -464,5 +466,66 @@ describe('debounced remote sync (scheduleRemoteSync)', () => {
     await vi.runAllTimersAsync();
 
     expect(mockClearPackedSyncPending).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sync signal — writeSyncSignal calls after successful saves
+// ---------------------------------------------------------------------------
+
+describe('commandHandlers.saveDatabase – writeSyncSignal (cross-device push)', () => {
+  test('writes sync signal after a successful slice-only save', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeSuccessResult(['residents']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents'], false);
+
+    expect(mockWriteSyncSignal).toHaveBeenCalledWith(
+      FACILITY_A,
+      ['residents'],
+      expect.any(String),
+    );
+  });
+
+  test('writes sync signal with succeeded slices after a successful full save', async () => {
+    const db = makeDB(FACILITY_A);
+    const allSlices = ['residents', 'abts', 'infections', 'vaxEvents',
+      'auditSessions', 'infectionControlAuditSessions', 'notifications', 'mutationLog'];
+    mockSaveSlices.mockResolvedValue(makeSuccessResult(allSlices));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, [], true);
+
+    expect(mockWriteSyncSignal).toHaveBeenCalledWith(
+      FACILITY_A,
+      expect.arrayContaining(['residents', 'abts']),
+      expect.any(String),
+    );
+  });
+
+  test('does NOT write sync signal when user is not authenticated', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+    const db = makeDB(FACILITY_A);
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents'], false);
+
+    expect(mockWriteSyncSignal).not.toHaveBeenCalled();
+  });
+
+  test('does NOT write sync signal when all slices fail on slice-only path', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeFailureResult([], ['residents']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents'], false);
+
+    expect(mockWriteSyncSignal).not.toHaveBeenCalled();
+  });
+
+  test('does NOT write sync signal when no slices succeed on main-change path', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeFailureResult([], ['residents', 'abts']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, [], true);
+
+    expect(mockWriteSyncSignal).not.toHaveBeenCalled();
   });
 });

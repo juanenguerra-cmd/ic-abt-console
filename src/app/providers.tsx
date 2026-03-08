@@ -2,9 +2,10 @@ import React, { createContext, useContext, useEffect, useState, ReactNode, useCa
 import { UnifiedDB, FacilityStore } from "../domain/models";
 import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN, reconcileWithRemoteAsync } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
-import { commandHandlers, MutationMeta } from "../services/commandHandlers";
+import { commandHandlers, MutationMeta, SESSION_ID } from "../services/commandHandlers";
+import { onSnapshot, doc as fsDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../services/firebase";
+import { auth, db as firestoreDb } from "../services/firebase";
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -139,19 +140,69 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('db-reconciled-from-remote', handleRemoteReconcile);
   }, []);
 
+  // Stable helper that reads the current in-memory DB via the functional-updater
+  // form of setDb (avoids stale closures) and kicks off an async reconciliation.
+  // When reconciliation finds the remote is newer it dispatches the
+  // `db-reconciled-from-remote` event handled above, which actually updates state.
+  const triggerReconciliation = useCallback((reason: string) => {
+    setDb(current => {
+      if (!current) return current;
+      console.log(`[Providers] Triggering remote reconciliation: ${reason}`);
+      reconcileWithRemoteAsync(current).catch((e) =>
+        console.warn(`[Providers] Reconciliation failed (${reason}):`, e)
+      );
+      return current;
+    });
+  }, []); // empty deps — setDb is stable; reconcileWithRemoteAsync has no captured state
+
+  // Realtime cross-device sync: subscribe to a Firestore signal document that
+  // Device A writes after each successful save.  When Device B receives the
+  // snapshot and the write originated from a different session, it triggers a
+  // reconciliation so the UI reflects the remote changes without requiring a
+  // manual page refresh, focus event, or reconnection.
+  useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // Always tear down the previous listener when auth state changes.
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (!user) return;
+
+      // Listen to users/{uid}/meta/sync — written by every device on save.
+      const signalRef = fsDoc(firestoreDb, 'users', user.uid, 'meta', 'sync');
+      unsubscribeSnapshot = onSnapshot(
+        signalRef,
+        (snapshot) => {
+          // Skip writes that are still pending confirmation (i.e. our own write
+          // before Firestore has acknowledged it).
+          if (snapshot.metadata.hasPendingWrites) return;
+          if (!snapshot.exists()) return;
+
+          const data = snapshot.data();
+          // Skip signals that this tab/session wrote — no reconciliation needed.
+          if (data?.sessionId === SESSION_ID) return;
+
+          console.log('[Providers] Cross-device change detected via Firestore listener. Triggering reconciliation.');
+          triggerReconciliation('firestore-signal');
+        },
+        (err) => {
+          console.warn('[Providers] Firestore sync signal listener error:', err);
+        },
+      );
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
+  }, [triggerReconciliation]);
+
   // Retry outbox + reconcile on: window focus, coming back online, auth transitions.
   useEffect(() => {
-    const triggerReconciliation = (reason: string) => {
-      setDb(current => {
-        if (!current) return current;
-        console.log(`[Providers] Triggering remote reconciliation: ${reason}`);
-        reconcileWithRemoteAsync(current).catch((e) =>
-          console.warn(`[Providers] Reconciliation failed (${reason}):`, e)
-        );
-        return current;
-      });
-    };
-
     const handleFocus = () => triggerReconciliation('window-focus');
     const handleOnline = () => triggerReconciliation('online');
 
@@ -171,7 +222,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       window.removeEventListener('online', handleOnline);
       unsubscribeAuth();
     };
-  }, []); // empty deps — db is accessed via the functional updater form of setDb, not a stale closure
+  }, [triggerReconciliation]); // triggerReconciliation is stable (useCallback with empty deps)
 
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
 

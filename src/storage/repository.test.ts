@@ -21,6 +21,7 @@ vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
   doc: vi.fn(),
   getDocs: vi.fn(),
+  setDoc: vi.fn().mockResolvedValue(undefined),
   writeBatch: vi.fn(),
 }));
 
@@ -43,7 +44,7 @@ vi.mock('./idb', () => ({
 // ---------------------------------------------------------------------------
 
 import { StorageRepository, STORAGE_SLICES } from './repository';
-import { collection, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
 import { getCurrentUser } from '../services/firebase';
 import { eventBus } from '@/src/services/eventBus';
 
@@ -54,6 +55,8 @@ import { eventBus } from '@/src/services/eventBus';
 const mockCollection = vi.mocked(collection);
 const mockGetDocs = vi.mocked(getDocs);
 const mockWriteBatch = vi.mocked(writeBatch);
+const mockDoc = vi.mocked(doc);
+const mockSetDoc = vi.mocked(setDoc);
 const mockGetCurrentUser = vi.mocked(getCurrentUser);
 const mockEventBusEmit = vi.mocked(eventBus.emit);
 
@@ -653,5 +656,64 @@ describe('StorageRepository.mergeSlicesIntoDB (startup reconciliation)', () => {
     expect(Object.keys(resultA!)).toContain('a1');
     expect(Object.keys(resultB!)).toContain('b1');
     expect(resultA).not.toEqual(resultB);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeSyncSignal
+// ---------------------------------------------------------------------------
+
+describe('StorageRepository.writeSyncSignal', () => {
+  const SESSION_ID = 'test-session-123';
+
+  test('writes a sync signal document to the users/{uid}/meta/sync path', async () => {
+    mockDoc.mockReturnValue('users/user-123/meta/sync' as any);
+
+    await StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID);
+
+    expect(mockDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      'users', MOCK_USER.uid, 'meta', 'sync',
+    );
+    expect(mockSetDoc).toHaveBeenCalledWith(
+      'users/user-123/meta/sync',
+      expect.objectContaining({
+        sessionId: SESSION_ID,
+        facilityId: FACILITY_A,
+        changedSlices: ['residents'],
+      }),
+    );
+  });
+
+  test('includes a lastUpdatedAt ISO timestamp in the signal document', async () => {
+    await StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID);
+
+    const [, dataArg] = mockSetDoc.mock.calls[0];
+    expect(dataArg.lastUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  test('does nothing when user is not authenticated', async () => {
+    mockGetCurrentUser.mockResolvedValue(null);
+
+    await StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID);
+
+    expect(mockSetDoc).not.toHaveBeenCalled();
+  });
+
+  test('does not throw when setDoc fails — swallows the error', async () => {
+    mockSetDoc.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+    await expect(
+      StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID),
+    ).resolves.toBeUndefined();
+  });
+
+  test('passes all changed slices in the signal document', async () => {
+    const slices = ['residents', 'abts', 'infections'] as any[];
+
+    await StorageRepository.writeSyncSignal(FACILITY_A, slices, SESSION_ID);
+
+    const [, dataArg] = mockSetDoc.mock.calls[0];
+    expect(dataArg.changedSlices).toEqual(slices);
   });
 });
