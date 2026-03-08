@@ -393,7 +393,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   // 1. Try to fetch remote DB
   try {
     const rawRemote = await remoteFetchDb();
-    remoteDb = runMigrations(rawRemote as Record<string, unknown>);
+    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
   } catch (e) {
     console.log("Could not fetch remote DB. Working offline.", e);
   }
@@ -435,6 +435,9 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
 
     if (remoteDate > localDate) {
       console.log(`[Startup] Remote DB is newer (remote: ${remoteDb.updatedAt}, local: ${localDb.updatedAt}). Overwriting local with remote.`);
+      // Overlay fresh Firestore slices to capture any slice-only changes that
+      // were not yet reflected in the packed remote document.
+      await StorageRepository.mergeSlicesIntoDB(remoteDb);
       await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
       return remoteDb;
     } else if (localDate > remoteDate) {
@@ -456,6 +459,9 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     }
   } else if (remoteDb) {
     console.log(`[Startup] No local DB found. Using remote DB (updatedAt: ${remoteDb.updatedAt}).`);
+    // Overlay fresh Firestore slices to capture any slice-only changes that
+    // were not yet reflected in the packed remote document.
+    await StorageRepository.mergeSlicesIntoDB(remoteDb);
     await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
     return remoteDb;
   } else if (localDb) {

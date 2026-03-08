@@ -1,5 +1,5 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { UnifiedDB } from "../storage/engine";
+import { UnifiedDB } from "../domain/models";
 import { getCurrentUser } from "./firebase";
 
 const functions = getFunctions();
