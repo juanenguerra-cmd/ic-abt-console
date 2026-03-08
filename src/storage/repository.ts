@@ -3,7 +3,7 @@ import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet, idbRemove } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
 import { eventBus } from '@/src/services/eventBus';
-import { auth, db } from "../services/firebase";
+import { getCurrentUser, db } from "../services/firebase";
 
 export const STORAGE_SLICES = [
   "residents",
@@ -28,51 +28,47 @@ export class StorageRepository {
   }
 
   static async saveSlice(facilityId: string, slice: StorageSlice, data: any): Promise<void> {
-    if (slice === 'residents') {
-        const user = auth.currentUser;
-        if (!user) throw new Error("User not authenticated");
-
-        const residentsCollection = collection(db, 'users', user.uid, 'residents');
-        const batch = writeBatch(db);
-
-        data.forEach((resident: any) => {
-            const docRef = doc(residentsCollection, resident.id);
-            batch.set(docRef, resident);
-        });
-
-        await batch.commit();
-        return;
-    }
-    
-    // Fallback to IndexedDB for other slices
-    const key = this.getSliceKey(facilityId, slice);
-    const prevKey = this.getPrevSliceKey(facilityId, slice);
-
-    const current = await idbGet<string>(key);
-    if (current) {
-      await idbSet(prevKey, current).catch(() => {});
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn(`Attempted to save slice '${slice}' without an authenticated user. Skipping.`);
+      return;
     }
 
-    await idbSet(key, JSON.stringify(data));
+    const sliceCollection = collection(db, 'users', user.uid, slice);
+    const batch = writeBatch(db);
+
+    // data is an array of items. We write each item as a document.
+    data.forEach((item: any) => {
+        // The item must have an `id` property to be used as the document ID.
+        if (item.id) {
+            const docRef = doc(sliceCollection, item.id);
+            batch.set(docRef, item);
+        }
+    });
+
+    await batch.commit();
   }
 
   static async loadSlice(facilityId: string, slice: StorageSlice): Promise<any | null> {
-    if (slice === 'residents') {
-        const user = auth.currentUser;
-        if (!user) throw new Error("User not authenticated");
-
-        const residentsCollection = collection(db, 'users', user.uid, 'residents');
-        const snapshot = await getDocs(residentsCollection);
-        return snapshot.docs.map(doc => doc.data());
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn(`Attempted to load slice '${slice}' without an authenticated user. Skipping.`);
+      return null;
     }
 
-    // Fallback to IndexedDB for other slices
-    const key = this.getSliceKey(facilityId, slice);
-    const raw = await idbGet<string>(key);
-    return raw ? JSON.parse(raw) : null;
+    const sliceCollection = collection(db, 'users', user.uid, slice);
+    const snapshot = await getDocs(sliceCollection);
+
+    if (snapshot.empty) {
+        // Return null to indicate that no data exists.
+        return null;
+    }
+    
+    return snapshot.docs.map(doc => doc.data());
   }
 
   static async restoreSliceFromPrev(facilityId: string, slice: StorageSlice): Promise<boolean> {
+    // This is a legacy IndexedDB function and is no longer used for Firestore-backed slices.
     const prevKey = this.getPrevSliceKey(facilityId, slice);
     const key = this.getSliceKey(facilityId, slice);
     
@@ -88,7 +84,7 @@ export class StorageRepository {
     eventBus.emit('sync-start');
     try {
         const promises = changedSlices.map((slice) => 
-        this.saveSlice(facilityId, slice, store[slice])
+          this.saveSlice(facilityId, slice, store[slice])
         );
         await Promise.all(promises);
     } finally {
@@ -113,6 +109,7 @@ export class StorageRepository {
   }
 
   static async restoreAllSlicesFromPrev(facilityId: string): Promise<void> {
+    // This is a legacy IndexedDB function and will not restore Firestore data.
     const promises = STORAGE_SLICES.map((slice) => 
       this.restoreSliceFromPrev(facilityId, slice)
     );
@@ -120,16 +117,7 @@ export class StorageRepository {
   }
 
   static async clearAllSlices(facilityId: string): Promise<void> {
-    // Note: This will only clear IndexedDB slices. A separate mechanism will be needed for Firestore data.
-    const promises = STORAGE_SLICES.flatMap((slice) => {
-        if (slice !== 'residents') {
-            return [
-                idbRemove(this.getSliceKey(facilityId, slice)),
-                idbRemove(this.getPrevSliceKey(facilityId, slice))
-            ];
-        }
-        return [];
-    });
-    await Promise.all(promises).catch(() => {});
+    // This method no longer clears application data from IndexedDB as it's now stored in Firestore.
+    return Promise.resolve();
   }
 }
