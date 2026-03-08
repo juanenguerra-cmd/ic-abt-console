@@ -20,9 +20,9 @@ export default defineConfig(({mode}) => {
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
-          name: 'Vite PWA Project',
-          short_name: 'Vite PWA Project',
-          description: 'I am a simple Vite PWA',
+          name: 'IC Nurse Console',
+          short_name: 'IC Nurse Console',
+          description: 'Infection Control & Antibiotic Stewardship Console',
           theme_color: '#ffffff',
           icons: [
             {
