@@ -1,6 +1,7 @@
 import { UnifiedDB, MutationLogEntry, FacilityStore } from "../domain/models";
 import { saveDBAsync, restoreFromPrevAsync, validateCommitGate } from "../storage/engine";
 import { StorageRepository, StorageSlice, STORAGE_SLICES } from "../storage/repository";
+import { getCurrentUser } from "../services/firebase";
 
 const MAX_MUTATION_LOG_ENTRIES = 500;
 
@@ -69,20 +70,23 @@ export const commandHandlers = {
   },
 
   saveDatabase: async (db: UnifiedDB, activeFacilityId: string, changedSlices: StorageSlice[], mainChanged: boolean) => {
-    // Validate the entire DB before saving anything
     validateCommitGate(db);
 
     const store = db.data.facilityData[activeFacilityId];
+    const user = await getCurrentUser();
+
+    if (!user) {
+        console.warn("User not authenticated, skipping remote sync. Saving locally.");
+        await saveDBAsync(db, { skipRemote: true });
+        return;
+    }
 
     if (mainChanged || changedSlices.length === 0) {
-      // If main changed, or nothing changed (force save), save the whole DB
       await saveDBAsync(db);
       if (store) {
-        // Also sync slices to keep them up to date
         await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
       }
     } else {
-      // Only slices changed
       if (store) {
         await StorageRepository.saveSlices(activeFacilityId, store, changedSlices);
       }
