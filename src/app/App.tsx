@@ -1,4 +1,3 @@
-// IC-ABT Console — Version 1.0.0 | © 2026 Juan Enguerra
 import React from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AppProviders, useFacilityData, useDatabase } from "./providers";
@@ -25,7 +24,6 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
-import { AnalyticsDashboard } from '../features/Analytics';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -349,7 +347,6 @@ const AppShell = () => {
             <SidebarSection title="Overview">
               <SidebarLink to="/home" icon={Home} label="Home" />
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-              <SidebarLink to="/analytics" icon={BarChart3} label="Analytics" />
             </SidebarSection>
             
             <SidebarSection title="Residents">
@@ -400,7 +397,6 @@ const AppShell = () => {
                 <Route path="/home" element={<PageTransition><HomePage /></PageTransition>} />
                 <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route path="/dashboard" element={<PageTransition><Dashboard /></PageTransition>} />
-                <Route path="/analytics" element={<PageTransition><AnalyticsDashboard /></PageTransition>} />
                 <Route path="/resident-board" element={<PageTransition><ResidentBoard /></PageTransition>} />
                 <Route path="/floor-map" element={<PageTransition><FloorMapPage /></PageTransition>} />
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />

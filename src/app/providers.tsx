@@ -48,77 +48,80 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   // Multi-tab sync: detect when another tab writes to the database
   useEffect(() => {
-    const channel = new BroadcastChannel('ic_console_sync');
-    channel.onmessage = async (event) => {
-      if (event.data.type === 'DB_UPDATED') {
-        const { changedSlices, mainChanged } = event.data;
-        
-        try {
-          if (!mainChanged && changedSlices && changedSlices.length > 0) {
-            // Only specific slices changed, we can load just those slices and merge them
-            // into our current state, avoiding a full database reload.
-            const { StorageRepository } = await import('../storage/repository');
-            
-            // We need activeFacilityId, but we don't want to add it to deps.
-            // We can get it from the current state using setDb.
-            let currentFacilityId: string | null = null;
-            setDb(currentDb => {
-              if (currentDb) {
-                currentFacilityId = currentDb.data.facilities.activeFacilityId;
+    // This feature is disabled in development to prevent HMR issues.
+    if (import.meta.env.PROD) {
+      const channel = new BroadcastChannel('ic_console_sync');
+      channel.onmessage = async (event) => {
+        if (event.data.type === 'DB_UPDATED') {
+          const { changedSlices, mainChanged } = event.data;
+          
+          try {
+            if (!mainChanged && changedSlices && changedSlices.length > 0) {
+              // Only specific slices changed, we can load just those slices and merge them
+              // into our current state, avoiding a full database reload.
+              const { StorageRepository } = await import('../storage/repository');
+              
+              // We need activeFacilityId, but we don't want to add it to deps.
+              // We can get it from the current state using setDb.
+              let currentFacilityId: string | null = null;
+              setDb(currentDb => {
+                if (currentDb) {
+                  currentFacilityId = currentDb.data.facilities.activeFacilityId;
+                }
+                return currentDb;
+              });
+              
+              if (!currentFacilityId) return;
+              
+              // Async load the changed slices
+              const newSlices: any = {};
+              for (const slice of changedSlices) {
+                const data = await StorageRepository.loadSlice(currentFacilityId, slice);
+                if (data) newSlices[slice] = data;
               }
-              return currentDb;
-            });
-            
-            if (!currentFacilityId) return;
-            
-            // Async load the changed slices
-            const newSlices: any = {};
-            for (const slice of changedSlices) {
-              const data = await StorageRepository.loadSlice(currentFacilityId, slice);
-              if (data) newSlices[slice] = data;
-            }
-            
-            // Apply the loaded slices to the state
-            setDb(currentDb => {
-              if (!currentDb) return currentDb;
-              const nextDb = JSON.parse(JSON.stringify(currentDb));
-              const store = nextDb.data.facilityData[currentFacilityId!];
-              if (store) {
-                for (const slice of changedSlices) {
-                  if (newSlices[slice]) {
-                    store[slice] = newSlices[slice];
+              
+              // Apply the loaded slices to the state
+              setDb(currentDb => {
+                if (!currentDb) return currentDb;
+                const nextDb = JSON.parse(JSON.stringify(currentDb));
+                const store = nextDb.data.facilityData[currentFacilityId!];
+                if (store) {
+                  for (const slice of changedSlices) {
+                    if (newSlices[slice]) {
+                      store[slice] = newSlices[slice];
+                    }
                   }
                 }
-              }
-              return nextDb;
-            });
-            
-          } else {
-            // Full reload required
-            const loadedDb = await loadDBAsync();
+                return nextDb;
+              });
+              
+            } else {
+              // Full reload required
+              const loadedDb = await loadDBAsync();
+              setDb(loadedDb);
+              setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
+            }
+          } catch (err) {
+            console.error("Failed to sync DB from other tab", err);
+          }
+        }
+      };
+
+      const handleStorageChange = (e: StorageEvent) => {
+        if ((e.key === DB_KEY_MAIN || e.key === `${DB_KEY_MAIN}_signal`) && e.newValue !== null) {
+          loadDBAsync().then((loadedDb) => {
             setDb(loadedDb);
             setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
-          }
-        } catch (err) {
-          console.error("Failed to sync DB from other tab", err);
+          }).catch(err => console.error("Failed to sync DB from other tab", err));
         }
-      }
-    };
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if ((e.key === DB_KEY_MAIN || e.key === `${DB_KEY_MAIN}_signal`) && e.newValue !== null) {
-        loadDBAsync().then((loadedDb) => {
-          setDb(loadedDb);
-          setActiveFacilityId(loadedDb.data.facilities.activeFacilityId);
-        }).catch(err => console.error("Failed to sync DB from other tab", err));
-      }
-    };
-    window.addEventListener("storage", handleStorageChange);
-    
-    return () => {
-      channel.close();
-      window.removeEventListener("storage", handleStorageChange);
-    };
+      };
+      window.addEventListener("storage", handleStorageChange);
+      
+      return () => {
+        channel.close();
+        window.removeEventListener("storage", handleStorageChange);
+      };
+    }
   }, []);
 
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
