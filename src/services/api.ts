@@ -1,48 +1,23 @@
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { UnifiedDB } from "../storage/engine";
+import { auth } from "./firebase";
 
-// The local Node.js server will run on port 3001
-const API_BASE_URL = "http://localhost:3001/api";
+const functions = getFunctions();
 
-/**
- * Fetches the entire database from the remote server.
- */
+const getDb = httpsCallable(functions, 'getDb');
+const setDb = httpsCallable(functions, 'setDb');
+
 export const remoteFetchDb = async (): Promise<UnifiedDB> => {
-  const response = await fetch(`${API_BASE_URL}/db`);
-  if (!response.ok) {
-    throw new Error("Failed to fetch database from server.");
-  }
-  // The server might return an empty object if the DB file doesn't exist yet
-  const responseBody = await response.text();
-  if (!responseBody || responseBody === '{}') {
-      // If the response is empty or just an empty object, treat it as a non-existent DB
-      // This will trigger the logic to use a local DB or create a new one.
-      throw new Error("Remote database is empty or not found.");
-  }
-  return JSON.parse(responseBody);
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
+
+    const result = await getDb();
+    return result.data as UnifiedDB;
 };
 
-/**
- * Saves the entire database to the remote server.
- * @param db The database object to save.
- */
 export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
-  const response = await fetch(`${API_BASE_URL}/db`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(db),
-  });
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    let errorMsg = `Failed to save database to server. Status: ${response.status}`;
-    try {
-        const errorBody = JSON.parse(errorText);
-        errorMsg += `, Message: ${errorBody.message}`;
-    } catch (e) {
-        errorMsg += `, Body: ${errorText}`;
-    }
-    throw new Error(errorMsg);
-  }
+    await setDb(db);
 };
