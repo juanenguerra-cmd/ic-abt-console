@@ -86,8 +86,15 @@ export class StorageRepository {
   /**
    * Load a single slice from Firestore.
    *
-   * Uses the same facility-scoped path as {@link saveSlice}:
+   * Primary path (facility-scoped):
    *   users/{uid}/facilities/{facilityId}/{slice}/{docId}
+   *
+   * Legacy fallback path (user-only, pre-facility-scoping fix):
+   *   users/{uid}/{slice}/{docId}
+   *
+   * If the new path is empty but legacy data exists, the data is
+   * automatically migrated to the facility-scoped path and returned.
+   * Old data is preserved at the legacy path (non-destructive migration).
    */
   static async loadSlice(facilityId: string, slice: StorageSlice): Promise<any | null> {
     const user = await getCurrentUser();
@@ -96,22 +103,141 @@ export class StorageRepository {
       return null;
     }
 
-    // Facility-scoped path — must match saveSlice exactly.
+    // Primary: facility-scoped path — must match saveSlice exactly.
     const sliceCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
     const snapshot = await getDocs(sliceCollection);
 
-    if (snapshot.empty) {
-        return null;
-    }
-    
-    const data: { [key: string]: any } = {};
-    snapshot.docs.forEach(doc => {
+    if (!snapshot.empty) {
+      const data: { [key: string]: any } = {};
+      snapshot.docs.forEach(doc => {
         const docData = doc.data();
         if (docData && docData.id) {
-            data[docData.id] = docData;
+          data[docData.id] = docData;
         }
+      });
+      return data;
+    }
+
+    // Fallback: legacy user-only path (no facilityId segment in the path).
+    // This catches records written before the facility-scoping fix was applied.
+    console.warn(
+      `[Migration] Slice '${slice}' not found at facility-scoped path. Checking legacy path.`
+    );
+    const legacyCollection = collection(db, 'users', user.uid, slice);
+    const legacySnapshot = await getDocs(legacyCollection);
+
+    if (legacySnapshot.empty) {
+      return null;
+    }
+
+    // Parse legacy documents.
+    const data: { [key: string]: any } = {};
+    legacySnapshot.docs.forEach(doc => {
+      const docData = doc.data();
+      if (docData && docData.id) {
+        data[docData.id] = docData;
+      }
     });
+
+    // Auto-migrate to the new facility-scoped path so subsequent reads use
+    // the correct location. The legacy data is NOT deleted (safe migration).
+    console.log(
+      `[Migration] Migrating slice '${slice}' from legacy path to ` +
+      `facility-scoped path for facility '${facilityId}'.`
+    );
+    try {
+      await this.saveSlice(facilityId, slice, data);
+      console.log(`[Migration] Slice '${slice}' migrated successfully.`);
+    } catch (err) {
+      console.error(
+        `[Migration] Failed to migrate slice '${slice}' to facility-scoped path. ` +
+        `Legacy data returned without completing migration.`,
+        err,
+      );
+    }
+
     return data;
+  }
+
+  /**
+   * Explicitly migrate all slices for a facility from the legacy user-only
+   * Firestore path to the facility-scoped path.
+   *
+   * Legacy path: users/{uid}/{slice}/{docId}
+   * New path:    users/{uid}/facilities/{facilityId}/{slice}/{docId}
+   *
+   * This is a safe, non-destructive operation — existing data at the legacy
+   * path is preserved. Slices that already have data at the new path are
+   * skipped to avoid overwriting newer writes.
+   *
+   * Call this once per facility after deploying the facility-scoping fix to
+   * ensure any pre-existing remote data is moved to the correct path.
+   */
+  static async migrateSlicesToFacilityScope(
+    facilityId: string,
+  ): Promise<{ migrated: StorageSlice[]; skipped: StorageSlice[]; failed: StorageSlice[] }> {
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn('[Migration] Cannot migrate slices: user is not authenticated.');
+      return { migrated: [], skipped: [], failed: [] };
+    }
+
+    const migrated: StorageSlice[] = [];
+    const skipped: StorageSlice[] = [];
+    const failed: StorageSlice[] = [];
+
+    for (const slice of STORAGE_SLICES) {
+      try {
+        // Fetch both the new path and the legacy path concurrently.
+        const newCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
+        const legacyCollection = collection(db, 'users', user.uid, slice);
+        const [newSnapshot, legacySnapshot] = await Promise.all([
+          getDocs(newCollection),
+          getDocs(legacyCollection),
+        ]);
+
+        // Skip slices that already have data at the new facility-scoped path.
+        if (!newSnapshot.empty) {
+          skipped.push(slice);
+          continue;
+        }
+
+        if (legacySnapshot.empty) {
+          skipped.push(slice);
+          continue;
+        }
+
+        // Parse legacy data.
+        const data: { [key: string]: any } = {};
+        legacySnapshot.docs.forEach(doc => {
+          const docData = doc.data();
+          if (docData && docData.id) {
+            data[docData.id] = docData;
+          }
+        });
+
+        // Write to the new facility-scoped path.
+        await this.saveSlice(facilityId, slice, data);
+        migrated.push(slice);
+        console.log(
+          `[Migration] Slice '${slice}' migrated to facility-scoped path for facility '${facilityId}'.`
+        );
+      } catch (err) {
+        console.error(
+          `[Migration] Failed to migrate slice '${slice}' for facility '${facilityId}'.`,
+          err,
+        );
+        failed.push(slice);
+      }
+    }
+
+    console.log(
+      `[Migration] Complete for facility '${facilityId}'. ` +
+      `Migrated: [${migrated.join(', ')}], ` +
+      `Skipped: [${skipped.join(', ')}], ` +
+      `Failed: [${failed.join(', ')}].`
+    );
+    return { migrated, skipped, failed };
   }
 
   static async restoreSliceFromPrev(facilityId: string, slice: StorageSlice): Promise<boolean> {
