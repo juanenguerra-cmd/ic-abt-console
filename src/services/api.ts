@@ -35,6 +35,14 @@ export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to save database to server.");
+    const errorText = await response.text();
+    let errorMsg = `Failed to save database to server. Status: ${response.status}`;
+    try {
+        const errorBody = JSON.parse(errorText);
+        errorMsg += `, Message: ${errorBody.message}`;
+    } catch (e) {
+        errorMsg += `, Body: ${errorText}`;
+    }
+    throw new Error(errorMsg);
   }
 };

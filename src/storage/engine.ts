@@ -452,7 +452,10 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   } else if (localDb) {
     console.log("Using local DB, remote not available.");
     // Try to save the local version to remote in case the remote is just empty
-    await remoteSaveDb(localDb).catch(e => console.warn("Failed to save local DB to empty remote:", e));
+    await remoteSaveDb(localDb).catch(e => {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.warn(`Failed to save local DB to empty remote: ${errorMsg}`);
+    });
     return localDb;
   }
   
