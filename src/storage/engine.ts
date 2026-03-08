@@ -2,6 +2,8 @@ import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
 import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
 import { StorageRepository } from "./repository";
+import { remoteFetchDb, remoteSaveDb } from "../services/api";
+
 export { DB_KEY_MAIN };
 
 // localStorage fallback thresholds (kept for the sync backup path).
@@ -384,45 +386,82 @@ export function createEmptyDB(): UnifiedDB {
 // Async IndexedDB-backed load / save (primary path)
 // ---------------------------------------------------------------------------
 
-/**
- * Load the DB from IndexedDB.  Falls back to localStorage (one-time migration)
- * so users who previously used the localStorage-only build do not lose data.
- */
 export async function loadDBAsync(): Promise<UnifiedDB> {
-  // 1. Try IndexedDB first (primary store).
+  let remoteDb: UnifiedDB | null = null;
+  let localDb: UnifiedDB | null = null;
+  
+  // 1. Try to fetch remote DB
   try {
-    const raw = await idbGet<string>(DB_KEY_MAIN);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const migrated = runMigrations(parsed);
-      await StorageRepository.mergeSlicesIntoDB(migrated);
-      return migrated;
-    }
+    const rawRemote = await remoteFetchDb();
+    remoteDb = runMigrations(rawRemote as Record<string, unknown>);
   } catch (e) {
-    console.warn("IDB load failed, falling back to localStorage:", e);
+    console.log("Could not fetch remote DB. Working offline.", e);
   }
 
-  // 2. One-time migration from localStorage → IDB.
+  // 2. Try to load local DB
   try {
-    const lsRaw = localStorage.getItem(DB_KEY_MAIN);
-    if (lsRaw) {
-      const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
+    const rawLocal = await idbGet<string>(DB_KEY_MAIN);
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal) as Record<string, unknown>;
       const migrated = runMigrations(parsed);
       await StorageRepository.mergeSlicesIntoDB(migrated);
-      // Persist to IDB so future loads come from IDB.
-      const packed = packV3(migrated);
-      await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
-        console.warn("IDB migration write failed:", err)
-      );
-      return migrated;
+      localDb = migrated;
+    } else {
+      // One-time migration from localStorage → IDB.
+      const lsRaw = localStorage.getItem(DB_KEY_MAIN);
+      if (lsRaw) {
+        const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
+        const migrated = runMigrations(parsed);
+        await StorageRepository.mergeSlicesIntoDB(migrated);
+        
+        // Persist to IDB for future loads
+        const packed = packV3(migrated);
+        await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
+          console.warn("IDB migration write failed:", err)
+        );
+        localDb = migrated;
+      }
     }
   } catch (e) {
     if (e instanceof SchemaMigrationError) throw e;
-    console.error("localStorage migration read failed:", e);
-    throw new StorageError("Database corruption detected during migration.");
+    console.error("Failed to load local DB:", e);
+    // Don't rethrow, let the sync logic decide what to do.
   }
 
-  return createEmptyDB();
+  // 3. Sync and decide which DB to use
+  if (remoteDb && localDb) {
+    const remoteDate = new Date(remoteDb.updatedAt);
+    const localDate = new Date(localDb.updatedAt);
+
+    if (remoteDate > localDate) {
+      console.log("Remote DB is newer. Overwriting local with remote.");
+      await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
+      return remoteDb;
+    } else if (localDate > remoteDate) {
+      console.log("Local DB is newer. Pushing changes to remote.");
+      await remoteSaveDb(localDb).catch(e => console.error("Failed to push newer local DB to remote:", e));
+      return localDb;
+    } else {
+      console.log("Local and remote DBs are in sync.");
+      return localDb;
+    }
+  } else if (remoteDb) {
+    console.log("Using remote DB as local was not found.");
+    await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
+    return remoteDb;
+  } else if (localDb) {
+    console.log("Using local DB, remote not available.");
+    // Try to save the local version to remote in case the remote is just empty
+    await remoteSaveDb(localDb).catch(e => console.warn("Failed to save local DB to empty remote:", e));
+    return localDb;
+  }
+  
+  // 4. If all else fails, create a fresh DB
+  console.log("No local or remote DB found. Creating a new empty database.");
+  const newDb = createEmptyDB();
+  // Save it everywhere
+  await saveDBAsync(newDb).catch(e => console.error("Initial save of empty DB failed:", e));
+  return newDb;
 }
 
 /**
@@ -435,7 +474,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
  * The IDB write is fire-and-forget from the caller's perspective; errors are
  * surfaced as a rejected Promise so callers that await can handle them.
  */
-export async function saveDBAsync(db: UnifiedDB): Promise<void> {
+export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean } = {}): Promise<void> {
   validateCommitGate(db);
 
   db.updatedAt = new Date().toISOString();
@@ -513,6 +552,14 @@ export async function saveDBAsync(db: UnifiedDB): Promise<void> {
     }
   } catch {
     // localStorage backup failure is non-fatal — IDB is the source of truth.
+  }
+  
+  // --- After local saves are complete, save to remote ---
+  if (!options.skipRemote) {
+    await remoteSaveDb(db).catch(err => {
+      console.error("Failed to save database to remote server:", err);
+      // We could add more robust queueing logic here for offline support.
+    });
   }
 }
 
