@@ -12,6 +12,17 @@ import {
 const MAX_MUTATION_LOG_ENTRIES = 500;
 
 /**
+ * Stable per-tab identifier used to stamp sync-signal documents.
+ * The `onSnapshot` listener on the same tab compares this value and skips
+ * signals that originate from itself, preventing unnecessary reconciliation
+ * round-trips.
+ */
+export const SESSION_ID: string =
+  typeof crypto !== 'undefined'
+    ? crypto.randomUUID()
+    : `session-${Date.now()}-${Math.random()}`;
+
+/**
  * Debounce window (ms) for coalescing rapid slice-only saves into a single
  * remote push.  2 s is long enough to batch typical burst edits while still
  * guaranteeing a remote write within a few seconds of the last change.
@@ -166,6 +177,10 @@ export const commandHandlers = {
           // Queue failed slices for retry.
           await markSlicesPending(result.failedSlices).catch(() => {});
         }
+        // Notify other devices of the successful slice writes via a signal document.
+        if (result.succeededSlices.length > 0) {
+          await StorageRepository.writeSyncSignal(activeFacilityId, result.succeededSlices, SESSION_ID).catch(() => {});
+        }
       }
     } else {
       // Slice-only path — local-first: persist to IDB before attempting remote
@@ -179,6 +194,8 @@ export const commandHandlers = {
           // Schedule a debounced remote sync so the packed Firebase document stays
           // current, enabling correct timestamp-based reconciliation at startup.
           scheduleRemoteSync(db);
+          // Notify other devices of the change via a signal document.
+          await StorageRepository.writeSyncSignal(activeFacilityId, result.succeededSlices, SESSION_ID).catch(() => {});
         } else {
           console.error(
             `[Sync] Partial slice save failure (slice-only path). Failed: [${result.failedSlices.join(', ')}]. ` +

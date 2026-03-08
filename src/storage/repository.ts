@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, writeBatch } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
@@ -386,5 +386,38 @@ export class StorageRepository {
   static async clearAllSlices(facilityId: string): Promise<void> {
     // This method no longer clears application data from IndexedDB as it's now stored in Firestore.
     return Promise.resolve();
+  }
+
+  /**
+   * Write a lightweight sync-signal document to Firestore so that other
+   * devices can detect the change via an `onSnapshot` listener and trigger
+   * remote reconciliation without polling.
+   *
+   * Path: users/{uid}/meta/sync
+   *
+   * The `sessionId` field lets the listener on the writing device skip its own
+   * signal and avoid a pointless reconciliation round-trip.
+   *
+   * This is a best-effort write — failures are swallowed so they never block
+   * the main save path.
+   */
+  static async writeSyncSignal(
+    facilityId: string,
+    changedSlices: StorageSlice[],
+    sessionId: string,
+  ): Promise<void> {
+    try {
+      const user = await getCurrentUser();
+      if (!user) return;
+      const signalRef = doc(db, 'users', user.uid, 'meta', 'sync');
+      await setDoc(signalRef, {
+        lastUpdatedAt: new Date().toISOString(),
+        sessionId,
+        facilityId,
+        changedSlices,
+      });
+    } catch (err) {
+      console.warn('[Sync] Failed to write sync signal:', err);
+    }
   }
 }
