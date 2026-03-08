@@ -2,8 +2,71 @@ import { UnifiedDB, MutationLogEntry, FacilityStore } from "../domain/models";
 import { saveDBAsync, restoreFromPrevAsync, validateCommitGate } from "../storage/engine";
 import { StorageRepository, StorageSlice, STORAGE_SLICES } from "../storage/repository";
 import { getCurrentUser } from "../services/firebase";
+import { remoteSaveDb } from "./api";
 
 const MAX_MUTATION_LOG_ENTRIES = 500;
+
+/**
+ * Debounce window (ms) for coalescing rapid slice-only saves into a single
+ * remote push.  2 s is long enough to batch typical burst edits while still
+ * guaranteeing a remote write within a few seconds of the last change.
+ */
+const REMOTE_SYNC_DEBOUNCE_MS = 2_000;
+
+// Module-level debounce state — intentionally not exported.
+let _remoteSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let _pendingRemoteSyncDb: UnifiedDB | null = null;
+let _remoteSyncInFlight = false;
+
+/**
+ * Schedule a debounced remote sync of the full packed database.
+ *
+ * Rapid slice-only saves reset the timer so only one remote write fires
+ * after the burst settles.  A local save (IDB + Firestore slices) is already
+ * committed before this runs, so a remote-sync failure never rolls back
+ * local data.
+ */
+function scheduleRemoteSync(db: UnifiedDB): void {
+  // Always keep a reference to the most-recently saved DB so the debounced
+  // push carries the latest state.
+  _pendingRemoteSyncDb = db;
+
+  if (_remoteSyncTimer !== null) {
+    clearTimeout(_remoteSyncTimer);
+  }
+
+  console.log(`[Sync] Remote sync scheduled (debounced, fires in ${REMOTE_SYNC_DEBOUNCE_MS / 1000} s).`);
+
+  _remoteSyncTimer = setTimeout(async () => {
+    _remoteSyncTimer = null;
+    const dbToSync = _pendingRemoteSyncDb;
+    _pendingRemoteSyncDb = null;
+
+    if (!dbToSync) return;
+
+    // Avoid overlapping remote writes: if a sync is already in flight, the
+    // next debounce cycle (triggered by the caller rescattering the timer)
+    // will pick up the latest DB.  Re-schedule if needed.
+    if (_remoteSyncInFlight) {
+      console.log('[Sync] Remote sync already in flight; re-scheduling.');
+      scheduleRemoteSync(dbToSync);
+      return;
+    }
+
+    _remoteSyncInFlight = true;
+    try {
+      console.log('[Sync] Executing debounced remote sync...');
+      await remoteSaveDb(dbToSync);
+      console.log(`[Sync] Debounced remote sync successful (updatedAt: ${dbToSync.updatedAt}).`);
+      window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+    } catch (err) {
+      console.error('[Sync] Debounced remote sync failed. Local data is safe in IDB/Firestore.', err);
+      window.dispatchEvent(new Event('backup-failed'));
+    } finally {
+      _remoteSyncInFlight = false;
+    }
+  }, REMOTE_SYNC_DEBOUNCE_MS);
+}
 
 export interface MutationMeta {
   action: MutationLogEntry['action'];
@@ -87,9 +150,20 @@ export const commandHandlers = {
         await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
       }
     } else {
+      // Only slices changed — save those slices to Firestore, then update the
+      // local IDB snapshot so it stays fresh for startup reconciliation.
       if (store) {
         await StorageRepository.saveSlices(activeFacilityId, store, changedSlices);
+        console.log(`[Sync] Slice-only local save successful (slices: ${changedSlices.join(', ')}).`);
       }
+      // Persist the updated DB to IDB (local only) so the IDB snapshot stays
+      // consistent with what is now in Firestore and timestamps reflect the
+      // latest mutation. skipRemote avoids a duplicate write to the unified
+      // remote document since slices were already pushed above.
+      await saveDBAsync(db, { skipRemote: true });
+      // Schedule a debounced remote sync so the packed Firebase document stays
+      // current, enabling correct timestamp-based reconciliation at startup.
+      scheduleRemoteSync(db);
     }
 
     try {

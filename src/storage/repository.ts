@@ -27,7 +27,33 @@ export class StorageRepository {
     return `${DB_KEY_MAIN}_prev_slice_${facilityId}_${slice}`;
   }
 
-  static async loadSlice(facilityId: string, slice: StorageSlice): Promise<{ [key: string]: any } | null> {
+  static async saveSlice(facilityId: string, slice: StorageSlice, data: any): Promise<void> {
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn(`[Sync] Attempted to save slice '${slice}' without an authenticated user. Skipping.`);
+      return;
+    }
+
+    const sliceCollection = collection(db, 'users', user.uid, slice);
+    const batch = writeBatch(db);
+
+    // data may be a Record<string, T> or an array — handle both shapes.
+    const items: object[] = Array.isArray(data)
+      ? (data as object[])
+      : Object.values(data as Record<string, object>);
+    items.forEach((item: any) => {
+        // The item must have an `id` property to be used as the document ID.
+        if (item && item.id) {
+            const docRef = doc(sliceCollection, item.id);
+            batch.set(docRef, item);
+        }
+    });
+
+    await batch.commit();
+    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
+  }
+
+  static async loadSlice(facilityId: string, slice: StorageSlice): Promise<any | null> {
     const user = await getCurrentUser();
     if (!user) {
       console.warn(`Attempted to load slice '${slice}' without an authenticated user. Skipping.`);
@@ -75,40 +101,18 @@ export class StorageRepository {
     }
 
     eventBus.emit('sync-start');
-
-    const MAX_RETRIES = 3;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const batch = writeBatch(db);
-
-            for (const slice of changedSlices) {
-                const sliceData = store[slice];
-                const sliceCollection = collection(db, 'users', user.uid, slice);
-                
-                if (sliceData) {
-                    const items = Object.values(sliceData as any);
-                    items.forEach((item: any) => {
-                        if (item && item.id) {
-                            const docRef = doc(sliceCollection, item.id);
-                            batch.set(docRef, item);
-                        }
-                    });
-                }
-            }
-
-            await batch.commit();
-            eventBus.emit('sync-end');
-            console.log("Slices saved successfully to remote.");
-            return; // Success
-        } catch (error) {
-            console.error(`Failed to save slices to remote (attempt ${attempt}/${MAX_RETRIES}):`, error);
-            if (attempt === MAX_RETRIES) {
-                eventBus.emit('sync-end');
-                window.dispatchEvent(new Event('backup-failed'));
-                throw error;
-            }
-            await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt - 1)));
-        }
+    console.log(`[Sync] Saving slices to Firestore: ${changedSlices.join(', ')}`);
+    try {
+        const promises = changedSlices.map((slice) => 
+          this.saveSlice(facilityId, slice, store[slice])
+        );
+        await Promise.all(promises);
+        console.log(`[Sync] All slices saved to Firestore successfully.`);
+    } catch (err) {
+        console.error(`[Sync] Remote slice save failed:`, err);
+        throw err;
+    } finally {
+        eventBus.emit('sync-end');
     }
   }
 

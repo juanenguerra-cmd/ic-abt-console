@@ -393,7 +393,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   // 1. Try to fetch remote DB
   try {
     const rawRemote = await remoteFetchDb();
-    remoteDb = runMigrations(rawRemote as Record<string, unknown>);
+    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
   } catch (e) {
     console.log("Could not fetch remote DB. Working offline.", e);
   }
@@ -434,50 +434,58 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     const localDate = new Date(localDb.updatedAt);
 
     if (remoteDate > localDate) {
-      console.log("Remote DB is newer. Overwriting local with remote.");
+      console.log(`[Startup] Remote DB is newer (remote: ${remoteDb.updatedAt}, local: ${localDb.updatedAt}). Overwriting local with remote.`);
+      // Overlay fresh Firestore slices to capture any slice-only changes that
+      // were not yet reflected in the packed remote document.
+      await StorageRepository.mergeSlicesIntoDB(remoteDb);
       await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
       return remoteDb;
     } else if (localDate > remoteDate) {
-      console.log("Local DB is newer. Pushing changes to remote.");
+      console.log(`[Startup] Local DB is newer (local: ${localDb.updatedAt}, remote: ${remoteDb.updatedAt}). Pushing local changes to remote.`);
       window.dispatchEvent(new Event("backup-started"));
       await remoteSaveDb(localDb)
         .then(() => {
+            console.log("[Startup] Local DB successfully pushed to remote.");
             window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
         })
         .catch(e => {
-            console.error("Failed to push newer local DB to remote:", e)
+            console.error("[Startup] Failed to push newer local DB to remote. Local state is preserved.", e);
             window.dispatchEvent(new Event('backup-failed'));
         });
       return localDb;
     } else {
-      console.log("Local and remote DBs are in sync.");
+      console.log(`[Startup] Local and remote DBs are in sync (updatedAt: ${localDb.updatedAt}).`);
       return localDb;
     }
   } else if (remoteDb) {
-    console.log("Using remote DB as local was not found.");
+    console.log(`[Startup] No local DB found. Using remote DB (updatedAt: ${remoteDb.updatedAt}).`);
+    // Overlay fresh Firestore slices to capture any slice-only changes that
+    // were not yet reflected in the packed remote document.
+    await StorageRepository.mergeSlicesIntoDB(remoteDb);
     await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
     return remoteDb;
   } else if (localDb) {
-    console.log("Using local DB, remote not available.");
+    console.log(`[Startup] Remote not available. Using local DB (updatedAt: ${localDb.updatedAt}).`);
     // Try to save the local version to remote in case the remote is just empty
     window.dispatchEvent(new Event("backup-started"));
     await remoteSaveDb(localDb)
       .then(() => {
+        console.log("[Startup] Local DB successfully synced to remote.");
         window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
       })
       .catch(e => {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.warn(`Failed to save local DB to empty remote: ${errorMsg}`);
+      console.warn(`[Startup] Could not sync local DB to remote (offline?): ${errorMsg}. Local data is safe.`);
       window.dispatchEvent(new Event('backup-failed'));
     });
     return localDb;
   }
   
   // 4. If all else fails, create a fresh DB
-  console.log("No local or remote DB found. Creating a new empty database.");
+  console.log("[Startup] No local or remote DB found. Creating a new empty database.");
   const newDb = createEmptyDB();
   // Save it everywhere
-  await saveDBAsync(newDb).catch(e => console.error("Initial save of empty DB failed:", e));
+  await saveDBAsync(newDb).catch(e => console.error("[Startup] Initial save of empty DB failed:", e));
   return newDb;
 }
 
@@ -577,14 +585,17 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   if (!options.skipRemote) {
     await remoteSaveDb(db)
       .then(() => {
+        console.log(`[Sync] Remote save successful (updatedAt: ${db.updatedAt}).`);
         window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
       })
       .catch(err => {
-        console.error("Failed to save database to remote server:", err);
+        console.error("[Sync] Remote save failed. Local data is safe in IDB.", err);
         window.dispatchEvent(new Event("backup-failed"));
-        // We could add more robust queueing logic here for offline support.
+        // Local data is safe in IDB. The next startup reconciliation will detect
+        // that local is newer than remote and re-push. No user mutations are lost.
       });
   } else {
+    console.log(`[Sync] Local save successful (IDB updated, remote skipped, updatedAt: ${db.updatedAt}).`);
     window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
   }
 }
