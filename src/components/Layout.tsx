@@ -2,6 +2,7 @@ import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Activity, Users, Map, FileText, Settings, ShieldAlert } from "lucide-react";
 import { GlobalSearch } from "./GlobalSearch";
+import SyncStatusIndicator from "./SyncStatusIndicator";
 
 const navItems = [
   { name: "Resident Board", path: "/", icon: Users },
@@ -49,8 +50,11 @@ export function Layout() {
           <h2 className="text-xl font-semibold text-neutral-800">
             {navItems.find(item => item.path === location.pathname)?.name || "Dashboard"}
           </h2>
-          <div className="w-96">
-            <GlobalSearch />
+          <div className="flex items-center gap-4">
+            <SyncStatusIndicator />
+            <div className="w-96">
+              <GlobalSearch />
+            </div>
           </div>
         </header>
         <div className="flex-1 overflow-y-auto p-8">

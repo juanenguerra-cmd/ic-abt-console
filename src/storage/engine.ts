@@ -478,6 +478,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
  * surfaced as a rejected Promise so callers that await can handle them.
  */
 export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean } = {}): Promise<void> {
+  window.dispatchEvent(new Event("backup-started"));
   validateCommitGate(db);
 
   db.updatedAt = new Date().toISOString();
@@ -499,6 +500,7 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   const tmpVerify = await idbGet<string>(uniqueTmpKey);
   if (!tmpVerify) {
     // TMP slot is completely absent — genuine write failure.
+    window.dispatchEvent(new Event("backup-failed"));
     throw new StorageError(
       "Save failed: storage write could not be verified. " +
       "This is often caused by a browser extension interfering with storage. " +
@@ -559,10 +561,17 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   
   // --- After local saves are complete, save to remote ---
   if (!options.skipRemote) {
-    await remoteSaveDb(db).catch(err => {
-      console.error("Failed to save database to remote server:", err);
-      // We could add more robust queueing logic here for offline support.
-    });
+    await remoteSaveDb(db)
+      .then(() => {
+        window.dispatchEvent(new Event("backup-completed"));
+      })
+      .catch(err => {
+        console.error("Failed to save database to remote server:", err);
+        window.dispatchEvent(new Event("backup-failed"));
+        // We could add more robust queueing logic here for offline support.
+      });
+  } else {
+    window.dispatchEvent(new Event("backup-completed"));
   }
 }
 
