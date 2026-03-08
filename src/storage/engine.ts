@@ -1,8 +1,15 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
 import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
-import { StorageRepository } from "./repository";
+import { StorageRepository, StorageSlice } from "./repository";
 import { remoteFetchDb, remoteSaveDb } from "../services/api";
+import {
+  getOutboxState,
+  markPackedSyncPending,
+  markSlicesPending,
+  clearPackedSyncPending,
+  clearSlicesPending,
+} from "./syncOutbox";
 
 export { DB_KEY_MAIN };
 
@@ -386,19 +393,19 @@ export function createEmptyDB(): UnifiedDB {
 // Async IndexedDB-backed load / save (primary path)
 // ---------------------------------------------------------------------------
 
+/**
+ * Load the local DB from IDB as fast as possible and return it immediately
+ * (local-first UX). Remote reconciliation is scheduled in the background via
+ * {@link reconcileWithRemoteAsync} — callers should listen for the
+ * `db-reconciled-from-remote` window event to receive an updated DB when the
+ * remote is found to be newer.
+ *
+ * If no local DB exists the function falls back to fetching remote, then
+ * creates a fresh empty DB as a last resort.
+ */
 export async function loadDBAsync(): Promise<UnifiedDB> {
-  let remoteDb: UnifiedDB | null = null;
+  // 1. Try to load local DB first (fast path — no network).
   let localDb: UnifiedDB | null = null;
-  
-  // 1. Try to fetch remote DB
-  try {
-    const rawRemote = await remoteFetchDb();
-    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
-  } catch (e) {
-    console.log("Could not fetch remote DB. Working offline.", e);
-  }
-
-  // 2. Try to load local DB
   try {
     const rawLocal = await idbGet<string>(DB_KEY_MAIN);
     if (rawLocal) {
@@ -428,65 +435,193 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     // Don't rethrow, let the sync logic decide what to do.
   }
 
-  // 3. Sync and decide which DB to use
-  if (remoteDb && localDb) {
-    const remoteDate = new Date(remoteDb.updatedAt);
-    const localDate = new Date(localDb.updatedAt);
+  if (localDb) {
+    console.log(`[Startup] Local DB loaded (updatedAt: ${localDb.updatedAt}). Background remote reconciliation scheduled.`);
+    // Return local immediately (preserves local-first UX), then reconcile in
+    // the background.  The `db-reconciled-from-remote` event will fire if a
+    // newer remote version is found.
+    reconcileWithRemoteAsync(localDb).catch((e) =>
+      console.warn("[Startup] Background remote reconciliation error:", e)
+    );
+    return localDb;
+  }
 
-    if (remoteDate > localDate) {
-      console.log(`[Startup] Remote DB is newer (remote: ${remoteDb.updatedAt}, local: ${localDb.updatedAt}). Overwriting local with remote.`);
-      // Overlay fresh Firestore slices to capture any slice-only changes that
-      // were not yet reflected in the packed remote document.
-      await StorageRepository.mergeSlicesIntoDB(remoteDb);
-      await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
-      return remoteDb;
-    } else if (localDate > remoteDate) {
-      console.log(`[Startup] Local DB is newer (local: ${localDb.updatedAt}, remote: ${remoteDb.updatedAt}). Pushing local changes to remote.`);
-      window.dispatchEvent(new Event("backup-started"));
-      await remoteSaveDb(localDb)
-        .then(() => {
-            console.log("[Startup] Local DB successfully pushed to remote.");
-            window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
-        })
-        .catch(e => {
-            console.error("[Startup] Failed to push newer local DB to remote. Local state is preserved.", e);
-            window.dispatchEvent(new Event('backup-failed'));
-        });
-      return localDb;
-    } else {
-      console.log(`[Startup] Local and remote DBs are in sync (updatedAt: ${localDb.updatedAt}).`);
-      return localDb;
-    }
-  } else if (remoteDb) {
+  // 2. No local DB — must fetch remote before we can show anything.
+  let remoteDb: UnifiedDB | null = null;
+  try {
+    const rawRemote = await remoteFetchDb();
+    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+  } catch (e) {
+    console.log("Could not fetch remote DB. Working offline.", e);
+  }
+
+  if (remoteDb) {
     console.log(`[Startup] No local DB found. Using remote DB (updatedAt: ${remoteDb.updatedAt}).`);
-    // Overlay fresh Firestore slices to capture any slice-only changes that
-    // were not yet reflected in the packed remote document.
     await StorageRepository.mergeSlicesIntoDB(remoteDb);
     await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
     return remoteDb;
-  } else if (localDb) {
-    console.log(`[Startup] Remote not available. Using local DB (updatedAt: ${localDb.updatedAt}).`);
-    // Try to save the local version to remote in case the remote is just empty
-    window.dispatchEvent(new Event("backup-started"));
-    await remoteSaveDb(localDb)
-      .then(() => {
-        console.log("[Startup] Local DB successfully synced to remote.");
-        window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
-      })
-      .catch(e => {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      console.warn(`[Startup] Could not sync local DB to remote (offline?): ${errorMsg}. Local data is safe.`);
-      window.dispatchEvent(new Event('backup-failed'));
-    });
-    return localDb;
   }
-  
-  // 4. If all else fails, create a fresh DB
+
+  // 3. If all else fails, create a fresh DB.
   console.log("[Startup] No local or remote DB found. Creating a new empty database.");
   const newDb = createEmptyDB();
-  // Save it everywhere
-  await saveDBAsync(newDb).catch(e => console.error("[Startup] Initial save of empty DB failed:", e));
+  await saveDBAsync(newDb).catch(e => console.error("[Startup] Initial save of empty DB failed (local or remote):", e));
   return newDb;
+}
+
+// ---------------------------------------------------------------------------
+// Background remote reconciliation
+// ---------------------------------------------------------------------------
+
+/**
+ * Compare the local DB with the remote DB and resolve any discrepancy.
+ *
+ * - Remote newer  → pull remote, save to IDB, dispatch `db-reconciled-from-remote`.
+ * - Local  newer  → push to remote (fire-and-forget, marks outbox on failure).
+ * - Equal         → retry any pending outbox items.
+ *
+ * This is called automatically from {@link loadDBAsync} and can also be
+ * called explicitly after auth state changes, focus events, or online events.
+ *
+ * @param localDb  The in-memory DB snapshot to compare against.  When called
+ *   from the background after startup this is the DB returned by loadDBAsync.
+ */
+export async function reconcileWithRemoteAsync(localDb: UnifiedDB): Promise<void> {
+  // Always drain the outbox first — these are writes that previously failed
+  // and should be flushed before we compare timestamps.
+  await retryOutboxAsync(localDb);
+
+  let remoteDb: UnifiedDB | null = null;
+  try {
+    const rawRemote = await remoteFetchDb();
+    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+  } catch (e) {
+    console.log("[Reconcile] Could not reach remote (offline?). Skipping timestamp comparison.", e);
+    return;
+  }
+
+  const remoteDate = new Date(remoteDb.updatedAt);
+  const localDate = new Date(localDb.updatedAt);
+
+  if (remoteDate > localDate) {
+    console.log(
+      `[Reconcile] Remote is newer (remote: ${remoteDb.updatedAt}, local: ${localDb.updatedAt}). Pulling remote data.`
+    );
+    // Overlay Firestore slices to capture slice-level writes not yet reflected
+    // in the packed remote document.
+    await StorageRepository.mergeSlicesIntoDB(remoteDb);
+    await saveDBAsync(remoteDb, { skipRemote: true });
+
+    // Notify the running app that it should update its in-memory state.
+    try {
+      window.dispatchEvent(
+        new CustomEvent('db-reconciled-from-remote', { detail: remoteDb })
+      );
+    } catch { /* test environments may not have window */ }
+
+    console.log("[Reconcile] Remote data applied. UI notified via db-reconciled-from-remote event.");
+  } else if (localDate > remoteDate) {
+    console.log(
+      `[Reconcile] Local is newer (local: ${localDb.updatedAt}, remote: ${remoteDb.updatedAt}). Pushing to remote.`
+    );
+    window.dispatchEvent(new Event("backup-started"));
+    await remoteSaveDb(localDb)
+      .then(async () => {
+        console.log("[Reconcile] Local DB pushed to remote successfully.");
+        window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+        await clearPackedSyncPending().catch(() => {});
+      })
+      .catch(async (e) => {
+        console.error("[Reconcile] Failed to push local DB to remote. Queued in outbox.", e);
+        window.dispatchEvent(new Event('backup-failed'));
+        await markPackedSyncPending(e).catch(() => {});
+      });
+  } else {
+    console.log(`[Reconcile] Local and remote are in sync (updatedAt: ${localDb.updatedAt}).`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Outbox retry
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt to flush any pending outbox items (failed remote writes) against
+ * the current database state.
+ *
+ * Succeeded items are removed from the outbox; failed items are kept with
+ * updated metadata so they will be retried on the next trigger.
+ *
+ * @param currentDb  Optional in-memory DB to use for retries.  When omitted
+ *   the function reads the latest DB from IDB.
+ */
+export async function retryOutboxAsync(currentDb?: UnifiedDB): Promise<void> {
+  const state = await getOutboxState();
+  const hasPending = state.hasPendingPackedSync || state.pendingSlices.length > 0;
+  if (!hasPending) return;
+
+  console.log(
+    `[Outbox] Retrying pending items — packed: ${state.hasPendingPackedSync}, slices: [${state.pendingSlices.join(', ')}]`
+  );
+
+  // Resolve the DB to use for retries.
+  let db = currentDb;
+  if (!db) {
+    const rawDb = await idbGet<string>(DB_KEY_MAIN);
+    if (!rawDb) {
+      console.warn('[Outbox] No local DB in IDB, cannot retry outbox.');
+      return;
+    }
+    try {
+      db = runMigrations(JSON.parse(rawDb) as Record<string, unknown>);
+    } catch (e) {
+      console.error('[Outbox] Failed to parse local DB for outbox retry.', e);
+      return;
+    }
+  }
+
+  // --- Retry packed sync ---
+  if (state.hasPendingPackedSync) {
+    try {
+      await remoteSaveDb(db);
+      await clearPackedSyncPending();
+      console.log('[Outbox] Packed sync succeeded.');
+      window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+    } catch (e) {
+      console.warn('[Outbox] Packed sync retry failed — will try again later.', e);
+    }
+  }
+
+  // --- Retry per-slice sync ---
+  if (state.pendingSlices.length > 0) {
+    const facilityId = db.data.facilities.activeFacilityId;
+    const store = db.data.facilityData[facilityId];
+    if (!store) {
+      console.warn('[Outbox] No store for active facility, skipping slice retries.');
+      return;
+    }
+
+    const succeeded: string[] = [];
+    for (const sliceName of state.pendingSlices) {
+      const slice = sliceName as StorageSlice;
+      try {
+        await StorageRepository.saveSlice(facilityId, slice, store[slice]);
+        succeeded.push(sliceName);
+        console.log(`[Outbox] Slice '${sliceName}' retry succeeded.`);
+      } catch (e) {
+        console.warn(`[Outbox] Slice '${sliceName}' retry failed — will try again later.`, e);
+      }
+    }
+
+    if (succeeded.length > 0) {
+      await clearSlicesPending(succeeded);
+    }
+
+    const remaining = state.pendingSlices.filter((s) => !succeeded.includes(s));
+    if (remaining.length === 0 && !state.hasPendingPackedSync) {
+      window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+    }
+  }
 }
 
 /**
@@ -584,15 +719,17 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   // --- After local saves are complete, save to remote ---
   if (!options.skipRemote) {
     await remoteSaveDb(db)
-      .then(() => {
+      .then(async () => {
         console.log(`[Sync] Remote save successful (updatedAt: ${db.updatedAt}).`);
         window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
+        // Clear any previously queued packed sync so we don't double-push.
+        await clearPackedSyncPending().catch(() => {});
       })
-      .catch(err => {
-        console.error("[Sync] Remote save failed. Local data is safe in IDB.", err);
+      .catch(async (err) => {
+        console.error("[Sync] Remote save failed. Local data is safe in IDB. Queued in outbox.", err);
         window.dispatchEvent(new Event("backup-failed"));
-        // Local data is safe in IDB. The next startup reconciliation will detect
-        // that local is newer than remote and re-push. No user mutations are lost.
+        // Queue for retry on the next trigger (online, focus, auth-restored).
+        await markPackedSyncPending(err).catch(() => {});
       });
   } else {
     console.log(`[Sync] Local save successful (IDB updated, remote skipped, updatedAt: ${db.updatedAt}).`);

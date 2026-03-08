@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { UnifiedDB, FacilityStore } from "../domain/models";
-import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN } from "../storage/engine";
+import { loadDBAsync, SchemaMigrationError, DB_KEY_MAIN, reconcileWithRemoteAsync } from "../storage/engine";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { commandHandlers, MutationMeta } from "../services/commandHandlers";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../services/firebase";
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -123,6 +125,53 @@ export function AppProviders({ children }: { children: ReactNode }) {
       };
     }
   }, []);
+
+  // Remote reconciliation: apply a newer DB delivered by the background sync.
+  useEffect(() => {
+    const handleRemoteReconcile = (event: Event) => {
+      const remoteDb = (event as CustomEvent<UnifiedDB>).detail;
+      if (!remoteDb) return;
+      console.log("[Providers] Applying remote DB from background reconciliation.");
+      setDb(remoteDb);
+      setActiveFacilityId(remoteDb.data.facilities.activeFacilityId);
+    };
+    window.addEventListener('db-reconciled-from-remote', handleRemoteReconcile);
+    return () => window.removeEventListener('db-reconciled-from-remote', handleRemoteReconcile);
+  }, []);
+
+  // Retry outbox + reconcile on: window focus, coming back online, auth transitions.
+  useEffect(() => {
+    const triggerReconciliation = (reason: string) => {
+      setDb(current => {
+        if (!current) return current;
+        console.log(`[Providers] Triggering remote reconciliation: ${reason}`);
+        reconcileWithRemoteAsync(current).catch((e) =>
+          console.warn(`[Providers] Reconciliation failed (${reason}):`, e)
+        );
+        return current;
+      });
+    };
+
+    const handleFocus = () => triggerReconciliation('window-focus');
+    const handleOnline = () => triggerReconciliation('online');
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
+
+    // Auth transition: when the user logs in during an active session, replay
+    // the outbox and reconcile so any local-only changes are pushed to remote.
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        triggerReconciliation('auth-state-change');
+      }
+    });
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
+      unsubscribeAuth();
+    };
+  }, []); // empty deps — db is accessed via the functional updater form of setDb, not a stale closure
 
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
 

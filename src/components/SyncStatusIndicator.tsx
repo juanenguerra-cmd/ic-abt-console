@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, RefreshCw, AlertTriangle, Cloud } from 'lucide-react';
+import { CheckCircle, RefreshCw, AlertTriangle, Cloud, Upload } from 'lucide-react';
+import { hasOutboxItems } from '../storage/syncOutbox';
 
-type SyncState = 'synced' | 'syncing' | 'error' | 'local';
+type SyncState = 'synced' | 'syncing' | 'pending' | 'error' | 'local';
 
 const SyncStatusIndicator: React.FC = () => {
   const [syncState, setSyncState] = useState<SyncState>('synced');
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+
+  // Read the initial outbox state on mount.
+  useEffect(() => {
+    hasOutboxItems().then((hasPending) => {
+      if (hasPending) {
+        setSyncState('pending');
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleSyncStart = () => setSyncState('syncing');
@@ -20,9 +30,18 @@ const SyncStatusIndicator: React.FC = () => {
     };
     const handleSyncError = () => setSyncState('error');
 
+    // Outbox changes: switch to 'pending' when items are queued.
+    const handleOutboxChanged = (event: Event) => {
+      const isEmpty = (event as CustomEvent<{ isEmpty: boolean }>).detail?.isEmpty;
+      if (!isEmpty) {
+        setSyncState('pending');
+      }
+    };
+
     window.addEventListener('backup-started', handleSyncStart);
     window.addEventListener('backup-completed', handleSyncSuccess);
     window.addEventListener('backup-failed', handleSyncError);
+    window.addEventListener('sync-outbox-changed', handleOutboxChanged);
 
     // Set initial synced time
     setSyncState('synced');
@@ -32,6 +51,7 @@ const SyncStatusIndicator: React.FC = () => {
       window.removeEventListener('backup-started', handleSyncStart);
       window.removeEventListener('backup-completed', handleSyncSuccess);
       window.removeEventListener('backup-failed', handleSyncError);
+      window.removeEventListener('sync-outbox-changed', handleOutboxChanged);
     };
   }, []);
 
@@ -42,6 +62,12 @@ const SyncStatusIndicator: React.FC = () => {
           Icon: RefreshCw,
           text: 'Syncing...',
           className: 'text-neutral-500 animate-spin',
+        };
+      case 'pending':
+        return {
+          Icon: Upload,
+          text: 'Pending sync',
+          className: 'text-amber-500',
         };
       case 'error':
         return {
@@ -76,3 +102,4 @@ const SyncStatusIndicator: React.FC = () => {
 };
 
 export default SyncStatusIndicator;
+

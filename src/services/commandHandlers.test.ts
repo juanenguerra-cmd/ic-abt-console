@@ -69,6 +69,15 @@ vi.mock('./api', () => ({
   remoteSaveDb: vi.fn().mockResolvedValue(undefined),
 }));
 
+const mockMarkSlicesPending = vi.fn().mockResolvedValue(undefined);
+const mockMarkPackedSyncPending = vi.fn().mockResolvedValue(undefined);
+const mockClearPackedSyncPending = vi.fn().mockResolvedValue(undefined);
+vi.mock('../storage/syncOutbox', () => ({
+  markSlicesPending: (...args: any[]) => mockMarkSlicesPending(...args),
+  markPackedSyncPending: (...args: any[]) => mockMarkPackedSyncPending(...args),
+  clearPackedSyncPending: () => mockClearPackedSyncPending(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -372,6 +381,33 @@ describe('commandHandlers.saveDatabase – slice-only path', () => {
       expect.objectContaining({ type: 'DB_UPDATED' }),
     );
   });
+
+  test('marks failed slices as pending in outbox on slice-only path failure', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeFailureResult(['abts'], ['residents']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents', 'abts'], false);
+
+    expect(mockMarkSlicesPending).toHaveBeenCalledWith(['residents']);
+  });
+
+  test('marks failed slices as pending in outbox on main-change path failure', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeFailureResult([], ['abts']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, [], true);
+
+    expect(mockMarkSlicesPending).toHaveBeenCalledWith(['abts']);
+  });
+
+  test('does NOT mark slices pending in outbox when all slices succeed', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeSuccessResult(['residents', 'abts']));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents', 'abts'], false);
+
+    expect(mockMarkSlicesPending).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -406,5 +442,27 @@ describe('debounced remote sync (scheduleRemoteSync)', () => {
 
     // The push should use db2 (the most recent state)
     expect(mockRemoteSaveDb).toHaveBeenCalledWith(db2);
+  });
+
+  test('marks packed sync pending in outbox when debounced push fails', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeSuccessResult(['residents']));
+    mockRemoteSaveDb.mockRejectedValueOnce(new Error('Network error'));
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents'], false);
+    await vi.runAllTimersAsync();
+
+    expect(mockMarkPackedSyncPending).toHaveBeenCalled();
+  });
+
+  test('clears packed sync pending in outbox when debounced push succeeds', async () => {
+    const db = makeDB(FACILITY_A);
+    mockSaveSlices.mockResolvedValue(makeSuccessResult(['residents']));
+    mockRemoteSaveDb.mockResolvedValueOnce(undefined);
+
+    await commandHandlers.saveDatabase(db, FACILITY_A, ['residents'], false);
+    await vi.runAllTimersAsync();
+
+    expect(mockClearPackedSyncPending).toHaveBeenCalled();
   });
 });

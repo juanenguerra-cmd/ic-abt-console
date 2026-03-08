@@ -3,6 +3,11 @@ import { saveDBAsync, restoreFromPrevAsync, validateCommitGate } from "../storag
 import { StorageRepository, StorageSlice, STORAGE_SLICES, SaveSlicesResult } from "../storage/repository";
 import { getCurrentUser } from "../services/firebase";
 import { remoteSaveDb } from "./api";
+import {
+  markPackedSyncPending,
+  markSlicesPending,
+  clearPackedSyncPending,
+} from "../storage/syncOutbox";
 
 const MAX_MUTATION_LOG_ENTRIES = 500;
 
@@ -59,9 +64,11 @@ function scheduleRemoteSync(db: UnifiedDB): void {
       await remoteSaveDb(dbToSync);
       console.log(`[Sync] Debounced remote sync successful (updatedAt: ${dbToSync.updatedAt}).`);
       window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+      await clearPackedSyncPending().catch(() => {});
     } catch (err) {
-      console.error('[Sync] Debounced remote sync failed. Local data is safe in IDB/Firestore.', err);
+      console.error('[Sync] Debounced packed remote sync failed. Local data is safe in IDB. Queued in outbox for retry.', err);
       window.dispatchEvent(new Event('backup-failed'));
+      await markPackedSyncPending(err).catch(() => {});
     } finally {
       _remoteSyncInFlight = false;
     }
@@ -156,6 +163,8 @@ export const commandHandlers = {
             `Local data is safe. Remote slices are partially out of sync.`,
           );
           window.dispatchEvent(new Event('backup-failed'));
+          // Queue failed slices for retry.
+          await markSlicesPending(result.failedSlices).catch(() => {});
         }
       }
     } else {
@@ -176,6 +185,8 @@ export const commandHandlers = {
             `Local data is safe in IDB. Packed remote sync will not be scheduled to avoid masking slice failures.`,
           );
           window.dispatchEvent(new Event('backup-failed'));
+          // Queue failed slices for retry.
+          await markSlicesPending(result.failedSlices).catch(() => {});
           // Do NOT schedule packed remote sync — the remote is partially out of
           // sync and pushing the packed DB would mask the per-slice failures.
         }
