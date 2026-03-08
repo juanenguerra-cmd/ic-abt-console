@@ -30,23 +30,27 @@ export class StorageRepository {
   static async saveSlice(facilityId: string, slice: StorageSlice, data: any): Promise<void> {
     const user = await getCurrentUser();
     if (!user) {
-      console.warn(`Attempted to save slice '${slice}' without an authenticated user. Skipping.`);
+      console.warn(`[Sync] Attempted to save slice '${slice}' without an authenticated user. Skipping.`);
       return;
     }
 
     const sliceCollection = collection(db, 'users', user.uid, slice);
     const batch = writeBatch(db);
 
-    // data is an array of items. We write each item as a document.
-    data.forEach((item: any) => {
+    // data may be a Record<string, T> or an array — handle both shapes.
+    const items: object[] = Array.isArray(data)
+      ? (data as object[])
+      : Object.values(data as Record<string, object>);
+    items.forEach((item: any) => {
         // The item must have an `id` property to be used as the document ID.
-        if (item.id) {
+        if (item && item.id) {
             const docRef = doc(sliceCollection, item.id);
             batch.set(docRef, item);
         }
     });
 
     await batch.commit();
+    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
   static async loadSlice(facilityId: string, slice: StorageSlice): Promise<any | null> {
@@ -82,11 +86,16 @@ export class StorageRepository {
 
   static async saveSlices(facilityId: string, store: FacilityStore, changedSlices: StorageSlice[]): Promise<void> {
     eventBus.emit('sync-start');
+    console.log(`[Sync] Saving slices to Firestore: ${changedSlices.join(', ')}`);
     try {
         const promises = changedSlices.map((slice) => 
           this.saveSlice(facilityId, slice, store[slice])
         );
         await Promise.all(promises);
+        console.log(`[Sync] All slices saved to Firestore successfully.`);
+    } catch (err) {
+        console.error(`[Sync] Remote slice save failed:`, err);
+        throw err;
     } finally {
         eventBus.emit('sync-end');
     }
