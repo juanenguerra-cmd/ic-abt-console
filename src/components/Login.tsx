@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -13,7 +14,14 @@ const Login: React.FC = () => {
     setError(null);
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+        // Store user data in Firestore
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email,
+          createdAt: new Date().toISOString(),
+          role: 'Nurse', // Default role
+        });
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
