@@ -24,6 +24,7 @@ import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
 import UserGuidePage from "../pages/UserGuidePage";
 import { LineListReportPage } from '../features/LineListReport';
+import AnalyticsPage from '../features/Analytics';
 
 import { LockScreen } from './LockScreen';
 import { 
@@ -347,6 +348,7 @@ const AppShell = () => {
             <SidebarSection title="Overview">
               <SidebarLink to="/home" icon={Home} label="Home" />
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+              <SidebarLink to="/analytics" icon={BarChart3} label="Analytics" />
             </SidebarSection>
             
             <SidebarSection title="Residents">
@@ -402,6 +404,7 @@ const AppShell = () => {
                 <Route path="/floorplan" element={<Navigate to="/floor-map" replace />} />
                 <Route path="/heatmap" element={<Navigate to="/floor-map" replace />} />
                 <Route path="/staff" element={<PageTransition><StaffPage /></PageTransition>} />
+                <Route path="/analytics" element={<PageTransition><AnalyticsPage /></PageTransition>} />
                 
                 <Route path="/chat" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ShiftLogPage /></RoleGuard></PageTransition>} />
                 <Route path="/note-generator" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><NoteGenerator /></RoleGuard></PageTransition>} />

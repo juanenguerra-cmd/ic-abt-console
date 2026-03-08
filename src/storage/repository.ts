@@ -1,6 +1,7 @@
 import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet, idbRemove } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
+import { eventBus } from '@/src/services/eventBus';
 
 export const STORAGE_SLICES = [
   "residents",
@@ -56,10 +57,15 @@ export class StorageRepository {
   }
 
   static async saveSlices(facilityId: string, store: FacilityStore, changedSlices: StorageSlice[]): Promise<void> {
-    const promises = changedSlices.map((slice) => 
-      this.saveSlice(facilityId, slice, store[slice])
-    );
-    await Promise.all(promises);
+    eventBus.emit('sync-start');
+    try {
+        const promises = changedSlices.map((slice) => 
+        this.saveSlice(facilityId, slice, store[slice])
+        );
+        await Promise.all(promises);
+    } finally {
+        eventBus.emit('sync-end');
+    }
   }
 
   static async mergeSlicesIntoDB(db: UnifiedDB): Promise<void> {
