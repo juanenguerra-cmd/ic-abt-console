@@ -439,7 +439,15 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
       return remoteDb;
     } else if (localDate > remoteDate) {
       console.log("Local DB is newer. Pushing changes to remote.");
-      await remoteSaveDb(localDb).catch(e => console.error("Failed to push newer local DB to remote:", e));
+      window.dispatchEvent(new Event("backup-started"));
+      await remoteSaveDb(localDb)
+        .then(() => {
+            window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+        })
+        .catch(e => {
+            console.error("Failed to push newer local DB to remote:", e)
+            window.dispatchEvent(new Event('backup-failed'));
+        });
       return localDb;
     } else {
       console.log("Local and remote DBs are in sync.");
@@ -452,9 +460,15 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   } else if (localDb) {
     console.log("Using local DB, remote not available.");
     // Try to save the local version to remote in case the remote is just empty
-    await remoteSaveDb(localDb).catch(e => {
+    window.dispatchEvent(new Event("backup-started"));
+    await remoteSaveDb(localDb)
+      .then(() => {
+        window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
+      })
+      .catch(e => {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.warn(`Failed to save local DB to empty remote: ${errorMsg}`);
+      window.dispatchEvent(new Event('backup-failed'));
     });
     return localDb;
   }
@@ -563,7 +577,7 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   if (!options.skipRemote) {
     await remoteSaveDb(db)
       .then(() => {
-        window.dispatchEvent(new Event("backup-completed"));
+        window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
       })
       .catch(err => {
         console.error("Failed to save database to remote server:", err);
@@ -571,7 +585,7 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
         // We could add more robust queueing logic here for offline support.
       });
   } else {
-    window.dispatchEvent(new Event("backup-completed"));
+    window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
   }
 }
 

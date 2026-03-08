@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CheckCircle, RefreshCw, AlertTriangle, Cloud } from 'lucide-react';
+
+type SyncState = 'synced' | 'syncing' | 'error' | 'local';
 
 const SyncStatusIndicator: React.FC = () => {
-  const [syncState, setSyncState] = useState<'synced' | 'syncing' | 'error'>('synced');
+  const [syncState, setSyncState] = useState<SyncState>('synced');
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
 
   useEffect(() => {
     const handleSyncStart = () => setSyncState('syncing');
-    const handleSyncSuccess = () => {
-      setSyncState('synced');
+    const handleSyncSuccess = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail && detail.type === 'remote') {
+        setSyncState('synced');
+      } else {
+        setSyncState('local');
+      }
       setLastSynced(new Date());
     };
     const handleSyncError = () => setSyncState('error');
@@ -18,7 +25,8 @@ const SyncStatusIndicator: React.FC = () => {
     window.addEventListener('backup-failed', handleSyncError);
 
     // Set initial synced time
-    handleSyncSuccess();
+    setSyncState('synced');
+    setLastSynced(new Date());
 
     return () => {
       window.removeEventListener('backup-started', handleSyncStart);
@@ -41,10 +49,16 @@ const SyncStatusIndicator: React.FC = () => {
           text: 'Sync Error',
           className: 'text-red-500',
         };
+      case 'local':
+        return {
+          Icon: CheckCircle,
+          text: 'Saved locally',
+          className: 'text-blue-600',
+        };
       case 'synced':
       default:
         return {
-          Icon: CheckCircle,
+          Icon: Cloud,
           text: `Synced`,
           className: 'text-green-600',
         };
