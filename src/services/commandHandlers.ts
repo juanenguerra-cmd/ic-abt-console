@@ -1,6 +1,6 @@
 import { UnifiedDB, MutationLogEntry, FacilityStore } from "../domain/models";
 import { saveDBAsync, restoreFromPrevAsync, validateCommitGate } from "../storage/engine";
-import { StorageRepository, StorageSlice, STORAGE_SLICES } from "../storage/repository";
+import { StorageRepository, StorageSlice, STORAGE_SLICES, SaveSlicesResult } from "../storage/repository";
 import { getCurrentUser } from "../services/firebase";
 import { remoteSaveDb } from "./api";
 
@@ -145,25 +145,41 @@ export const commandHandlers = {
     }
 
     if (mainChanged || changedSlices.length === 0) {
+      // Full save: saveDBAsync writes locally (IDB) and pushes the packed DB
+      // remotely.  Individual slices are then synced on top for granularity.
       await saveDBAsync(db);
       if (store) {
-        await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
+        const result: SaveSlicesResult = await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
+        if (!result.allSucceeded) {
+          console.error(
+            `[Sync] Partial slice save failure (main path). Failed slices: [${result.failedSlices.join(', ')}]. ` +
+            `Local data is safe. Remote slices are partially out of sync.`,
+          );
+          window.dispatchEvent(new Event('backup-failed'));
+        }
       }
     } else {
-      // Only slices changed — save those slices to Firestore, then update the
-      // local IDB snapshot so it stays fresh for startup reconciliation.
-      if (store) {
-        await StorageRepository.saveSlices(activeFacilityId, store, changedSlices);
-        console.log(`[Sync] Slice-only local save successful (slices: ${changedSlices.join(', ')}).`);
-      }
-      // Persist the updated DB to IDB (local only) so the IDB snapshot stays
-      // consistent with what is now in Firestore and timestamps reflect the
-      // latest mutation. skipRemote avoids a duplicate write to the unified
-      // remote document since slices were already pushed above.
+      // Slice-only path — local-first: persist to IDB before attempting remote
+      // writes so a remote failure never leaves local data unsaved.
       await saveDBAsync(db, { skipRemote: true });
-      // Schedule a debounced remote sync so the packed Firebase document stays
-      // current, enabling correct timestamp-based reconciliation at startup.
-      scheduleRemoteSync(db);
+
+      if (store) {
+        const result: SaveSlicesResult = await StorageRepository.saveSlices(activeFacilityId, store, changedSlices);
+        if (result.allSucceeded) {
+          console.log(`[Sync] Slice-only remote save successful (slices: ${changedSlices.join(', ')}).`);
+          // Schedule a debounced remote sync so the packed Firebase document stays
+          // current, enabling correct timestamp-based reconciliation at startup.
+          scheduleRemoteSync(db);
+        } else {
+          console.error(
+            `[Sync] Partial slice save failure (slice-only path). Failed: [${result.failedSlices.join(', ')}]. ` +
+            `Local data is safe in IDB. Packed remote sync will not be scheduled to avoid masking slice failures.`,
+          );
+          window.dispatchEvent(new Event('backup-failed'));
+          // Do NOT schedule packed remote sync — the remote is partially out of
+          // sync and pushing the packed DB would mask the per-slice failures.
+        }
+      }
     }
 
     try {
