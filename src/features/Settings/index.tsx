@@ -159,7 +159,7 @@ export const SettingsConsole: React.FC = () => {
       try {
         const ok = await restoreFromPrevAsync();
         if (ok) {
-          sessionStorage.setItem("JUST_RESTORED_BACKUP", "1");
+          sessionStorage.setItem(LS_JUST_RESTORED_FLAG, "true");
           alertService.show("Previous version restored. App will reload.", {type: "success"});
           setTimeout(() => window.location.reload(), 1000);
         } else {
@@ -211,8 +211,8 @@ export const SettingsConsole: React.FC = () => {
       // `setDB` now handles both persisting to storage and updating the React state.
       await setDB(repairedDB);
       
-      // 3. Set the overwrite guard for the next page load.
-      sessionStorage.setItem("JUST_RESTORED_BACKUP", "1");
+      // 3. Set the overwrite guard for the next page load using the canonical key.
+      sessionStorage.setItem(LS_JUST_RESTORED_FLAG, "true");
       
       // 4. Manually update the active facility ID in the live context.
       setActiveFacilityId(repairedDB.data.facilities.activeFacilityId);
