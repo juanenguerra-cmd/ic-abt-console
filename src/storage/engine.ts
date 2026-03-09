@@ -401,17 +401,45 @@ export function createEmptyDB(): UnifiedDB {
 // ---------------------------------------------------------------------------
 
 /**
- * Load the local DB from IDB as fast as possible and return it immediately
- * (local-first UX). Remote reconciliation is scheduled in the background via
- * {@link reconcileWithRemoteAsync} — callers should listen for the
- * `db-reconciled-from-remote` window event to receive an updated DB when the
- * remote is found to be newer.
+ * Load the DB using an online-first strategy (prioritises data freshness).
  *
- * If no local DB exists the function falls back to fetching remote, then
- * creates a fresh empty DB as a last resort.
+ * 1. **Remote first** — attempt to fetch the latest DB from the remote server.
+ *    If successful the remote data is saved to IDB and returned immediately so
+ *    the app always starts with the most up-to-date information.
+ * 2. **Local fallback** — if the remote is unreachable (offline or error) the
+ *    function falls back to IDB (including a one-time migration from
+ *    localStorage).  Background reconciliation is scheduled so the app will
+ *    sync once connectivity is restored.
+ * 3. **Empty DB** — if neither remote nor local data is available a fresh
+ *    empty DB is created.
+ *
+ * Callers should listen for the `db-reconciled-from-remote` window event to
+ * receive updated data when the background reconciliation (offline fallback
+ * path) finds a newer remote version after connectivity is restored.
  */
 export async function loadDBAsync(): Promise<UnifiedDB> {
-  // 1. Try to load local DB first (fast path — no network).
+  // 1. Try to fetch the latest data from the remote server (online-first).
+  let remoteDb: UnifiedDB | null = null;
+  try {
+    const rawRemote = await remoteFetchDb();
+    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+  } catch (e) {
+    if (e instanceof SchemaMigrationError) throw e;
+    console.warn("[Startup] Could not reach remote server (offline?). Falling back to local DB.", e);
+  }
+
+  if (remoteDb) {
+    console.log(`[Startup] Remote DB fetched (updatedAt: ${remoteDb.updatedAt}). Saving to local storage.`);
+    try {
+      await StorageRepository.mergeSlicesIntoDB(remoteDb);
+      await saveDBAsync(remoteDb, { skipRemote: true }); // Persist to IDB only
+    } catch (e) {
+      console.warn("[Startup] Failed to persist remote DB to local storage. Continuing with remote data in memory.", e);
+    }
+    return remoteDb;
+  }
+
+  // 2. Remote unreachable — fall back to local IDB.
   let localDb: UnifiedDB | null = null;
   try {
     const rawLocal = await idbGet<string>(DB_KEY_MAIN);
@@ -427,8 +455,8 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
         const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
         const migrated = runMigrations(parsed);
         await StorageRepository.mergeSlicesIntoDB(migrated);
-        
-        // Persist to IDB for future loads
+
+        // Persist to IDB for future loads.
         const packed = packV3(migrated);
         await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
           console.warn("IDB migration write failed:", err)
@@ -439,34 +467,19 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   } catch (e) {
     if (e instanceof SchemaMigrationError) throw e;
     console.error("Failed to load local DB:", e);
-    // Don't rethrow, let the sync logic decide what to do.
+    // Don't rethrow — let the empty-DB path handle this.
   }
 
   if (localDb) {
-    console.log(`[Startup] Local DB loaded (updatedAt: ${localDb.updatedAt}). Background remote reconciliation scheduled.`);
-    // Return local immediately (preserves local-first UX), then reconcile in
-    // the background.  The `db-reconciled-from-remote` event will fire if a
-    // newer remote version is found.
+    console.log(`[Startup] Offline — using local DB (updatedAt: ${localDb.updatedAt}). Background reconciliation scheduled for when connectivity is restored.`);
+    // Schedule background reconciliation so any pending outbox items are
+    // retried and the app syncs once the remote becomes reachable again.
+    // The `db-reconciled-from-remote` event will fire if a newer remote
+    // version is found.
     reconcileWithRemoteAsync(localDb, 'startup').catch((e) =>
       console.warn("[Startup] Background remote reconciliation error:", e)
     );
     return localDb;
-  }
-
-  // 2. No local DB — must fetch remote before we can show anything.
-  let remoteDb: UnifiedDB | null = null;
-  try {
-    const rawRemote = await remoteFetchDb();
-    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
-  } catch (e) {
-    console.log("Could not fetch remote DB. Working offline.", e);
-  }
-
-  if (remoteDb) {
-    console.log(`[Startup] No local DB found. Using remote DB (updatedAt: ${remoteDb.updatedAt}).`);
-    await StorageRepository.mergeSlicesIntoDB(remoteDb);
-    await saveDBAsync(remoteDb, { skipRemote: true }); // Save to local only
-    return remoteDb;
   }
 
   // 3. If all else fails, create a fresh DB.
