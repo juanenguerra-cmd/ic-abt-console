@@ -164,7 +164,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             if (ext.onsetDate) setOnsetDate(ext.onsetDate);
             if (ext.eventDetectedDate) setEventDetectedDate(ext.eventDetectedDate);
             if (ext.precautionStartDate) setPrecautionStartDate(ext.precautionStartDate);
-            setNotes(existingIp.notes.replace(/\n\n--- EXTENDED DATA ---\n.*/s, ""));
+            setNotes(existingIp.notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, "").trim());
           } else {
             setNotes(existingIp.notes);
           }
