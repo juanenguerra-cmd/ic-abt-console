@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'vitest';
 import { computeResidentSignals } from './residentSignals';
-import { getActiveABT, getVaxDue, isActiveCensusResident } from './countCardDataHelpers';
+import { getActiveABT, getVaxDue, isActiveCensusResident, filterActiveResidents } from './countCardDataHelpers';
 import { FacilityStore, Resident } from '../domain/models';
 
 const makeResident = (overrides: Partial<Resident>): Resident => ({
@@ -87,6 +87,21 @@ test('active census helper: resident with "unassigned" unit and active status is
   // A resident with currentUnit ' unassigned ' but status 'Active' is currently
   // included because the function does not filter by unit value.
   expect(isActiveCensusResident(makeResident({ currentUnit: ' unassigned ' }))).toBe(true);
+});
+
+test('filterActiveResidents: removes isHistorical and backOfficeOnly residents', () => {
+  const active = makeResident({ mrn: 'A1', currentUnit: 'Unit 1' });
+  const historical = makeResident({ mrn: 'H1', isHistorical: true });
+  const backOffice = makeResident({ mrn: 'B1', backOfficeOnly: true });
+  const discharged = makeResident({ mrn: 'D1', status: 'Discharged' });
+  const result = filterActiveResidents([active, historical, backOffice, discharged]);
+  expect(result.map(r => r.mrn)).toEqual(['A1']);
+});
+
+test('filterActiveResidents: returns empty array when no active residents', () => {
+  const historical = makeResident({ mrn: 'H1', isHistorical: true });
+  const backOffice = makeResident({ mrn: 'B1', backOfficeOnly: true });
+  expect(filterActiveResidents([historical, backOffice])).toHaveLength(0);
 });
 
 test('computeResidentSignals uses normalized ABT/VAX helper rules', () => {

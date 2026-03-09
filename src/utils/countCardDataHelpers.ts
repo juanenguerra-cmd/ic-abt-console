@@ -16,6 +16,21 @@ export const isActiveCensusResident = (resident: Resident): boolean => {
   return status === 'active';
 };
 
+/**
+ * Returns true if the resident is a historical or back-office-only resident
+ * (i.e., not part of the active census).
+ */
+export const isHistoricalOrBackOffice = (resident: Resident): boolean =>
+  !!(resident?.isHistorical || resident?.backOfficeOnly);
+
+/**
+ * Returns only active census residents, excluding isHistorical and backOfficeOnly.
+ * Delegates to `isActiveCensusResident` which enforces status, isHistorical, and backOfficeOnly checks.
+ * Apply this before computing any derived metrics or aggregates for the board.
+ */
+export const filterActiveResidents = (residents: Resident[]): Resident[] =>
+  residents.filter(isActiveCensusResident);
+
 export const getActiveABT = (abts: ABTCourse[], residentMrn?: string): ABTCourse[] => {
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
   

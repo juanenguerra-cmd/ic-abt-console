@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
 import { Resident } from "../../domain/models";
-import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff, ChevronDown, Archive, History } from "lucide-react";
 import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CensusParserModal } from "./CensusParserModal";
@@ -16,7 +16,7 @@ import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
-import { getActiveABT, getVaxDue, isActiveCensusResident, normalizeStatus, getAbtDays } from "../../utils/countCardDataHelpers";
+import { getActiveABT, getVaxDue, isActiveCensusResident, filterActiveResidents, isHistoricalOrBackOffice, normalizeStatus, getAbtDays } from "../../utils/countCardDataHelpers";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
 import { getDeviceDay, normalizeClinicalDevices, formatDeviceDayLabel } from "../../utils/clinicalDevices";
@@ -73,6 +73,8 @@ const TILE_COLORS: Record<string, { strip: string; bg: string }> = {
   none:   { strip: 'transparent', bg: 'transparent' },
 };
 
+const HISTORICAL_TILE_COLOR = { strip: 'transparent', bg: 'transparent' };
+
 export const ResidentBoard: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { db, updateDB } = useDatabase();
@@ -94,12 +96,14 @@ export const ResidentBoard: React.FC = () => {
   const [filterPendingLabs, setFilterPendingLabs] = useState(() => searchParams.get('pendingLabs') === 'true');
   const [filterVaxDueOnly, setFilterVaxDueOnly] = useState(() => searchParams.get('vaxDue') === 'true');
   const [showAllActiveResidents, setShowAllActiveResidents] = useState(false);
+  const [showHistoricalResidents, setShowHistoricalResidents] = useState(() => searchParams.get('showHistorical') === 'true');
   
   const [selectedResidentId, setSelectedResidentId] = useState<string | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCensusModal, setShowCensusModal] = useState(false);
   
-  const [view, setView] = useState<'board' | 'report' | 'quarantine'>('board');
+  const [view, setView] = useState<'board' | 'report' | 'quarantine' | 'historicalLibrary'>('board');
+  const [historicalSearchQuery, setHistoricalSearchQuery] = useState('');
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [expandedSnapshots, setExpandedSnapshots] = useState<Record<string, boolean>>({});
@@ -205,10 +209,12 @@ export const ResidentBoard: React.FC = () => {
   // Filter logic
   const filteredResidents = useMemo(() => {
     return residents.filter(r => {
-      // Exclude unassigned residents since they are not true active census
-      if (!isActiveCensusResident(r)) {
-        return false;
-      }
+      const isHistoricalResident = isHistoricalOrBackOffice(r);
+
+      // Historical/backOffice residents: only shown when toggle is on
+      if (isHistoricalResident && !showHistoricalResidents) return false;
+      // Non-historical residents must pass the active census check (status === 'active', not historical, not backOfficeOnly)
+      if (!isHistoricalResident && !isActiveCensusResident(r)) return false;
 
       // Global Search
       const matchesSearch = 
@@ -218,9 +224,11 @@ export const ResidentBoard: React.FC = () => {
       
       if (!matchesSearch) return false;
 
-      // Toggles
-      if (filterActiveOnly && normalizeStatus(r.status) !== "active") return false;
-      if (filterDischargedOnly && normalizeStatus(r.status) !== "discharged") return false;
+      // Status toggles apply to non-historical residents only
+      if (!isHistoricalResident) {
+        if (filterActiveOnly && normalizeStatus(r.status) !== "active") return false;
+        if (filterDischargedOnly && normalizeStatus(r.status) !== "discharged") return false;
+      }
       
       if (filterAbtOnly) {
         const hasAbt = activeABTs.some(a => a.residentRef.kind === "mrn" && a.residentRef.id === r.mrn);
@@ -300,7 +308,7 @@ export const ResidentBoard: React.FC = () => {
 
       return true;
     });
-  }, [residents, searchQuery, filterActiveOnly, filterDischargedOnly, filterAbtOnly, filterOnPrecautions, filterPrecautionType, filterLast24h, filterNeedsReview, filterAbtReview, filterPendingLabs, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, signalMap, vaxEvents]);
+  }, [residents, searchQuery, filterActiveOnly, filterDischargedOnly, filterAbtOnly, filterOnPrecautions, filterPrecautionType, filterLast24h, filterNeedsReview, filterAbtReview, filterPendingLabs, filterVaxDueOnly, activeABTs, activeInfections, filterUnit, today, twentyFourHoursAgo, showAllActiveResidents, showHistoricalResidents, signalMap, vaxEvents]);
 
   // Group by Unit
   const units = useMemo(() => {
@@ -414,6 +422,133 @@ export const ResidentBoard: React.FC = () => {
       }],
     };
   };
+
+  if (view === 'historicalLibrary') {
+    const allHistoricalResidents = residents.filter(r => r.isHistorical || r.backOfficeOnly);
+    const filteredHistorical = allHistoricalResidents.filter(r => {
+      const q = historicalSearchQuery.toLowerCase();
+      if (!q) return true;
+      return (
+        (r.displayName || '').toLowerCase().includes(q) ||
+        (r.mrn || '').toLowerCase().includes(q) ||
+        (r.currentUnit || '').toLowerCase().includes(q) ||
+        (r.currentRoom || '').toLowerCase().includes(q)
+      );
+    });
+
+    return (
+      <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
+        <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center gap-4 shrink-0">
+          <button onClick={() => setView('board')} className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md" aria-label="Back to board">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <Archive className="w-5 h-5 text-neutral-500" aria-hidden="true" />
+          <h1 className="text-xl font-bold text-neutral-900">Historical Library</h1>
+          <div className="relative ml-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" aria-hidden="true" />
+            <input
+              type="search"
+              aria-label="Search historical residents by name, MRN, unit, or room"
+              placeholder="Search name, MRN, unit, room…"
+              value={historicalSearchQuery}
+              onChange={e => setHistoricalSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-72"
+            />
+          </div>
+          <span className="ml-auto text-sm text-neutral-500">{filteredHistorical.length} resident{filteredHistorical.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {filteredHistorical.length === 0 ? (
+            <EmptyState
+              icon={<Archive className="w-16 h-16 text-neutral-300" />}
+              title="No historical residents found"
+              description={
+                historicalSearchQuery
+                  ? "No historical residents match your search. Try clearing the search above."
+                  : "Historical and back-office-only residents will appear here."
+              }
+            />
+          ) : (
+            <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
+              <table className="w-full text-sm">
+                <thead className="bg-neutral-50 border-b border-neutral-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">MRN</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">DOB</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Unit</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Room</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Type</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {filteredHistorical.map(r => (
+                    <tr
+                      key={r.mrn}
+                      className="hover:bg-neutral-50 cursor-pointer"
+                      onClick={() => {
+                        setSelectedResidentId(r.mrn);
+                        setShowProfileModal(true);
+                      }}
+                    >
+                      <td className="px-4 py-3 font-medium text-neutral-900">{r.displayName}</td>
+                      <td className="px-4 py-3 text-neutral-500 font-mono">{r.mrn}</td>
+                      <td className="px-4 py-3 text-neutral-500">{r.dob || '—'}</td>
+                      <td className="px-4 py-3 text-neutral-500">{r.currentUnit || '—'}</td>
+                      <td className="px-4 py-3 text-neutral-500">{r.currentRoom || '—'}</td>
+                      <td className="px-4 py-3">
+                        {r.backOfficeOnly ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 uppercase tracking-wider">Back-Office</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-200 text-neutral-600 uppercase tracking-wider">Historical</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Resident Profile Modal (accessible from Historical Library) */}
+        {showProfileModal && selectedResidentId && (
+          <ResidentProfileModal
+            residentId={selectedResidentId}
+            onClose={() => setShowProfileModal(false)}
+            onAddAbt={() => { setEditingAbtId(null); setShowAbtModal(true); }}
+            onAddIp={() => { setEditingIpId(null); setShowIpModal(true); }}
+            onAddVax={() => { setEditingVaxId(null); setShowVaxModal(true); }}
+            onEditAbt={(id) => { setEditingAbtId(id); setShowAbtModal(true); }}
+            onEditIp={(id) => { setEditingIpId(id); setShowIpModal(true); }}
+            onEditVax={(id) => { setEditingVaxId(id); setShowVaxModal(true); }}
+            onDeleteAbt={(id) => {
+              if (!confirm("Delete this antibiotic course?")) return;
+              const snapshot = db.data.facilityData[activeFacilityId]?.abts?.[id];
+              if (!snapshot) return;
+              updateDB(draft => { delete draft.data.facilityData[activeFacilityId].abts[id]; }, { action: 'delete', entityType: 'ABTCourse', entityId: id });
+              showUndo({ message: "ABT course deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].abts[id] = snapshot; }) });
+            }}
+            onDeleteIp={(id) => {
+              if (!confirm("Delete this infection/precaution event?")) return;
+              const snapshot = db.data.facilityData[activeFacilityId]?.infections?.[id];
+              if (!snapshot) return;
+              updateDB(draft => { delete draft.data.facilityData[activeFacilityId].infections[id]; }, { action: 'delete', entityType: 'IPEvent', entityId: id });
+              showUndo({ message: "IP event deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].infections[id] = snapshot; }) });
+            }}
+            onDeleteVax={(id) => {
+              if (!confirm("Delete this vaccination record?")) return;
+              const snapshot = db.data.facilityData[activeFacilityId]?.vaxEvents?.[id];
+              if (!snapshot) return;
+              updateDB(draft => { delete draft.data.facilityData[activeFacilityId].vaxEvents[id]; }, { action: 'delete', entityType: 'VaxEvent', entityId: id });
+              showUndo({ message: "Vaccination record deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].vaxEvents[id] = snapshot; }) });
+            }}
+            onStartContactTrace={() => {}}
+          />
+        )}
+      </div>
+    );
+  }
 
   if (view === 'quarantine') {
     return (
@@ -593,6 +728,15 @@ export const ResidentBoard: React.FC = () => {
           >
             Show all active residents
           </button>
+          <button
+            onClick={() => { const v = !showHistoricalResidents; setShowHistoricalResidents(v); updateFilters({ showHistorical: v ? 'true' : null }); }}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${showHistoricalResidents ? 'bg-amber-100 border-amber-400 text-amber-800' : 'bg-white border-neutral-300 text-neutral-600 hover:bg-neutral-50'}`}
+            aria-pressed={showHistoricalResidents}
+            title="Show historical and back-office-only residents on the board"
+          >
+            <History className="w-3 h-3" aria-hidden="true" />
+            Show Historical
+          </button>
           {filterUnit && (
             <div className="flex items-center gap-1 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium border border-indigo-300">
               Unit: {filterUnit}
@@ -625,6 +769,14 @@ export const ResidentBoard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 ml-auto shrink-0">
+          <button 
+            onClick={() => setView('historicalLibrary')}
+            aria-label="View historical resident library"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
+          >
+            <Archive className="w-4 h-4" aria-hidden="true" />
+            Historical Library
+          </button>
           <button 
             onClick={() => setShowCensusModal(true)}
             aria-label="Upload or update census file"
@@ -760,8 +912,9 @@ export const ResidentBoard: React.FC = () => {
                 {unitResidents.map(resident => {
                   const hasAllergies = resident.allergies && resident.allergies.length > 0;
                   const isActive = resident.status === "Active";
+                  const isHistoricalResident = isHistoricalOrBackOffice(resident);
                   const sigs = signalMap[resident.mrn] || { hasActivePrecaution: false, hasEbp: false, hasActiveAbt: false, hasDueVax: false, hasRecentSymptoms96h: false, strip: 'none' as const };
-                  const tileColor = TILE_COLORS[sigs.strip] ?? TILE_COLORS.none;
+                  const tileColor = isHistoricalResident ? HISTORICAL_TILE_COLOR : (TILE_COLORS[sigs.strip] ?? TILE_COLORS.none);
                   const isSelected = selectedResidentId === resident.mrn;
                   const clinicalDeviceIndicators = getClinicalDeviceIndicators(resident);
                   const operationalIndicators: Array<{ icon: string; label: string }> = [...clinicalDeviceIndicators];
@@ -792,7 +945,7 @@ export const ResidentBoard: React.FC = () => {
                       }}
                       style={{ background: tileColor.bg }}
                       className={`relative border rounded-lg cursor-pointer transition-all shadow-sm hover:shadow-md overflow-hidden ${
-                        isSelected ? "border-indigo-500 ring-1 ring-indigo-500" : "border-neutral-200"
+                        isSelected ? "border-indigo-500 ring-1 ring-indigo-500" : isHistoricalResident ? "border-neutral-300 opacity-60" : "border-neutral-200"
                       }`}
                     >
                       {/* Left colour strip — yellow=Isolation, blue=EBP, green=ABT */}
@@ -800,7 +953,7 @@ export const ResidentBoard: React.FC = () => {
                       <div className="pl-4 pr-3 py-3">
                         {/* Header Row */}
                         <div className="flex justify-between items-start mb-1">
-                          <h4 className="text-sm font-bold text-neutral-900 truncate pr-2" title={resident.displayName}>
+                          <h4 className={`text-sm font-bold truncate pr-2 ${isHistoricalResident ? 'text-neutral-500' : 'text-neutral-900'}`} title={resident.displayName}>
                             {resident.displayName}
                           </h4>
                           <div className="flex items-center gap-1">
@@ -883,6 +1036,12 @@ export const ResidentBoard: React.FC = () => {
 
                         {/* Chip Row */}
                         <div className="flex flex-wrap gap-1.5 mt-1">
+                          {isHistoricalResident && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-neutral-300 text-neutral-600 shadow-sm uppercase tracking-wider">
+                              <History className="w-2.5 h-2.5" aria-hidden="true" />
+                              {resident.backOfficeOnly ? 'Back-Office' : 'Historical'}
+                            </span>
+                          )}
                           {hasAllergies && (
                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500 text-white shadow-sm uppercase tracking-wider">
                               Allergies
