@@ -1,20 +1,13 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // User profile document
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow a user to create, read, and write their own user document.
+      allow read, write, create: if request.auth != null && request.auth.uid == userId;
 
-      // Facility documents owned by the user
+      // Allow a user to manage documents in their own 'facilities' subcollection.
       match /facilities/{facilityId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        // All facility-scoped collections:
-        // residents, abts, ipEvents, vaccinations, audits, notifications, settings
-        match /{collection}/{docId} {
-          allow read, write: if request.auth != null && request.auth.uid == userId;
-        }
+        allow read, write, create: if request.auth != null && request.auth.uid == userId;
       }
     }
   }

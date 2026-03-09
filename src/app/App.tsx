@@ -51,11 +51,13 @@ const App: React.FC = () => {
   }
 
   return (
-    <Dashboard
-      user={user}
-      facilityId={facilityId}
-      onSignOut={() => signOut(auth)}
-    />
+    <>
+      <Dashboard
+        user={user}
+        facilityId={facilityId}
+        onSignOut={() => signOut(auth)}
+      />
+    </>
   );
 };
 
