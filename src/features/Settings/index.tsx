@@ -3,14 +3,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
 import { UserRole } from "../../types/roles";
-import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations, packV3 } from "../../storage/engine";
+import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations, packV3, saveDBAsync } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 import { CsvMigrationWizard } from "./CsvMigrationWizard";
 import { useNavigate } from "react-router-dom";
-import { LS_LAST_BACKUP_TS } from "../../constants/storageKeys";
+import { LS_LAST_BACKUP_TS, LS_ACTIVE_FACILITY_ID } from "../../constants/storageKeys";
 import { StorageRepository, STORAGE_SLICES } from "../../storage/repository";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
@@ -579,21 +579,31 @@ export const SettingsConsole: React.FC = () => {
         }}
         onConfirm={async () => {
           if (previewDB) {
-            setDB(previewDB);
-            const facilityId = previewDB.data.facilities.activeFacilityId;
-            const facilityData = previewDB.data.facilityData[facilityId];
-            if (facilityId && facilityData) {
-              await StorageRepository.saveSlices(
-                facilityId,
-                facilityData,
-                STORAGE_SLICES
-              );
+            try {
+              await saveDBAsync(previewDB, { skipRemote: true });
+
+              const facilityId = previewDB.data.facilities.activeFacilityId;
+              const facilityData = previewDB.data.facilityData[facilityId];
+              if (facilityId && facilityData) {
+                await StorageRepository.saveSlices(
+                  facilityId,
+                  facilityData,
+                  STORAGE_SLICES
+                );
+              }
+
+              if (facilityId) {
+                localStorage.setItem(LS_ACTIVE_FACILITY_ID, facilityId);
+              } else {
+                localStorage.removeItem(LS_ACTIVE_FACILITY_ID);
+              }
+              
+              alert("Backup restored successfully. The application will now reload.");
+              window.location.reload();
+            } catch (error) {
+              alert(`Restore failed: ${error instanceof Error ? error.message : String(error)}`);
+              console.error(error);
             }
-            alert("Backup restored successfully.");
-            setRestoreConfirm("");
-            setIsPreviewModalOpen(false);
-            setPreviewDB(null);
-            setPreviewMetadata(null);
           }
         }}
         currentDB={db}
