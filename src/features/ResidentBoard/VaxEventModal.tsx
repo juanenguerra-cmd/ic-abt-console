@@ -75,7 +75,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
             setOfferAgainDate(ext.offerAgainDate || "");
             setNextDoseNeeded(ext.nextDoseNeeded || 'complete');
             setScheduledDate(ext.scheduledDate || "");
-            setNotes(existingVax.notes.replace(/\n\n--- EXTENDED DATA ---\n.*/s, ""));
+            setNotes(existingVax.notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, "").trim());
           } else {
             setNotes(existingVax.notes);
           }
