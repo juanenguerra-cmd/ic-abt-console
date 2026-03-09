@@ -6,6 +6,15 @@ import { commandHandlers, MutationMeta, SESSION_ID } from "../services/commandHa
 import { onSnapshot, doc as fsDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db as firestoreDb } from "../services/firebase";
+import {
+  startSyncTimer,
+  stopSyncTimer,
+  triggerManualSync,
+  refreshSyncStatusFromStorage,
+  getSyncStatus,
+  SyncStatus,
+  DEFAULT_SYNC_INTERVAL_MS,
+} from "../services/syncService";
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -20,8 +29,14 @@ interface FacilityContextType {
   store: FacilityStore;
 }
 
+interface SyncStatusContextType {
+  syncStatus: SyncStatus;
+  triggerSync: () => Promise<void>;
+}
+
 const DatabaseContext = createContext<DatabaseContextType | null>(null);
 const FacilityContext = createContext<FacilityContextType | null>(null);
+const SyncStatusContext = createContext<SyncStatusContextType | null>(null);
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<UnifiedDB | null>(null);
@@ -30,6 +45,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [isSafeMode, setIsSafeMode] = useState(false);
   const [isMigrationRequired, setIsMigrationRequired] = useState(false);
   const [saveErrorToast, setSaveErrorToast] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus);
 
   useEffect(() => {
     loadDBAsync()
@@ -148,12 +164,42 @@ export function AppProviders({ children }: { children: ReactNode }) {
     setDb(current => {
       if (!current) return current;
       console.log(`[Providers] Triggering remote reconciliation: ${reason}`);
-      reconcileWithRemoteAsync(current).catch((e) =>
+      reconcileWithRemoteAsync(current, reason).catch((e) =>
         console.warn(`[Providers] Reconciliation failed (${reason}):`, e)
       );
       return current;
     });
   }, []); // empty deps — setDb is stable; reconcileWithRemoteAsync has no captured state
+
+  // Subscribe to sync-status-changed events so the SyncStatusContext stays
+  // in sync with the background service.
+  useEffect(() => {
+    const handleStatusChange = (event: Event) => {
+      const detail = (event as CustomEvent<SyncStatus>).detail;
+      if (detail) setSyncStatus(detail);
+    };
+    window.addEventListener('sync-status-changed', handleStatusChange);
+    // Hydrate from IDB on mount so last-synced-at is visible immediately.
+    refreshSyncStatusFromStorage().catch(() => {});
+    return () => window.removeEventListener('sync-status-changed', handleStatusChange);
+  }, []);
+
+  // Start the periodic sync timer once the DB is loaded.
+  // A stable getter (via ref) avoids re-creating the timer on every render.
+  const dbRef = useRef<UnifiedDB | null>(null);
+  useEffect(() => { dbRef.current = db; }, [db]);
+
+  useEffect(() => {
+    if (!db) return;
+    startSyncTimer(() => dbRef.current, DEFAULT_SYNC_INTERVAL_MS);
+    return () => stopSyncTimer();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!db]); // start once when db becomes available
+
+  // triggerSync for manual "Sync Now" action exposed via context.
+  const triggerSync = useCallback(async () => {
+    await triggerManualSync(() => dbRef.current);
+  }, []);
 
   // Realtime cross-device sync: subscribe to a Firestore signal document that
   // Device A writes after each successful save.  When Device B receives the
@@ -410,19 +456,21 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <DatabaseContext.Provider value={{ db, updateDB, setDB, error }}>
       <FacilityContext.Provider value={{ activeFacilityId, setActiveFacilityId, store }}>
-        {saveErrorToast && (
-          <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm">
-            <div className="bg-red-50 border border-red-300 rounded-lg shadow-lg p-4 flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-red-900">Save Failed</p>
-                <p className="text-xs text-red-700 mt-1 break-words">{saveErrorToast}</p>
+        <SyncStatusContext.Provider value={{ syncStatus, triggerSync }}>
+          {saveErrorToast && (
+            <div className="fixed top-4 right-4 z-[9999] w-full max-w-sm">
+              <div className="bg-red-50 border border-red-300 rounded-lg shadow-lg p-4 flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-900">Save Failed</p>
+                  <p className="text-xs text-red-700 mt-1 break-words">{saveErrorToast}</p>
+                </div>
+                <button onClick={() => setSaveErrorToast(null)} className="text-red-400 hover:text-red-600 shrink-0"><X className="h-4 w-4" /></button>
               </div>
-              <button onClick={() => setSaveErrorToast(null)} className="text-red-400 hover:text-red-600 shrink-0"><X className="h-4 w-4" /></button>
             </div>
-          </div>
-        )}
-        {children}
+          )}
+          {children}
+        </SyncStatusContext.Provider>
       </FacilityContext.Provider>
     </DatabaseContext.Provider>
   );
@@ -440,6 +488,14 @@ export function useFacilityData() {
   const context = useContext(FacilityContext);
   if (!context) {
     throw new Error("useFacilityData must be used within AppProviders");
+  }
+  return context;
+}
+
+export function useSyncStatus() {
+  const context = useContext(SyncStatusContext);
+  if (!context) {
+    throw new Error("useSyncStatus must be used within AppProviders");
   }
   return context;
 }
