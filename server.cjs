@@ -1,4 +1,3 @@
-console.log('Loading server.cjs...');
 const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
@@ -7,7 +6,7 @@ const DB_PATH = path.join(__dirname, 'db.json');
 
 const server = http.createServer(async (req, res) => {
     // Set CORS headers to allow requests from the frontend
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
@@ -63,9 +62,8 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
-const PORT = process.env.PORT || 3001;
-console.log('Before server.listen()');
-server.listen(PORT, '0.0.0.0', () => {
+const PORT = 3001;
+server.listen(PORT, () => {
     console.log(`Node.js server for database is listening on http://localhost:${PORT}`);
     console.log('It will store data in a `db.json` file in your project root.');
 });

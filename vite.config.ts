@@ -20,9 +20,9 @@ export default defineConfig(({mode}) => {
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
-          name: 'IC Nurse Console',
-          short_name: 'IC Nurse Console',
-          description: 'Infection Control & Antibiotic Stewardship Console',
+          name: 'Vite PWA Project',
+          short_name: 'Vite PWA Project',
+          description: 'I am a simple Vite PWA',
           theme_color: '#ffffff',
           icons: [
             {
@@ -51,12 +51,6 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      proxy: {
-        '/api': {
-          target: 'http://localhost:3001',
-          changeOrigin: true,
-        },
-      },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

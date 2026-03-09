@@ -1,0 +1,171 @@
+import React, { useMemo, useState } from "react";
+import MarkdownViewer from "../components/MarkdownViewer";
+import userGuideScreensDoc from "../../docs/user-guide-screens.md?raw";
+import dataFieldReferenceDoc from "../../docs/data-field-reference.md?raw";
+import processFlowsDoc from "../../docs/process-flows.md?raw";
+import { VersionHistory } from "../features/Settings/VersionHistory";
+
+const sections = [
+  {
+    title: "Dashboard",
+    purpose: "Daily command center for infection-control priorities.",
+    bullets: [
+      "Review active precautions and outbreak indicators.",
+      "Check antibiotic stewardship trends at a glance.",
+      "Jump quickly to resident and outbreak follow-up.",
+    ],
+  },
+  {
+    title: "Resident Board",
+    purpose: "Primary resident surveillance and event tracking workspace.",
+    bullets: [
+      "Track infection status and precautions.",
+      "Document IP events, vaccines, and antibiotic courses.",
+      "Open resident profile and supporting documentation.",
+    ],
+  },
+  {
+    title: "Staff",
+    purpose: "Manage staff records used in IC operations.",
+    bullets: ["Maintain staff records.", "Support operational coordination during outbreaks."],
+  },
+  {
+    title: "Outbreaks",
+    purpose: "Create and monitor outbreak episodes.",
+    bullets: ["Track active outbreaks and statuses.", "Keep outbreak timeline context and updates."],
+  },
+  {
+    title: "Quarantine Inbox",
+    purpose: "Intake queue for quarantine-related actions.",
+    bullets: ["Review incoming quarantine items.", "Edit records and move cases into line-list workflows."],
+  },
+  {
+    title: "Notes",
+    purpose: "Clinical and operational documentation tools.",
+    bullets: ["Generate AI-assisted notes.", "Maintain resident chat context and shift logs."],
+  },
+  {
+    title: "Reports",
+    purpose: "Build, run, and review reporting outputs.",
+    bullets: ["Create custom report criteria.", "Browse saved reports and key trends."],
+  },
+  {
+    title: "Audit Center",
+    purpose: "Structured audit documentation and compliance output.",
+    bullets: ["Complete infection-control audits.", "Review compliance reports."],
+  },
+  {
+    title: "Back Office",
+    purpose: "Historical data administration and correction workflows.",
+    bullets: ["Upload historical CSVs.", "Review and edit historical records."],
+  },
+  {
+    title: "Settings",
+    purpose: "Facility configuration and data management.",
+    bullets: ["Configure units/rooms and monthly metrics.", "Run migrations and backup/restore."],
+  },
+  {
+    title: "Lock Screen",
+    purpose: "Protect app access on shared workstations.",
+    bullets: ["Lock when stepping away.", "Require PIN before resuming work."],
+  },
+];
+
+type GuideTab = "overview" | "walkthrough" | "dataReference" | "processFlows" | "versionHistory";
+
+export default function UserGuidePage() {
+  const [activeTab, setActiveTab] = useState<GuideTab>("overview");
+
+  const openWalkthroughWindow = () => {
+    window.open('/data-field-walkthrough.html', '_blank', 'noopener,noreferrer');
+  };
+
+
+  const tabContent = useMemo(() => {
+    if (activeTab === "walkthrough") return <MarkdownViewer content={userGuideScreensDoc} />;
+    if (activeTab === "dataReference") return <MarkdownViewer content={dataFieldReferenceDoc} />;
+    if (activeTab === "processFlows") return <MarkdownViewer content={processFlowsDoc} />;
+    if (activeTab === "versionHistory") return <VersionHistory />;
+
+    return (
+      <section className="grid gap-4 md:grid-cols-2">
+        {sections.map((section) => (
+          <article key={section.title} className="bg-white border border-neutral-200 rounded-lg p-4">
+            <h3 className="font-semibold text-neutral-900">{section.title}</h3>
+            <p className="text-sm text-neutral-600 mt-1">{section.purpose}</p>
+            <ul className="list-disc pl-5 mt-3 text-sm text-neutral-700 space-y-1">
+              {section.bullets.map((bullet) => (
+                <li key={bullet}>{bullet}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </section>
+    );
+  }, [activeTab]);
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold text-neutral-900">User Guide</h1>
+        <p className="text-neutral-600">
+          Screen-by-screen walkthrough of where to work in the IC Nurse Console.
+        </p>
+      </header>
+
+      <section className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+        <h2 className="font-semibold text-indigo-900">Where to find this guide in the UI</h2>
+        <p className="text-indigo-900/90 mt-1">
+          Open the left sidebar and click <strong>User Guide</strong>.
+        </p>
+      </section>
+
+      <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3">
+        <button
+          type="button"
+          onClick={openWalkthroughWindow}
+          className="px-3 py-1.5 text-sm rounded-md border bg-emerald-50 text-emerald-800 border-emerald-300"
+        >
+          Data Field Walkthrough Table (New Window)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "overview" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("walkthrough")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "walkthrough" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Screen Walkthrough
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("processFlows")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "processFlows" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Process Flows
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("dataReference")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "dataReference" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Data Field Reference
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("versionHistory")}
+          className={`px-3 py-1.5 text-sm rounded-md border ${activeTab === "versionHistory" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-neutral-700 border-neutral-300"}`}
+        >
+          Version History
+        </button>
+      </nav>
+
+      {tabContent}
+    </div>
+  );
+}
