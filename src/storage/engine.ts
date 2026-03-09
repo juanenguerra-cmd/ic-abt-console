@@ -17,6 +17,7 @@ import {
   getLastSuccessfulSyncAt,
   setLastSuccessfulSyncAt,
 } from "./syncLog";
+import { getCurrentUser } from "../services/firebase";
 
 export { DB_KEY_MAIN };
 
@@ -25,9 +26,9 @@ const MAX_STORAGE_CHARS = 5 * 1024 * 1024;
 const WARN_THRESHOLD = 0.60;
 const BLOCK_THRESHOLD = 0.85;
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Error types
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 export class StorageError extends Error {
   constructor(message: string) {
@@ -47,9 +48,9 @@ export class SchemaMigrationError extends Error {
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Schema migration runner
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 /** Builds an empty FacilityStore used when back-filling missing stores. */
 function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
@@ -280,9 +281,9 @@ function migratePreV2toV2(raw: Record<string, unknown>): Record<string, unknown>
   return raw;
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Commit gate (ResidentRef + facility-scoping validation)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 export function validateCommitGate(db: UnifiedDB): void {
   for (const facilityId of Object.keys(db.data.facilityData)) {
@@ -362,9 +363,9 @@ export function validateCommitGate(db: UnifiedDB): void {
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // DB factory
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 export function createEmptyDB(): UnifiedDB {
   const now = new Date().toISOString();
@@ -396,9 +397,9 @@ export function createEmptyDB(): UnifiedDB {
   };
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Async IndexedDB-backed load / save (primary path)
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 /**
  * Load the DB using an online-first strategy (prioritises data freshness).
@@ -489,9 +490,9 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
   return newDb;
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Background remote reconciliation
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 /** Result returned by a single reconciliation cycle. */
 export interface ReconcileResult {
@@ -639,9 +640,9 @@ export async function reconcileWithRemoteAsync(
   return result;
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Internal helpers
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 /** Dispatch a DOM event safely (swallowed in test environments). */
 function _dispatchSafe(
@@ -660,9 +661,9 @@ function _dispatchSafe(
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Outbox retry
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 /**
  * Attempt to flush any pending outbox items (failed remote writes) against
@@ -837,19 +838,24 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   
   // --- After local saves are complete, save to remote ---
   if (!options.skipRemote) {
-    await remoteSaveDb(db)
-      .then(async () => {
-        console.log(`[Sync] Remote save successful (updatedAt: ${db.updatedAt}).`);
-        window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
-        // Clear any previously queued packed sync so we don't double-push.
-        await clearPackedSyncPending().catch(() => {});
-      })
-      .catch(async (err) => {
-        console.error("[Sync] Remote save failed. Local data is safe in IDB. Queued in outbox.", err);
-        window.dispatchEvent(new Event("backup-failed"));
-        // Queue for retry on the next trigger (online, focus, auth-restored).
-        await markPackedSyncPending(err).catch(() => {});
-      });
+    const user = await getCurrentUser();
+    if (user) {
+      await remoteSaveDb(db)
+        .then(async () => {
+          console.log(`[Sync] Remote save successful (updatedAt: ${db.updatedAt}).`);
+          window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
+          await clearPackedSyncPending().catch(() => {});
+        })
+        .catch(async (err) => {
+          console.error("[Sync] Remote save failed. Local data is safe in IDB. Queued in outbox.", err);
+          window.dispatchEvent(new Event("backup-failed"));
+          await markPackedSyncPending(err).catch(() => {});
+        });
+    } else {
+      console.warn("User not authenticated, skipping remote sync. Saving locally.");
+      await markPackedSyncPending(new Error("User not authenticated")).catch(() => {});
+      window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
+    }
   } else {
     console.log(`[Sync] Local save successful (IDB updated, remote skipped, updatedAt: ${db.updatedAt}).`);
     window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
@@ -871,10 +877,10 @@ export async function hardResetStorageAsync(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Synchronous localStorage load / save (legacy / fallback path)
 // Used by the providers until the async load resolves and as an emergency path.
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 export function loadDB(): UnifiedDB {
   try {
@@ -956,9 +962,9 @@ export function saveDB(db: UnifiedDB): void {
   localStorage.removeItem(DB_KEY_TMP);
 }
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 // Restore helpers
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------\
 
 export async function restoreFromPrevAsync(): Promise<boolean> {
   try {

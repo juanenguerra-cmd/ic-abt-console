@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
@@ -10,6 +11,7 @@ import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 import { CsvMigrationWizard } from "./CsvMigrationWizard";
 import { useNavigate } from "react-router-dom";
 import { LS_LAST_BACKUP_TS } from "../../constants/storageKeys";
+import { StorageRepository, STORAGE_SLICES } from "../../storage/repository";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
@@ -575,9 +577,18 @@ export const SettingsConsole: React.FC = () => {
           setPreviewDB(null);
           setPreviewMetadata(null);
         }}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (previewDB) {
             setDB(previewDB);
+            const facilityId = previewDB.data.facilities.activeFacilityId;
+            const facilityData = previewDB.data.facilityData[facilityId];
+            if (facilityId && facilityData) {
+              await StorageRepository.saveSlices(
+                facilityId,
+                facilityData,
+                STORAGE_SLICES
+              );
+            }
             alert("Backup restored successfully.");
             setRestoreConfirm("");
             setIsPreviewModalOpen(false);
