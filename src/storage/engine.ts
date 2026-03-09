@@ -10,6 +10,13 @@ import {
   clearPackedSyncPending,
   clearSlicesPending,
 } from "./syncOutbox";
+import {
+  SyncAction,
+  appendSyncRun,
+  appendConflict,
+  getLastSuccessfulSyncAt,
+  setLastSuccessfulSyncAt,
+} from "./syncLog";
 
 export { DB_KEY_MAIN };
 
@@ -440,7 +447,7 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
     // Return local immediately (preserves local-first UX), then reconcile in
     // the background.  The `db-reconciled-from-remote` event will fire if a
     // newer remote version is found.
-    reconcileWithRemoteAsync(localDb).catch((e) =>
+    reconcileWithRemoteAsync(localDb, 'startup').catch((e) =>
       console.warn("[Startup] Background remote reconciliation error:", e)
     );
     return localDb;
@@ -473,6 +480,14 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
 // Background remote reconciliation
 // ---------------------------------------------------------------------------
 
+/** Result returned by a single reconciliation cycle. */
+export interface ReconcileResult {
+  action: SyncAction;
+  pushedCount: number;
+  pulledCount: number;
+  conflictCount: number;
+}
+
 /**
  * Compare the local DB with the remote DB and resolve any discrepancy.
  *
@@ -480,13 +495,30 @@ export async function loadDBAsync(): Promise<UnifiedDB> {
  * - Local  newer  → push to remote (fire-and-forget, marks outbox on failure).
  * - Equal         → retry any pending outbox items.
  *
+ * When both sides have changed since the last successful sync a conflict is
+ * detected, logged to IDB, and resolved by remote-wins (last-write-wins
+ * based on updatedAt timestamp).
+ *
  * This is called automatically from {@link loadDBAsync} and can also be
  * called explicitly after auth state changes, focus events, or online events.
  *
- * @param localDb  The in-memory DB snapshot to compare against.  When called
- *   from the background after startup this is the DB returned by loadDBAsync.
+ * @param localDb      The in-memory DB snapshot to compare against.
+ * @param triggeredBy  Optional label for the run log ('startup', 'focus', …).
  */
-export async function reconcileWithRemoteAsync(localDb: UnifiedDB): Promise<void> {
+export async function reconcileWithRemoteAsync(
+  localDb: UnifiedDB,
+  triggeredBy = 'unknown',
+): Promise<ReconcileResult> {
+  const startedAt = new Date().toISOString();
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+  const result: ReconcileResult = {
+    action: 'noop',
+    pushedCount: 0,
+    pulledCount: 0,
+    conflictCount: 0,
+  };
+
   // Always drain the outbox first — these are writes that previously failed
   // and should be flushed before we compare timestamps.
   await retryOutboxAsync(localDb);
@@ -497,13 +529,48 @@ export async function reconcileWithRemoteAsync(localDb: UnifiedDB): Promise<void
     remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
   } catch (e) {
     console.log("[Reconcile] Could not reach remote (offline?). Skipping timestamp comparison.", e);
-    return;
+    result.action = 'offline';
+    await appendSyncRun({
+      id: runId,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      ...result,
+      triggeredBy,
+    }).catch(() => {});
+    return result;
   }
 
   const remoteDate = new Date(remoteDb.updatedAt);
   const localDate = new Date(localDb.updatedAt);
 
   if (remoteDate > localDate) {
+    // Before pulling, check for a conflict: local has been modified since the
+    // last successful sync, meaning both sides changed independently.
+    const lastSyncedAt = await getLastSuccessfulSyncAt().catch(() => null);
+    const isConflict =
+      lastSyncedAt !== null && localDate > new Date(lastSyncedAt);
+
+    if (isConflict) {
+      result.conflictCount += 1;
+      const now = new Date().toISOString();
+      await appendConflict({
+        id: `${runId}-c0`,
+        detectedAt: now,
+        entityType: 'database',
+        entityId: 'main',
+        localUpdatedAt: localDb.updatedAt,
+        remoteUpdatedAt: remoteDb.updatedAt,
+        // Remote is newer → remote wins (last-write-wins).
+        resolution: 'remote-wins',
+        resolvedAt: now,
+      }).catch(() => {});
+      console.warn(
+        `[Reconcile] Conflict detected — both sides changed since last sync (lastSyncedAt: ${lastSyncedAt}). ` +
+        `Resolving with remote-wins. Local: ${localDb.updatedAt}, Remote: ${remoteDb.updatedAt}`
+      );
+      _dispatchSafe('sync-conflict-detected', { conflictCount: result.conflictCount });
+    }
+
     console.log(
       `[Reconcile] Remote is newer (remote: ${remoteDb.updatedAt}, local: ${localDb.updatedAt}). Pulling remote data.`
     );
@@ -512,32 +579,71 @@ export async function reconcileWithRemoteAsync(localDb: UnifiedDB): Promise<void
     await StorageRepository.mergeSlicesIntoDB(remoteDb);
     await saveDBAsync(remoteDb, { skipRemote: true });
 
+    result.action = 'pull';
+    result.pulledCount = 1;
+
     // Notify the running app that it should update its in-memory state.
-    try {
-      window.dispatchEvent(
-        new CustomEvent('db-reconciled-from-remote', { detail: remoteDb })
-      );
-    } catch { /* test environments may not have window */ }
+    _dispatchSafe('db-reconciled-from-remote', remoteDb);
 
     console.log("[Reconcile] Remote data applied. UI notified via db-reconciled-from-remote event.");
   } else if (localDate > remoteDate) {
     console.log(
       `[Reconcile] Local is newer (local: ${localDb.updatedAt}, remote: ${remoteDb.updatedAt}). Pushing to remote.`
     );
-    window.dispatchEvent(new Event("backup-started"));
-    await remoteSaveDb(localDb)
-      .then(async () => {
-        console.log("[Reconcile] Local DB pushed to remote successfully.");
-        window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
-        await clearPackedSyncPending().catch(() => {});
-      })
-      .catch(async (e) => {
-        console.error("[Reconcile] Failed to push local DB to remote. Queued in outbox.", e);
-        window.dispatchEvent(new Event('backup-failed'));
-        await markPackedSyncPending(e).catch(() => {});
-      });
+    _dispatchSafe('backup-started', undefined, 'Event');
+    try {
+      await remoteSaveDb(localDb);
+      console.log("[Reconcile] Local DB pushed to remote successfully.");
+      _dispatchSafe('backup-completed', { type: 'remote' });
+      await clearPackedSyncPending().catch(() => {});
+      result.action = 'push';
+      result.pushedCount = 1;
+    } catch (e) {
+      console.error("[Reconcile] Failed to push local DB to remote. Queued in outbox.", e);
+      _dispatchSafe('backup-failed', undefined, 'Event');
+      await markPackedSyncPending(e).catch(() => {});
+      result.action = 'error';
+    }
   } else {
     console.log(`[Reconcile] Local and remote are in sync (updatedAt: ${localDb.updatedAt}).`);
+  }
+
+  // Persist the log entry.
+  const completedAt = new Date().toISOString();
+  await appendSyncRun({
+    id: runId,
+    startedAt,
+    completedAt,
+    ...result,
+    triggeredBy,
+  }).catch(() => {});
+
+  // Update the last-successful-sync timestamp for conflict detection.
+  if (result.action === 'pull' || result.action === 'push' || result.action === 'noop') {
+    await setLastSuccessfulSyncAt(completedAt).catch(() => {});
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/** Dispatch a DOM event safely (swallowed in test environments). */
+function _dispatchSafe(
+  type: string,
+  detail?: unknown,
+  kind: 'CustomEvent' | 'Event' = 'CustomEvent',
+): void {
+  try {
+    const evt =
+      kind === 'Event'
+        ? new Event(type)
+        : new CustomEvent(type, { detail });
+    window.dispatchEvent(evt);
+  } catch {
+    /* test environments may not have window */
   }
 }
 
