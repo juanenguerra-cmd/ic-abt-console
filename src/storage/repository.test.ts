@@ -688,7 +688,7 @@ describe('StorageRepository.writeSyncSignal', () => {
   test('includes a lastUpdatedAt ISO timestamp in the signal document', async () => {
     await StorageRepository.writeSyncSignal(FACILITY_A, ['residents'], SESSION_ID);
 
-    const [, dataArg] = mockSetDoc.mock.calls[0];
+    const [, dataArg] = (mockSetDoc.mock.calls[0] as unknown) as [unknown, Record<string, unknown>];
     expect(dataArg.lastUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
@@ -713,7 +713,7 @@ describe('StorageRepository.writeSyncSignal', () => {
 
     await StorageRepository.writeSyncSignal(FACILITY_A, slices, SESSION_ID);
 
-    const [, dataArg] = mockSetDoc.mock.calls[0];
+    const [, dataArg] = (mockSetDoc.mock.calls[0] as unknown) as [unknown, Record<string, unknown>];
     expect(dataArg.changedSlices).toEqual(slices);
   });
 });

@@ -16,10 +16,14 @@ function getBuildHash(): string {
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, process.cwd(), '');
+  // Stable build identifier embedded at compile time so the running bundle
+  // can be distinguished in console logs and diagnostics.
+  const buildId = `${new Date().toISOString().slice(0, 19).replace('T', '_')}_${Math.random().toString(36).slice(2, 8)}`;
   return {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      '__APP_BUILD_HASH__': JSON.stringify(getBuildHash()),
+      // Injected at build time — consumed by startup diagnostics in providers.tsx.
+      '__BUILD_ID__': JSON.stringify(buildId),
     },
     plugins: [
       react(),
@@ -27,13 +31,17 @@ export default defineConfig(({mode}) => {
       VitePWA({
         registerType: 'autoUpdate',
         workbox: {
+          // Immediately activate the new service worker so users always get
+          // the latest bundle after a Cloudflare deploy.
+          skipWaiting: true,
+          clientsClaim: true,
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
         },
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
-          name: 'Vite PWA Project',
-          short_name: 'Vite PWA Project',
-          description: 'I am a simple Vite PWA',
+          name: 'IC ABT Console',
+          short_name: 'IC Console',
+          description: 'Infection Control ABT Management Console',
           theme_color: '#ffffff',
           icons: [
             {

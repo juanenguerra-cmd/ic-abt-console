@@ -8,6 +8,7 @@ import {
   markSlicesPending,
   clearPackedSyncPending,
 } from "../storage/syncOutbox";
+import { LS_JUST_RESTORED_FLAG } from "../constants/storageKeys";
 
 const MAX_MUTATION_LOG_ENTRIES = 500;
 
@@ -222,6 +223,9 @@ export const commandHandlers = {
   restorePrevious: async () => {
     const ok = await restoreFromPrevAsync();
     if (ok) {
+      // Guard must be set BEFORE reload so the bootstrap skips remote reconciliation
+      // and loads the freshly-restored local IDB data instead.
+      sessionStorage.setItem(LS_JUST_RESTORED_FLAG, "true");
       window.location.reload();
     } else {
       alert("No previous healthy snapshot found to restore.");

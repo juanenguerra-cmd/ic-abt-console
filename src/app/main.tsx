@@ -10,16 +10,3 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>
 );
-
-// Print startup banner: version, build, env, SW status, sync mode.
-// Helps distinguish app errors from browser-extension console noise.
-logAppBanner();
-
-// Register service worker for offline-first support.
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch((err) => {
-      console.warn("Service worker registration failed:", err);
-    });
-  });
-}

@@ -5,5 +5,5 @@ declare module '*.md?raw' {
   export default content;
 }
 
-/** Injected at build time by Vite (see vite.config.ts → define). */
-declare const __APP_BUILD_HASH__: string;
+/** Injected by vite.config.ts at build time; identifies the running bundle. */
+declare const __BUILD_ID__: string;
