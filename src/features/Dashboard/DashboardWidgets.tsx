@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, AlertCircle, FileText, Inbox, Building2, ClipboardCheck, Bell, Activity, ChevronRight, SlidersHorizontal, TrendingUp, Shield, X, ArrowUpRight, Database, Syringe, AlertTriangle } from 'lucide-react';
@@ -544,6 +545,9 @@ export const NeedsReviewWidget: React.FC<WidgetProps> = ({ navigate, store, vaxD
 // --- Floor Map Widget ---
 
 export const FloorMapWidget: React.FC<WidgetProps> = ({ navigate, activeFacilityId, units, selectedUnit, setSelectedUnit, tileSize, setTileSize, filteredLayout, roomStatuses, symptomIndicators, selectedRoomId, setSelectedRoomId, roomResidentsMap, perResidentIndicators }) => {
+  if (!filteredLayout) {
+    return <div>Display Default</div>
+  }
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
       <div className="flex items-center justify-between mb-4">

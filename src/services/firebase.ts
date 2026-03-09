@@ -1,22 +1,29 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
 // Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyB5qJ_qRmT78Ss718mVKLXll_1rPd306_A",
-  authDomain: "ic-abt-console-44321826-ea0eb.firebaseapp.com",
-  projectId: "ic-abt-console-44321826-ea0eb",
-  storageBucket: "ic-abt-console-44321826-ea0eb.appspot.com",
-  messagingSenderId: "1082693079493",
-  appId: "1:1082693079493:web:07e4c5a3e7c36195b6a9d7"
-  // measurementId is optional and can be added here later
+  apiKey: "AIzaSyAkHhm5rS2QNsOTPzqlgkViMcMXwujLl0Y",
+  authDomain: "infection-control-progra-6110a.firebaseapp.com",
+  projectId: "infection-control-progra-6110a",
+  storageBucket: "infection-control-progra-6110a.firebasestorage.app",
+  messagingSenderId: "9546433510",
+  appId: "1:9546433510:web:8e3eccd34f857da027cc27",
+  measurementId: "G-K2HGQCMZYY"
 };
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
 
 // Initialize and export Firebase services
 export const auth = getAuth(app);

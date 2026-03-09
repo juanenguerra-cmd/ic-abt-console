@@ -1,0 +1,56 @@
+type Patient @table {
+  patientId: String!
+  firstName: String!
+  lastName: String!
+  dateOfBirth: Date!
+  gender: String
+  admissionDate: Timestamp
+  dischargeDate: Timestamp
+  medicalRecordNumber: String
+}
+
+type Pathogen @table {
+  name: String!
+  type: String!
+  commonDiseasesCaused: String
+  transmissionRoute: String
+}
+
+type Antibiotic @table {
+  name: String!
+  class: String!
+  commonDosages: String
+  sideEffects: String
+}
+
+type Infection @table {
+  patient: Patient!
+  pathogen: Pathogen
+  infectionDate: Timestamp!
+  infectionSite: String!
+  infectionStatus: String!
+  notes: String
+  sourceOfInfection: String
+}
+
+type Prescription @table {
+  patient: Patient!
+  infection: Infection
+  antibiotic: Antibiotic!
+  prescriptionDate: Timestamp!
+  dosage: String!
+  durationDays: Int!
+  prescribedBy: UUID!
+  administrationRoute: String
+  reasonForPrescription: String
+}
+
+type SensitivityTest @table {
+  pathogen: Pathogen!
+  antibiotic: Antibiotic!
+  infection: Infection
+  testDate: Timestamp!
+  result: String!
+  MICValue: Float
+  testingMethod: String
+}

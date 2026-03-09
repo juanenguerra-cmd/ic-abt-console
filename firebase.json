@@ -21,5 +21,18 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "emulators": {
+    "dataconnect": {
+      "dataDir": "dataconnect/.dataconnect/pgliteData"
+    }
+  },
+  "dataconnect": {
+    "source": "dataconnect",
+    "sdk": {
+      "web": {
+        "outputDir": "src/dataconnect"
+      }
+    }
   }
 }
