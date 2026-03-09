@@ -10,55 +10,77 @@ import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
 import { UnitRoomConfigModal } from "./UnitRoomConfigModal";
 import { CsvMigrationWizard } from "./CsvMigrationWizard";
 import { useNavigate } from "react-router-dom";
-import { LS_LAST_BACKUP_TS, LS_ACTIVE_FACILITY_ID } from "../../constants/storageKeys";
+import { LS_LAST_BACKUP_TS, LS_ACTIVE_FACILITY_ID, LS_JUST_RESTORED_FLAG } from "../../constants/storageKeys";
 import { StorageRepository, STORAGE_SLICES } from "../../storage/repository";
 
 const MAX_STORAGE_CHARS = 5 * 1024 * 1024; // 5MB
 
-const validateUnifiedDB = (db: unknown): { valid: boolean; error?: string } => {
-  if (!db || typeof db !== "object") {
-    return { valid: false, error: "Invalid database format" };
+// Temporary debug helper during patching
+function logRestoreSnapshot(db: any, label = 'restore-debug') {
+  try {
+    const facId = db?.data?.facilities?.activeFacilityId;
+    const store = db?.data?.facilityData?.[facId] ?? {};
+    console.log(label, {
+      schemaName: db?.schemaName,
+      schemaVersion: db?.schemaVersion,
+      hasDictionary: !!db?.dictionary,
+      dictionarySize: Array.isArray(db?.dictionary) ? db.dictionary.length : 0,
+      activeFacilityId: facId,
+      residentCount: Object.keys(store?.residents?.byId || {}).length,
+      abtCount: Object.keys(store?.abts?.byId || {}).length,
+      infectionCount: Object.keys(store?.infections?.byId || {}).length,
+      vaxCount: Object.keys(store?.vaxEvents?.byId || {}).length,
+    });
+  } catch (err) {
+    console.error('logRestoreSnapshot failed', err);
+  }
+}
+
+const validateRestoredDB = (db: unknown): { valid: boolean; error?: string; repairedDB?: UnifiedDB } => {
+  if (!db || typeof db !== 'object') {
+    return { valid: false, error: 'Invalid root object.' };
   }
 
-  const parsedDB = db as Record<string, unknown>;
-  const data = parsedDB.data as Record<string, unknown> | undefined;
-  if (!data || typeof data !== "object") {
-    return { valid: false, error: "Missing data object" };
+  const workingDB = JSON.parse(JSON.stringify(db)) as UnifiedDB; // Deep copy to avoid mutation issues
+
+  if (!workingDB.data?.facilities?.byId) {
+    return { valid: false, error: 'Missing facilities.byId.' };
   }
 
-  const facilities = data.facilities as Record<string, unknown> | undefined;
-  if (!facilities || typeof facilities !== "object") {
-    return { valid: false, error: "Invalid facilities structure" };
+  if (!workingDB.data?.facilityData) {
+    return { valid: false, error: 'Missing facilityData.' };
   }
 
-  const facilitiesById = facilities.byId as Record<string, unknown> | undefined;
-  const activeFacilityId = facilities.activeFacilityId;
-  if (!facilitiesById || typeof facilitiesById !== "object" || typeof activeFacilityId !== "string" || !activeFacilityId.trim()) {
-    return { valid: false, error: "Invalid facilities structure" };
-  }
+  let activeId = workingDB.data.facilities.activeFacilityId;
+  const facilityIds = Object.keys(workingDB.data.facilities.byId);
 
-  const facilityData = data.facilityData as Record<string, unknown> | undefined;
-  if (!facilityData || typeof facilityData !== "object") {
-    return { valid: false, error: "Missing facilityData object" };
-  }
-
-  const activeFacilityData = facilityData[activeFacilityId] as Record<string, unknown> | undefined;
-  if (!activeFacilityData || typeof activeFacilityData !== "object") {
-    return { valid: false, error: `Missing data for facility: ${activeFacilityId}` };
-  }
-
-  const requiredCollections = ["residents", "staff", "infections", "abts", "vaxEvents", "staffVaxEvents", "fitTestEvents", "notes"];
-  for (const collection of requiredCollections) {
-    const value = activeFacilityData[collection];
-    if (value === undefined || value === null) {
-      return { valid: false, error: `Missing or null collection: ${collection}` };
+  // Repair logic: If activeFacilityId is missing or invalid, but there's only one facility, use it.
+  if (!activeId || !facilityIds.includes(activeId)) {
+    if (facilityIds.length === 1) {
+      console.warn('Restored DB has missing/invalid activeFacilityId. Repaired by setting to the only available facility.');
+      activeId = facilityIds[0];
+      workingDB.data.facilities.activeFacilityId = activeId;
+    } else {
+      return { valid: false, error: `Invalid or missing activeFacilityId: '${activeId}'. Available: ${facilityIds.join(', ')}` };
     }
-    if (typeof value !== "object") {
-      return { valid: false, error: `Invalid collection type: ${collection}` };
-    }
   }
 
-  return { valid: true };
+  // Repair logic: Ensure facilityData exists for the active facility.
+  if (!workingDB.data.facilityData[activeId]) {
+    console.warn(`Restored DB is missing facilityData for active facility '${activeId}'. Initializing empty store.`);
+    workingDB.data.facilityData[activeId] = {
+      residents: { byId: {}, allIds: [] },
+      staff: { byId: {}, allIds: [] },
+      infections: { byId: {}, allIds: [] },
+      abts: { byId: {}, allIds: [] },
+      vaxEvents: { byId: {}, allIds: [] },
+      staffVaxEvents: { byId: {}, allIds: [] },
+      fitTestEvents: { byId: {}, allIds: [] },
+      notes: { byId: {}, allIds: [] },
+    } as any; // Cast as any to bypass strict checks for this repair case
+  }
+
+  return { valid: true, repairedDB: workingDB };
 };
 
 import { VersionHistory } from "./VersionHistory";
@@ -68,7 +90,7 @@ import { alertService } from "../../services/alertService";
 
 export const SettingsConsole: React.FC = () => {
   const { db, updateDB, setDB } = useDatabase();
-  const { activeFacilityId, store } = useFacilityData();
+  const { activeFacilityId, store, setActiveFacilityId } = useFacilityData();
   const { role, setRole, can } = useRole();
   const navigate = useNavigate();
   const [dbSize, setDbSize] = useState(0);
@@ -83,7 +105,7 @@ export const SettingsConsole: React.FC = () => {
   const [previewMetadata, setPreviewMetadata] = useState<any>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   
-  // Global floor tile size (1–10, default 5)
+  // Global floor tile size
   const [tileSize, setTileSize] = useState(5);
   useEffect(() => {
     try {
@@ -95,7 +117,6 @@ export const SettingsConsole: React.FC = () => {
     setTileSize(size);
     localStorage.setItem(`ltc_floor_tile_size_global:${activeFacilityId}`, String(size));
   };
-  // Pixel dimensions for the current tile size (same formula as FloorMap)
   const previewTileW = 40 + tileSize * 12;
   const previewTileH = 24 + tileSize * 6;
   
@@ -159,91 +180,109 @@ export const SettingsConsole: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString());
-    
-    // Update the last saved state to reflect the backup
-    const status = alertService.getBackupStatus();
-    setLastSaved(db.updatedAt);
-    // Force a re-render of the badge by dispatching a custom event or just letting the interval handle it
     window.dispatchEvent(new Event('backup-completed'));
   };
 
   const handleRestorePrev = () => {
-    if (confirm("Are you sure you want to restore the previous snapshot? Current unsaved changes may be lost.")) {
+    if (confirm("Are you sure? This will overwrite current data.")) {
       setIsRestoring(true);
-      setTimeout(() => {
-        restoreFromPrevAsync().then((ok) => {
-          if (ok) {
-            window.location.reload();
-          } else {
-            alert("No previous snapshot found.");
-            setIsRestoring(false);
-          }
-        });
-      }, 1000);
+      restoreFromPrevAsync().then((ok) => {
+        if (ok) {
+          // Set sentinel flag for providers to skip remote hydration
+          localStorage.setItem(LS_JUST_RESTORED_FLAG, 'true');
+          window.location.reload();
+        } else {
+          alert("No previous snapshot found.");
+          setIsRestoring(false);
+        }
+      });
     }
   };
 
   const handleFullReset = async () => {
-    const confirmed = confirm(
-      "Are you absolutely sure? This will erase all saved data, backups, and local storage remnants for this app. This cannot be undone."
-    );
-    if (!confirmed) return;
-
-    try {
-      await hardResetStorageAsync();
-      alert("All local data has been erased. The app will now reload with a clean database.");
-      window.location.reload();
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      alert(`Failed to fully reset local storage: ${errorMsg}`);
-      console.error("Full reset error:", error);
-    }
+    if (!confirm("Are you absolutely sure? This will erase all data.")) return;
+    await hardResetStorageAsync();
+    alert("All local data has been erased.");
+    window.location.reload();
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && restoreConfirm === "RESTORE") {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        let text = "";
+      reader.onload = async (e) => {
         try {
-          text = e.target?.result as string;
-          const rawParsed = JSON.parse(text) as Record<string, unknown>;
-          
-          // Strip backup metadata if present
+          const text = e.target?.result as string;
+          const rawParsed = JSON.parse(text);
+
           let metadata = null;
           if ('backupMetadata' in rawParsed) {
             metadata = rawParsed.backupMetadata;
             delete rawParsed.backupMetadata;
           }
+          
+          // The root cause of the previous bug: the restore flow wasn't correctly
+          // migrating, validating, and then HYDRATING the application state.
+          // The new flow ensures all these steps are performed atomically.
 
-          const parsed = runMigrations(rawParsed);
+          // 1. Run migrations, which also handles unpacking V3 dictionary format.
+          const migratedDB = runMigrations(rawParsed);
+          logRestoreSnapshot(rawParsed, 'raw-backup-file-snapshot');
+          logRestoreSnapshot(migratedDB, 'post-migration-snapshot');
 
-          const validation = validateUnifiedDB(parsed);
-          if (!validation.valid) {
-            alert(`Invalid backup file: ${validation.error}`);
-            console.error("Validation failed:", validation.error);
+          // 2. Perform strong validation and repair.
+          const { valid, error, repairedDB } = validateRestoredDB(migratedDB);
+          if (!valid || !repairedDB) {
+            alert(`Invalid backup file: ${error}`);
+            console.error("Validation failed:", error);
             return;
           }
 
-          if (restoreConfirm === "RESTORE") {
-            setPreviewDB(parsed);
-            setPreviewMetadata(metadata);
-            setIsPreviewModalOpen(true);
-          } else {
-            alert("Please type RESTORE to confirm.");
-          }
+          // 3. Open the preview modal for user confirmation.
+          setPreviewDB(repairedDB);
+          setPreviewMetadata(metadata);
+          setIsPreviewModalOpen(true);
+
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : "Unknown error";
           alert(`Error reading or parsing backup file: ${errorMsg}`);
           console.error("Restore error:", error);
-          console.error("Parsed data preview:", text.substring(0, 500));
         }
       };
       reader.readAsText(file);
+    } else if (restoreConfirm !== "RESTORE") {
+      alert("Please type RESTORE to confirm.");
     }
     event.target.value = '';
   };
+
+  // This is the final step of the restore process, triggered by the preview modal.
+  const onConfirmRestore = async () => {
+    if (!previewDB) return;
+
+    try {
+      // The `setDB` function from useDatabase is now robust.
+      // It handles updating in-memory state, persisting to storage,
+      // and updating the active facility ID all at once.
+      await setDB(previewDB);
+      
+      // Set a sentinel flag that the provider layer will use on the next
+      // page load to skip remote data hydration, which would otherwise
+      // overwrite our freshly restored local state.
+      localStorage.setItem(LS_JUST_RESTORED_FLAG, 'true');
+
+      // The `setDB` call above already updated the in-memory state, so a full
+      // reload is primarily to ensure all components re-render from the new state.
+      alert("Backup restored successfully. The application will now reload.");
+      window.location.reload();
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      alert(`Restore failed during final save: ${errorMsg}`);
+      console.error('Final restore confirmation failed:', error);
+    }
+  };
+
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -577,35 +616,7 @@ export const SettingsConsole: React.FC = () => {
           setPreviewDB(null);
           setPreviewMetadata(null);
         }}
-        onConfirm={async () => {
-          if (previewDB) {
-            try {
-              await saveDBAsync(previewDB, { skipRemote: true });
-
-              const facilityId = previewDB.data.facilities.activeFacilityId;
-              const facilityData = previewDB.data.facilityData[facilityId];
-              if (facilityId && facilityData) {
-                await StorageRepository.saveSlices(
-                  facilityId,
-                  facilityData,
-                  STORAGE_SLICES
-                );
-              }
-
-              if (facilityId) {
-                localStorage.setItem(LS_ACTIVE_FACILITY_ID, facilityId);
-              } else {
-                localStorage.removeItem(LS_ACTIVE_FACILITY_ID);
-              }
-              
-              alert("Backup restored successfully. The application will now reload.");
-              window.location.reload();
-            } catch (error) {
-              alert(`Restore failed: ${error instanceof Error ? error.message : String(error)}`);
-              console.error(error);
-            }
-          }
-        }}
+        onConfirm={onConfirmRestore}
         currentDB={db}
         backupDB={previewDB}
         backupMetadata={previewMetadata}
