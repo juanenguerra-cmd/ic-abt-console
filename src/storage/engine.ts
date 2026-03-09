@@ -409,9 +409,14 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
   }
 
   if (localDb) {
-    reconcileWithRemoteAsync(localDb, 'startup').catch((e) =>
-      console.warn("[Startup] Background remote reconciliation error:", e)
-    );
+    // Only run background reconciliation when the caller has not explicitly
+    // requested to skip it (e.g. right after a restore so the restored data
+    // is never overwritten by a remote pull in the same session).
+    if (!options.skipRemoteReconciliation) {
+      reconcileWithRemoteAsync(localDb, 'startup').catch((e) =>
+        console.warn("[Startup] Background remote reconciliation error:", e)
+      );
+    }
     return localDb;
   }
 
