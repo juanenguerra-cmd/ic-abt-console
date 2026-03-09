@@ -1,6 +1,7 @@
 import React, { Component, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Clipboard, Trash2 } from "lucide-react";
 import { clearFirestoreCache } from "../services/firebase"; // Import the new function
+import { classifyError, ERROR_KIND_LABEL } from "../debug/errorClassifier";
 
 interface Props {
   children: ReactNode;
@@ -29,7 +30,27 @@ export class ErrorBoundary extends Component<Props, State> {
       error: error,
       errorInfo: errorInfo,
     });
-    console.error("Uncaught error in React tree:", error, errorInfo);
+
+    const kind = classifyError(error);
+    const label = ERROR_KIND_LABEL[kind];
+
+    if (kind === "extension") {
+      // Extension errors cannot be fixed in app code; log at warn level so
+      // they remain visible but don't pollute error monitoring dashboards.
+      console.warn(
+        `[ErrorBoundary] ${label} — this error originated in a browser extension, not the app.\n` +
+          "Open in Incognito / InPrivate or disable extensions to confirm. " +
+          "See docs/debugging-console-errors.md for details.",
+        error,
+        errorInfo
+      );
+    } else {
+      console.error(
+        `[ErrorBoundary] ${label} — Uncaught error in React tree:`,
+        error,
+        errorInfo
+      );
+    }
   }
 
   handleReload = () => {
@@ -53,7 +74,9 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleCopyError = () => {
+    const kind = classifyError(this.state.error);
     const errorDetails = `
+Error kind: ${ERROR_KIND_LABEL[kind]}
 Error: ${this.state.error?.toString()}
 Component Stack: ${this.state.errorInfo?.componentStack}
     `;
@@ -64,6 +87,9 @@ Component Stack: ${this.state.errorInfo?.componentStack}
 
   render() {
     if (this.state.hasError) {
+      const kind = classifyError(this.state.error);
+      const isExtensionError = kind === "extension";
+
       return (
         <div className="min-h-screen bg-neutral-100 flex flex-col items-center justify-center p-4 font-sans">
           <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl border border-red-200 overflow-hidden">
@@ -78,11 +104,20 @@ Component Stack: ${this.state.errorInfo?.componentStack}
             </div>
             <div className="p-6 bg-white space-y-4">
               {this.state.error && (
-                <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
-                  <h3 className="text-sm font-semibold text-neutral-800 mb-2">Error Details:</h3>
+                <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200 space-y-2">
+                  <h3 className="text-sm font-semibold text-neutral-800">Error Details:</h3>
                   <p className="text-xs font-mono text-neutral-600 break-words leading-relaxed">
                     {this.state.error.message}
                   </p>
+                  <p className="text-xs font-semibold text-neutral-500">
+                    Source: {ERROR_KIND_LABEL[kind]}
+                  </p>
+                  {isExtensionError && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                      This error appears to originate from a browser extension, not the app.
+                      Try opening in an Incognito window or disabling browser extensions.
+                    </p>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
