@@ -1,50 +1,77 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { initializeApp, FirebaseApp } from "firebase/app";
+import { getAuth, connectAuthEmulator, User } from "firebase/auth";
+import { 
+  getFirestore, 
+  connectFirestoreEmulator, 
+  clearIndexedDbPersistence, 
+  terminate, 
+  Firestore 
+} from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// WARNING: Replace this with your actual Firebase config object.
 const firebaseConfig = {
-  apiKey: "AIzaSyAkHhm5rS2QNsOTPzqlgkViMcMXwujLl0Y",
-  authDomain: "infection-control-progra-6110a.firebaseapp.com",
-  projectId: "infection-control-progra-6110a",
-  storageBucket: "infection-control-progra-6110a.firebasestorage.app",
-  messagingSenderId: "9546433510",
-  appId: "1:9546433510:web:8e3eccd34f857da027cc27",
-  measurementId: "G-K2HGQCMZYY"
+  apiKey: "AIzaSyA...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "...",
+  appId: "...",
 };
 
-// Initialize Firebase
-export const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+let app: FirebaseApp;
+let auth: any;
+let db: Firestore;
+let functions: any;
 
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  functions = getFunctions(app);
+} catch (e) {
+  console.error("Firebase initialization failed:", e);
+  // In a real app, you might want to show a global error message.
+}
 
-// Initialize and export Firebase services
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+if (window.location.hostname === "localhost" && db) {
+  try {
+    connectFirestoreEmulator(db, 'localhost', 8080);
+    connectAuthEmulator(auth, "http://localhost:9099");
+    connectFunctionsEmulator(functions, "localhost", 5001);
+    console.log("Connected to Firebase emulators");
+  } catch (e) {
+    console.error("Firebase emulator connection failed:", e);
+  }
+}
 
 /**
- * Returns a promise that resolves with the authenticated user, or null if not authenticated.
- * This function is crucial for preventing race conditions where parts of the app
- * try to access user-specific data before authentication is fully initialized.
+ * A utility function to get the current signed-in user.
+ * @returns The current Firebase user object or null.
  */
-export const getCurrentUser = (): Promise<User | null> => {
-  return new Promise((resolve) => {
-    // If the user is already available synchronously, resolve immediately.
-    if (auth.currentUser) {
-      return resolve(auth.currentUser);
-    }
-    // Otherwise, wait for the first auth state change.
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe(); // Unsubscribe to only get the value once.
-      resolve(user);
-    });
-  });
+export const getCurrentUser = (): User | null => {
+  return auth.currentUser;
 };
+
+/**
+ * Shuts down the active Firestore instance and clears its local IndexedDB cache.
+ * This is a recovery mechanism for "Unexpected state" errors.
+ * The page MUST be reloaded after calling this function.
+ */
+export const clearFirestoreCache = async (): Promise<void> => {
+  if (!db) return;
+  try {
+    console.warn("Terminating Firestore instance and clearing persistence...");
+    // Shut down the existing DB connection.
+    await terminate(db);
+    // Get a new, temporary DB instance to clear the cache for the app.
+    await clearIndexedDbPersistence(getFirestore(app));
+    console.warn("Firestore persistence cleared.");
+  } catch (error) {
+    console.error("Failed to clear Firestore persistence:", error);
+    // This is a last-ditch effort, if it fails, the user may need to clear manually.
+    throw new Error("Automatic cache clearing failed. Please clear your browser\'s site data for this domain.");
+  }
+};
+
+export { app, auth, db, functions };

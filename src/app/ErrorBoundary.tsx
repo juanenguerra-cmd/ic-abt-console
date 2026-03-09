@@ -1,5 +1,6 @@
 import React, { Component, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Clipboard, Trash2 } from "lucide-react";
+import { clearFirestoreCache } from "../services/firebase"; // Import the new function
 
 interface Props {
   children: ReactNode;
@@ -19,8 +20,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    // We are not using this, but it is required.
-    // We are setting the error state in componentDidCatch.
     return { hasError: true, error, errorInfo: null, copied: false };
   }
 
@@ -37,16 +36,20 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
-  handleClearCacheAndReload = () => {
-    if ('caches' in window) {
-      caches.keys().then((names) => {
-        // Delete all the caches
-        names.forEach(name => {
-          caches.delete(name);
-        })
-      });
+  handleClearCacheAndReload = async () => {
+    try {
+      await clearFirestoreCache();
+      // Also clear regular browser cache for good measure
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map(name => caches.delete(name)));
+      }
+    } catch (e) {
+      console.error("Cache clearing failed:", e);
+      // Even if clearing fails, a reload is the best next step.
+    } finally {
+      window.location.reload();
     }
-    window.location.reload();
   };
 
   handleCopyError = () => {
@@ -70,7 +73,7 @@ Component Stack: ${this.state.errorInfo?.componentStack}
               </div>
               <h1 className="text-2xl font-bold text-red-900">An Unexpected Error Occurred</h1>
               <p className="text-md text-red-700 mt-2 max-w-md">
-                We're sorry for the inconvenience. The application encountered a problem. Your data is safe.
+                We're sorry for the inconvenience. The application encountered a problem. Your data is likely safe.
               </p>
             </div>
             <div className="p-6 bg-white space-y-4">
