@@ -21,7 +21,7 @@ import { getCurrentUser } from "../services/firebase";
 
 export { DB_KEY_MAIN };
 
-const MAX_STORAGE_CHARS = 5 * 1024 * 1024;
+export const MAX_STORAGE_CHARS = 5 * 1024 * 1024;
 const WARN_THRESHOLD = 0.60;
 const BLOCK_THRESHOLD = 0.85;
 

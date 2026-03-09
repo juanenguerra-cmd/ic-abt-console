@@ -21,6 +21,8 @@ import { LS_JUST_RESTORED_FLAG, LS_ACTIVE_FACILITY_ID } from "../constants/stora
 // triggered by the restore flow, preventing any in-flight reconciliation
 // from overwriting the freshly-restored state.
 const RESTORE_GUARD_TTL_MS = 5_000;
+// How long an app-toast notification stays visible before auto-dismissing.
+const TOAST_AUTO_DISMISS_MS = 4_000;
 type SyncDebugInfo = {
   label: string;
   syncMode?: string;
@@ -95,6 +97,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [isSafeMode, setIsSafeMode] = useState(false);
   const [isMigrationRequired, setIsMigrationRequired] = useState(false);
   const [saveErrorToast, setSaveErrorToast] = useState<string | null>(null);
+  const [appToast, setAppToast] = useState<{ message: string; type: string } | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus);
 
   // Stable ref so async callbacks always access the latest db without stale closures.
@@ -124,6 +127,22 @@ export function AppProviders({ children }: { children: ReactNode }) {
         localStorage.setItem(LS_ACTIVE_FACILITY_ID, facId);
         debugDb("initial-load", loadedDb);
         syncLog({ label: 'bootstrap', facilityId: facId, extra: { justRestored } });
+
+        // ── Startup diagnostics ──────────────────────────────────────────────
+        const store = loadedDb.data.facilityData[facId] || {} as any;
+        const swReg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+        const swVersion = swReg?.active?.scriptURL ?? 'none';
+        console.group('%c[IC Console] Startup Diagnostics', 'color: #059669; font-weight: bold;');
+        console.log('BUILD_ID        :', __BUILD_ID__);
+        console.log('SW script URL   :', swVersion);
+        console.log('Active facilityId:', facId);
+        console.log('Resident count  :', Object.keys(store?.residents?.byId || {}).length);
+        console.log('ABT count       :', Object.keys(store?.abts?.byId || {}).length);
+        console.log('Infection count :', Object.keys(store?.infections?.byId || {}).length);
+        console.log('Vax count       :', Object.keys(store?.vaxEvents?.byId || {}).length);
+        console.log('Just restored?  :', justRestored);
+        console.log('Schema version  :', loadedDb.schemaVersion);
+        console.groupEnd();
       } catch (err) {
         console.error("Failed to load DB:", err);
         if (err instanceof SchemaMigrationError) {
@@ -234,7 +253,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
   }, []); // Empty deps — registered once.
 
-  // ── Remote pull → live state update ───────────────────────────────────────
+  // ── App-toast event (from alertService.show) ─────────────────────────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { message, type } = (e as CustomEvent<{ message: string; type: string }>).detail ?? {};
+      if (!message) return;
+      setAppToast({ message, type: type ?? 'info' });
+      // Auto-dismiss after the configured TTL.
+      setTimeout(() => setAppToast(null), TOAST_AUTO_DISMISS_MS);
+    };
+    window.addEventListener('app-toast', handler);
+    return () => window.removeEventListener('app-toast', handler);
+  }, []); // Empty deps — registered once.
   // When reconciliation pulls a newer DB from the remote, it saves to IDB and
   // fires this event. Without this handler the React state would remain stale
   // for the rest of the session.
@@ -370,6 +400,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
                   </div>
                   <button onClick={() => setSaveErrorToast(null)} className="ml-4">
                       <X className="h-5 w-5" />
+                  </button>
+              </div>
+            )}
+           {appToast && (
+              <div className={`fixed bottom-16 right-4 px-4 py-3 rounded-md shadow-lg z-50 flex items-center border ${
+                appToast.type === 'error'
+                  ? 'bg-red-100 border-red-400 text-red-700'
+                  : appToast.type === 'success'
+                  ? 'bg-emerald-100 border-emerald-400 text-emerald-700'
+                  : 'bg-blue-100 border-blue-400 text-blue-700'
+              }`}>
+                  <div className="flex-1 text-sm">{appToast.message}</div>
+                  <button onClick={() => setAppToast(null)} className="ml-4">
+                      <X className="h-4 w-4" />
                   </button>
               </div>
             )}

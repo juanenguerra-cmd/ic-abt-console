@@ -1,6 +1,21 @@
 import { LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 
 export const alertService = {
+  /**
+   * Show a non-blocking in-app toast notification.
+   * Dispatches the 'app-toast' CustomEvent which AppProviders listens for
+   * and renders using the same banner pattern as the save-error toast.
+   */
+  show: (message: string, opts?: { type?: 'success' | 'error' | 'info' }) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('app-toast', {
+          detail: { message, type: opts?.type ?? 'info' },
+        })
+      );
+    }
+  },
+
   getBackupStatus: () => {
     const lastBackupTimestamp = localStorage.getItem(LS_LAST_BACKUP_TS);
     if (lastBackupTimestamp) {

@@ -8,6 +8,7 @@ import {
   Firestore 
 } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 // WARNING: Replace this with your actual Firebase config object.
 const firebaseConfig = {
@@ -23,12 +24,14 @@ let app: FirebaseApp;
 let auth: any;
 let db: Firestore;
 let functions: any;
+let storage: any;
 
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
   functions = getFunctions(app);
+  storage = getStorage(app);
 } catch (e) {
   console.error("Firebase initialization failed:", e);
   // In a real app, you might want to show a global error message.
@@ -39,6 +42,7 @@ if (window.location.hostname === "localhost" && db) {
     connectFirestoreEmulator(db, 'localhost', 8080);
     connectAuthEmulator(auth, "http://localhost:9099");
     connectFunctionsEmulator(functions, "localhost", 5001);
+    connectStorageEmulator(storage, "localhost", 9199);
     console.log("Connected to Firebase emulators");
   } catch (e) {
     console.error("Firebase emulator connection failed:", e);
@@ -74,4 +78,4 @@ export const clearFirestoreCache = async (): Promise<void> => {
   }
 };
 
-export { app, auth, db, functions };
+export { app, auth, db, functions, storage };

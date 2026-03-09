@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { useRole } from "../../context/RoleContext";
 import { UserRole } from "../../types/roles";
-import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations, packV3 } from "../../storage/engine";
+import { restoreFromPrevAsync, hardResetStorageAsync, runMigrations, packV3, MAX_STORAGE_CHARS } from "../../storage/engine";
 import { Database, Download, RefreshCw, AlertTriangle, CheckCircle, Building2, Save, Upload, FileText as FileTextIcon, Calendar, Map, Users, Shield, Loader2 } from "lucide-react";
 import { UnifiedDB } from "../../domain/models";
 import { MonthlyMetricsModal } from "./MonthlyMetricsModal";
