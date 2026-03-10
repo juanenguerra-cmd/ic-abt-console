@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { sanitizeField } from "../utils/sanitizePrompt";
 
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -20,11 +21,12 @@ export async function extractIpEventFromText(text: string): Promise<IpEventExtra
   }
 
   try {
+    const safeText = sanitizeField(text, 2000); // Allow up to 2000 chars for clinical notes
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Extract infection prevention event details from the following clinical note.
       
-      Note: "${text}"
+      Note: "${safeText}"
       
       Return a JSON object with these fields (all optional):
       - infectionCategory: string (e.g., "Respiratory", "Urinary", "Skin/Soft Tissue", "GI", "Bloodstream", "Other")

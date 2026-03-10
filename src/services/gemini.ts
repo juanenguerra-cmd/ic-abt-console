@@ -1,3 +1,5 @@
+import { sanitizeField } from "../utils/sanitizePrompt";
+
 /**
  * Generate text content via the /api/generate proxy.
  *
@@ -13,10 +15,11 @@ export async function generateContent(
   prompt: string,
   model = "gemini-2.0-flash"
 ): Promise<string> {
+  const safePrompt = sanitizeField(prompt, 5000); // Allow up to 5000 chars for general prompts
   const response = await fetch("/api/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, model }),
+    body: JSON.stringify({ prompt: safePrompt, model }),
   });
   if (!response.ok) throw new Error("AI generation failed");
   const data = await response.json() as { text?: string };
