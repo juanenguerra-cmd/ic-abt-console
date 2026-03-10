@@ -12,12 +12,12 @@ import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 // WARNING: Replace this with your actual Firebase config object.
 const firebaseConfig = {
-  apiKey: "AIzaSyA...",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "...",
-  appId: "...",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA...",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "your-project",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "...",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "...",
 };
 
 let app: FirebaseApp;

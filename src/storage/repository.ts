@@ -7,12 +7,28 @@ import { getCurrentUser, db } from "../services/firebase";
 
 export const STORAGE_SLICES = [
   "residents",
+  "quarantine",
   "abts",
   "infections",
   "vaxEvents",
+  "notes",
+  "staff",
+  "staffVaxEvents",
+  "fitTestEvents",
   "auditSessions",
+  "outbreaks",
+  "outbreakCases",
+  "outbreakExposures",
+  "outbreakDailyStatuses",
+  "exportProfiles",
+  "surveyPackets",
   "infectionControlAuditSessions",
+  "infectionControlAuditItems",
   "notifications",
+  "contactTraceCases",
+  "contactTraceExposures",
+  "lineListEvents",
+  "shiftLog",
   "mutationLog",
 ] as const;
 
@@ -47,6 +63,67 @@ export class StorageRepository {
     return `${DB_KEY_MAIN}_prev_slice_${facilityId}_${slice}`;
   }
 
+  static async saveMetadata(dbData: UnifiedDB): Promise<void> {
+    const user = await getCurrentUser();
+    if (!user) return;
+    
+    // Extract metadata excluding facilityData
+    const metadata = {
+      schemaName: dbData.schemaName,
+      schemaVersion: dbData.schemaVersion,
+      createdAt: dbData.createdAt,
+      updatedAt: dbData.updatedAt,
+      integrity: dbData.integrity,
+      data: {
+        facilities: dbData.data.facilities
+      }
+    };
+    
+    const metaRef = doc(db, 'users', user.uid, 'meta', 'db');
+    await setDoc(metaRef, metadata);
+
+    // Save facility-level metadata
+    const activeFacilityId = dbData.data.facilities.activeFacilityId;
+    const store = dbData.data.facilityData[activeFacilityId];
+    if (store) {
+      const facilityMeta = {
+        currentRole: store.currentRole || null,
+        lineListOverrides: store.lineListOverrides || {},
+        dismissedRuleKeys: store.dismissedRuleKeys || [],
+        notificationMeta: store.notificationMeta || {},
+      };
+      const facMetaRef = doc(db, 'users', user.uid, 'facilities', activeFacilityId, 'meta', 'config');
+      await setDoc(facMetaRef, facilityMeta);
+    }
+  }
+
+  static async loadMetadata(): Promise<Partial<UnifiedDB> | null> {
+    const user = await getCurrentUser();
+    if (!user) return null;
+    
+    const metaRef = doc(db, 'users', user.uid, 'meta', 'db');
+    const snapshot = await getDocs(collection(db, 'users', user.uid, 'meta'));
+    let metadata: any = null;
+    snapshot.forEach(doc => {
+      if (doc.id === 'db') metadata = doc.data();
+    });
+    
+    return metadata;
+  }
+
+  static async loadFacilityMeta(facilityId: string): Promise<any | null> {
+    const user = await getCurrentUser();
+    if (!user) return null;
+    
+    const facMetaRef = doc(db, 'users', user.uid, 'facilities', facilityId, 'meta', 'config');
+    const snapshot = await getDocs(collection(db, 'users', user.uid, 'facilities', facilityId, 'meta'));
+    let facMeta: any = null;
+    snapshot.forEach(doc => {
+      if (doc.id === 'config') facMeta = doc.data();
+    });
+    return facMeta;
+  }
+
   /**
    * Write a single slice to Firestore.
    *
@@ -64,22 +141,66 @@ export class StorageRepository {
 
     // Facility-scoped Firestore path — facilityId is explicit in the hierarchy.
     const sliceCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
-    const batch = writeBatch(db);
+    
+    // Fetch existing documents to find deletions
+    const existingDocs = await getDocs(sliceCollection);
+    const existingIds = new Set(existingDocs.docs.map(d => d.id));
 
     // data may be a Record<string, T> or an array — handle both shapes.
-    const items: object[] = Array.isArray(data)
-      ? (data as object[])
-      : Object.values(data as Record<string, object>);
-    items.forEach((item: any) => {
-        // The item must have an `id` property to be used as the document ID.
-        if (item && item.id) {
-            const docRef = doc(sliceCollection, item.id);
-            batch.set(docRef, item);
+    const items: object[] = [];
+    if (data) {
+      if (Array.isArray(data)) {
+        items.push(...data);
+      } else {
+        items.push(...Object.values(data as Record<string, object>));
+      }
+    }
+    
+    const newIds = new Set<string>();
+    const operations: { type: 'set' | 'delete', docRef: any, data?: any }[] = [];
+
+    items.forEach((item: any, index: number) => {
+        // Determine the document ID based on the entity type
+        let docId = item.id;
+        if (slice === 'residents') docId = item.mrn;
+        else if (slice === 'quarantine') docId = item.tempId;
+        else if (slice === 'mutationLog') docId = `log_${index}_${item.timestamp}`;
+
+        if (item && docId) {
+            newIds.add(docId);
+            const docRef = doc(sliceCollection, docId);
+            operations.push({ type: 'set', docRef, data: item });
+        } else {
+            console.warn(`[Sync] Item in slice '${slice}' is missing an ID and will not be saved.`, item);
         }
     });
 
-    await batch.commit();
-    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
+    // Delete documents that are no longer in the data
+    let deletedCount = 0;
+    existingIds.forEach(id => {
+        if (!newIds.has(id)) {
+            const docRef = doc(sliceCollection, id);
+            operations.push({ type: 'delete', docRef });
+            deletedCount++;
+        }
+    });
+
+    // Firestore limits batches to 500 operations. Chunk them.
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+        const chunk = operations.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(op => {
+            if (op.type === 'set') {
+                batch.set(op.docRef, op.data);
+            } else if (op.type === 'delete') {
+                batch.delete(op.docRef);
+            }
+        });
+        await batch.commit();
+    }
+    
+    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items, ${deletedCount} deleted).`);
   }
 
   /**
@@ -107,11 +228,19 @@ export class StorageRepository {
     const snapshot = await getDocs(sliceCollection);
 
     if (!snapshot.empty) {
+      if (slice === 'mutationLog') {
+        const data: any[] = [];
+        snapshot.docs.forEach(doc => data.push(doc.data()));
+        return data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      }
       const data: { [key: string]: any } = {};
       snapshot.docs.forEach(doc => {
         const docData = doc.data();
-        if (docData && docData.id) {
-          data[docData.id] = docData;
+        let docId = docData.id;
+        if (slice === 'residents') docId = docData.mrn;
+        else if (slice === 'quarantine') docId = docData.tempId;
+        if (docData && docId) {
+          data[docId] = docData;
         }
       });
       return data;
@@ -130,11 +259,36 @@ export class StorageRepository {
     }
 
     // Parse legacy documents.
+    if (slice === 'mutationLog') {
+      const data: any[] = [];
+      legacySnapshot.docs.forEach(doc => data.push(doc.data()));
+      const sortedData = data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+      console.log(
+        `[Migration] Migrating slice '${slice}' from legacy path to ` +
+        `facility-scoped path for facility '${facilityId}'.`
+      );
+      try {
+        await this.saveSlice(facilityId, slice, sortedData);
+        console.log(`[Migration] Slice '${slice}' migrated successfully.`);
+      } catch (err) {
+        console.error(
+          `[Migration] Failed to migrate slice '${slice}' to facility-scoped path. ` +
+          `Legacy data returned without completing migration.`,
+          err,
+        );
+      }
+      return sortedData;
+    }
+
     const data: { [key: string]: any } = {};
     legacySnapshot.docs.forEach(doc => {
       const docData = doc.data();
-      if (docData && docData.id) {
-        data[docData.id] = docData;
+      let docId = docData.id;
+      if (slice === 'residents') docId = docData.mrn;
+      else if (slice === 'quarantine') docId = docData.tempId;
+      if (docData && docId) {
+        data[docId] = docData;
       }
     });
 
@@ -207,11 +361,26 @@ export class StorageRepository {
         }
 
         // Parse legacy data.
+        if (slice === 'mutationLog') {
+          const data: any[] = [];
+          legacySnapshot.docs.forEach(doc => data.push(doc.data()));
+          const sortedData = data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          await this.saveSlice(facilityId, slice, sortedData);
+          migrated.push(slice);
+          console.log(
+            `[Migration] Slice '${slice}' migrated to facility-scoped path for facility '${facilityId}'.`
+          );
+          continue;
+        }
+
         const data: { [key: string]: any } = {};
         legacySnapshot.docs.forEach(doc => {
           const docData = doc.data();
-          if (docData && docData.id) {
-            data[docData.id] = docData;
+          let docId = docData.id;
+          if (slice === 'residents') docId = docData.mrn;
+          else if (slice === 'quarantine') docId = docData.tempId;
+          if (docData && docId) {
+            data[docId] = docData;
           }
         });
 
@@ -357,22 +526,6 @@ export class StorageRepository {
     eventBus.emit('sync-end', { allSucceeded, failedSlices });
 
     return { allSucceeded, succeededSlices, failedSlices, results };
-  }
-
-  static async mergeSlicesIntoDB(db: UnifiedDB): Promise<void> {
-    const activeFacilityId = db.data.facilities.activeFacilityId;
-    const store = db.data.facilityData[activeFacilityId];
-    if (!store) return;
-
-    const promises = STORAGE_SLICES.map(async (slice) => {
-      const data = await this.loadSlice(activeFacilityId, slice);
-      if (data) {
-        // @ts-ignore
-        store[slice] = data;
-      }
-    });
-
-    await Promise.all(promises);
   }
 
   static async restoreAllSlicesFromPrev(facilityId: string): Promise<void> {

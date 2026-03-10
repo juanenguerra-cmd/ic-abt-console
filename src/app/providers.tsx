@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
 import { UnifiedDB, FacilityStore } from "../domain/models";
 import { loadDBAsync, saveDBAsync, SchemaMigrationError, reconcileWithRemoteAsync } from "../storage/engine";
+import { STORAGE_SLICES } from "../storage/repository";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { commandHandlers, MutationMeta, SESSION_ID } from "../services/commandHandlers";
 import { onSnapshot, doc as fsDoc } from "firebase/firestore";
@@ -316,9 +317,19 @@ export function AppProviders({ children }: { children: ReactNode }) {
     isRestoringRef.current = true;
     syncLog({ label: 'setDB-restore-guard-on' });
     try {
-      await saveDBAsync(newDb, { skipRemote: true }); 
-      setDb(newDb);
+      // Bump the updatedAt timestamp so this restored backup is considered the newest version by all devices
+      newDb.updatedAt = new Date().toISOString();
+      
+      // Save all slices to Firestore and the packed DB locally/remotely
       const newFacId = newDb.data.facilities.activeFacilityId;
+      const store = newDb.data.facilityData[newFacId];
+      if (store) {
+        await commandHandlers.saveDatabase(newDb, newFacId, [...STORAGE_SLICES], true);
+      } else {
+        await saveDBAsync(newDb);
+      }
+      
+      setDb(newDb);
       _setActiveFacilityId(newFacId);
       localStorage.setItem(LS_ACTIVE_FACILITY_ID, newFacId);
     } finally {

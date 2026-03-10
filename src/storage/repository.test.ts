@@ -8,7 +8,7 @@
  *  4. Partial failure behaviour where some slices fail and others succeed
  *  5. No-auth failure handling
  *  6. Cross-facility isolation
- *  7. Startup reconciliation after migrated slice reads (mergeSlicesIntoDB)
+ *  7. Startup reconciliation after migrated slice reads
  */
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
@@ -564,10 +564,10 @@ describe('StorageRepository.migrateSlicesToFacilityScope', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Startup reconciliation — mergeSlicesIntoDB
+// Startup reconciliation
 // ---------------------------------------------------------------------------
 
-describe('StorageRepository.mergeSlicesIntoDB (startup reconciliation)', () => {
+describe('StorageRepository.loadSlice (startup reconciliation)', () => {
   function makeUnifiedDB(facilityId: string, storeOverrides: Record<string, any> = {}) {
     return {
       data: {
@@ -587,40 +587,6 @@ describe('StorageRepository.mergeSlicesIntoDB (startup reconciliation)', () => {
       },
     } as any;
   }
-
-  test('loads slices for the active facility only', async () => {
-    const db = makeUnifiedDB(FACILITY_A);
-    mockGetDocs.mockResolvedValue(makeSnapshot([{ id: 'r1' }]) as any);
-
-    await StorageRepository.mergeSlicesIntoDB(db);
-
-    mockCollection.mock.calls.forEach(callArgs => {
-      expect(callArgs).toContain(FACILITY_A);
-      expect(callArgs).not.toContain(FACILITY_B);
-    });
-  });
-
-  test('merges loaded slice data into the active facility store', async () => {
-    const db = makeUnifiedDB(FACILITY_A);
-    const docs = [{ id: 'r1', name: 'Remote Resident' }];
-    mockGetDocs.mockResolvedValue(makeSnapshot(docs) as any);
-
-    await StorageRepository.mergeSlicesIntoDB(db);
-
-    expect(db.data.facilityData[FACILITY_A].residents).toEqual({ r1: docs[0] });
-  });
-
-  test('does nothing when active facility store is absent', async () => {
-    const db = {
-      data: {
-        facilities: { activeFacilityId: FACILITY_A, byId: {} },
-        facilityData: {},
-      },
-    } as any;
-
-    await expect(StorageRepository.mergeSlicesIntoDB(db)).resolves.toBeUndefined();
-    expect(mockGetDocs).not.toHaveBeenCalled();
-  });
 
   test('after auto-migration, subsequent load reads from facility-scoped path', async () => {
     const legacyDocs = [{ id: 'r1', name: 'Migrated' }];

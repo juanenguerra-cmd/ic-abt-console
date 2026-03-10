@@ -1,7 +1,7 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
 import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
-import { StorageRepository, StorageSlice } from "./repository";
+import { StorageRepository, StorageSlice, STORAGE_SLICES } from "./repository";
 import { remoteFetchDb, remoteSaveDb } from "../services/api";
 import {
   getOutboxState,
@@ -359,42 +359,18 @@ export function createEmptyDB(): UnifiedDB {
 }
 
 export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean } = {}): Promise<UnifiedDB> {
-  if (!options.skipRemoteReconciliation) {
-    let remoteDb: UnifiedDB | null = null;
-    try {
-      const rawRemote = await remoteFetchDb();
-      remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
-    } catch (e) {
-      if (e instanceof SchemaMigrationError) throw e;
-      console.warn("[Startup] Could not reach remote server (offline?). Falling back to local DB.", e);
-    }
-
-    if (remoteDb) {
-      console.log(`[Startup] Remote DB fetched (updatedAt: ${remoteDb.updatedAt}). Saving to local storage.`);
-      try {
-        await StorageRepository.mergeSlicesIntoDB(remoteDb);
-        await saveDBAsync(remoteDb, { skipRemote: true }); // Persist to IDB only
-      } catch (e) {
-        console.warn("[Startup] Failed to persist remote DB to local storage. Continuing with remote data in memory.", e);
-      }
-      return remoteDb;
-    }
-  }
-
   let localDb: UnifiedDB | null = null;
   try {
     const rawLocal = await idbGet<string>(DB_KEY_MAIN);
     if (rawLocal) {
       const parsed = JSON.parse(rawLocal) as Record<string, unknown>;
       const migrated = runMigrations(parsed);
-      await StorageRepository.mergeSlicesIntoDB(migrated);
       localDb = migrated;
     } else {
       const lsRaw = localStorage.getItem(DB_KEY_MAIN);
       if (lsRaw) {
         const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
         const migrated = runMigrations(parsed);
-        await StorageRepository.mergeSlicesIntoDB(migrated);
 
         const packed = packV3(migrated);
         await idbSet(DB_KEY_MAIN, JSON.stringify(packed)).catch((err) =>
@@ -406,6 +382,34 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
   } catch (e) {
     if (e instanceof SchemaMigrationError) throw e;
     console.error("Failed to load local DB:", e);
+  }
+
+  if (!options.skipRemoteReconciliation) {
+    let remoteDb: UnifiedDB | null = null;
+    try {
+      const rawRemote = await remoteFetchDb();
+      if (rawRemote) {
+        remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+      }
+    } catch (e) {
+      if (e instanceof SchemaMigrationError) throw e;
+      console.warn("[Startup] Could not reach remote server (offline?). Falling back to local DB.", e);
+    }
+
+    if (remoteDb) {
+      const remoteDate = new Date(remoteDb.updatedAt);
+      const localDate = localDb ? new Date(localDb.updatedAt) : new Date(0);
+
+      if (remoteDate > localDate) {
+        console.log(`[Startup] Remote DB is newer (remote: ${remoteDb.updatedAt}, local: ${localDb?.updatedAt}). Saving to local storage.`);
+        try {
+          await saveDBAsync(remoteDb, { skipRemote: true }); // Persist to IDB only
+        } catch (e) {
+          console.warn("[Startup] Failed to persist remote DB to local storage. Continuing with remote data in memory.", e);
+        }
+        return remoteDb;
+      }
+    }
   }
 
   if (localDb) {
@@ -451,7 +455,9 @@ export async function reconcileWithRemoteAsync(
   let remoteDb: UnifiedDB | null = null;
   try {
     const rawRemote = await remoteFetchDb();
-    remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+    if (rawRemote) {
+      remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
+    }
   } catch (e) {
     result.action = 'offline';
     await appendSyncRun({
@@ -464,10 +470,10 @@ export async function reconcileWithRemoteAsync(
     return result;
   }
 
-  const remoteDate = new Date(remoteDb.updatedAt);
+  const remoteDate = remoteDb ? new Date(remoteDb.updatedAt) : new Date(0);
   const localDate = new Date(localDb.updatedAt);
 
-  if (remoteDate > localDate) {
+  if (remoteDb && remoteDate > localDate) {
     const lastSyncedAt = await getLastSuccessfulSyncAt().catch(() => null);
     const isConflict =
       lastSyncedAt !== null && localDate > new Date(lastSyncedAt);
@@ -488,7 +494,6 @@ export async function reconcileWithRemoteAsync(
       _dispatchSafe('sync-conflict-detected', { conflictCount: result.conflictCount });
     }
 
-    await StorageRepository.mergeSlicesIntoDB(remoteDb);
     await saveDBAsync(remoteDb, { skipRemote: true });
 
     result.action = 'pull';
@@ -499,6 +504,14 @@ export async function reconcileWithRemoteAsync(
     _dispatchSafe('backup-started', undefined, 'Event');
     try {
       await remoteSaveDb(localDb);
+      const activeFacilityId = localDb.data.facilities.activeFacilityId;
+      const store = localDb.data.facilityData[activeFacilityId];
+      if (store) {
+        const sliceResult = await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
+        if (!sliceResult.allSucceeded) {
+          throw new Error("Partial slice save failure during reconciliation push.");
+        }
+      }
       await clearPackedSyncPending().catch(() => {});
       result.action = 'push';
       result.pushedCount = 1;
@@ -678,9 +691,11 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
       await remoteSaveDb(db)
         .then(async () => {
           await clearPackedSyncPending().catch(() => {});
+          window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
         })
         .catch(async (err) => {
           await markPackedSyncPending(err).catch(() => {});
+          window.dispatchEvent(new Event("backup-failed"));
         });
     } else {
       await markPackedSyncPending(new Error("User not authenticated")).catch(() => {});
@@ -789,19 +804,31 @@ export async function restoreFromPrevAsync(): Promise<boolean> {
   try {
     const prev = await idbGet<string>(DB_KEY_PREV);
     if (!prev) return restoreFromPrev();
-    await idbSet(DB_KEY_MAIN, prev);
-
+    
+    let parsedDb: UnifiedDB | null = null;
     try {
-      const parsed = JSON.parse(prev);
-      const activeFacilityId = parsed?.data?.facilities?.activeFacilityId;
-      if (activeFacilityId) {
-        await StorageRepository.restoreAllSlicesFromPrev(activeFacilityId);
+      const parsed = JSON.parse(prev) as Record<string, unknown>;
+      parsedDb = runMigrations(parsed);
+      
+      // Bump the updatedAt timestamp so this restored backup is considered the newest version by all devices
+      parsedDb.updatedAt = new Date().toISOString();
+      
+      // Save the packed DB locally and remotely
+      await saveDBAsync(parsedDb);
+      
+      // Save all slices to Firestore
+      const activeFacilityId = parsedDb.data.facilities.activeFacilityId;
+      const store = parsedDb.data.facilityData[activeFacilityId];
+      if (store) {
+        await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
       }
     } catch (e) {
-      //noop
+      console.error("Failed to parse and push previous DB:", e);
+      // Fallback to local-only restore if parsing/pushing fails
+      await idbSet(DB_KEY_MAIN, prev);
+      try { localStorage.setItem(DB_KEY_MAIN, prev); } catch {}
     }
 
-    try { localStorage.setItem(DB_KEY_MAIN, prev); } catch {}
     return true;
   } catch (e) {
     return false;

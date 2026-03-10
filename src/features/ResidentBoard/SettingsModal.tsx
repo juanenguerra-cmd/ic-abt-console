@@ -84,13 +84,14 @@ export const SettingsModal: React.FC<Props> = ({ onClose }) => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const rawParsed = JSON.parse(event.target?.result as string) as Record<string, unknown>;
         const json = runMigrations(rawParsed);
         if (json && json.data && json.data.facilities) {
           if (confirm('Are you sure you want to import this database? This will overwrite all current data.')) {
-            setDB(json);
+            sessionStorage.setItem("ltc_just_restored_flag", "true");
+            await setDB(json);
             alert('Database imported successfully. The page will now reload.');
             window.location.reload();
           }

@@ -17,6 +17,8 @@
 
 import { VERSION_HISTORY } from "../constants/versionHistory";
 
+declare const __BUILD_ID__: string;
+
 async function getSwStatus(): Promise<string> {
   if (!("serviceWorker" in navigator)) return "not supported";
   try {
@@ -41,7 +43,7 @@ export async function logAppBanner(): Promise<void> {
 
   const version = VERSION_HISTORY[0]?.version ?? "unknown";
   const env = import.meta.env.MODE ?? "unknown";
-  const buildHash = __APP_BUILD_HASH__;
+  const buildHash = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'unknown';
   const swStatus = await getSwStatus();
 
   const bannerStyle = "font-weight:bold;color:#2563eb;font-size:11px";
