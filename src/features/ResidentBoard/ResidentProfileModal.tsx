@@ -154,6 +154,22 @@ export const ResidentProfileModal: React.FC<Props> = ({
           if (status === 'Active') {
             r.isHistorical = false;
             r.backOfficeOnly = false;
+          } else {
+            const now = new Date().toISOString();
+            Object.values(facility.infections || {}).forEach(ip => {
+              if (ip.residentRef.id === residentId && ip.status === 'active') {
+                ip.status = 'resolved';
+                ip.resolvedAt = now;
+                ip.updatedAt = now;
+              }
+            });
+            Object.values(facility.abts || {}).forEach(abt => {
+              if (abt.residentRef.id === residentId && abt.status === 'active') {
+                abt.status = 'discontinued';
+                abt.endDate = now;
+                abt.updatedAt = now;
+              }
+            });
           }
           r.payor = payor.trim() || undefined;
           r.primaryDiagnosis = primaryDiagnosis.trim() || undefined;

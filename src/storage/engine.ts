@@ -359,7 +359,6 @@ export function createEmptyDB(): UnifiedDB {
 }
 
 export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean } = {}): Promise<UnifiedDB> {
-  console.log('[Storage Engine] loadDBAsync started', { options });
   let localDb: UnifiedDB | null = null;
   try {
     const rawLocal = await idbGet<string>(DB_KEY_MAIN);
@@ -367,11 +366,9 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
       const parsed = JSON.parse(rawLocal) as Record<string, unknown>;
       const migrated = runMigrations(parsed);
       localDb = migrated;
-      console.log('[Storage Engine] Loaded from IndexedDB');
     } else {
       const lsRaw = localStorage.getItem(DB_KEY_MAIN);
       if (lsRaw) {
-        console.log('[Storage Engine] Loaded from localStorage');
         const parsed = JSON.parse(lsRaw) as Record<string, unknown>;
         const migrated = runMigrations(parsed);
 
@@ -390,13 +387,9 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
   if (!options.skipRemoteReconciliation) {
     let remoteDb: UnifiedDB | null = null;
     try {
-      console.log('[Storage Engine] Fetching remote DB...');
       const rawRemote = await remoteFetchDb();
       if (rawRemote) {
         remoteDb = runMigrations(rawRemote as unknown as Record<string, unknown>);
-        console.log('[Storage Engine] Remote DB fetched and migrated.');
-      } else {
-        console.log('[Storage Engine] No remote DB found.');
       }
     } catch (e) {
       if (e instanceof SchemaMigrationError) throw e;
@@ -411,18 +404,15 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
         console.log(`[Startup] Remote DB is newer (remote: ${remoteDb.updatedAt}, local: ${localDb?.updatedAt}). Saving to local storage.`);
         try {
           await saveDBAsync(remoteDb, { skipRemote: true }); // Persist to IDB only
-          console.log('[Storage Engine] Newer remote DB saved locally.');
         } catch (e) {
           console.warn("[Startup] Failed to persist remote DB to local storage. Continuing with remote data in memory.", e);
         }
-        console.log('[Storage Engine] loadDBAsync finished: returned remote DB.');
         return remoteDb;
       }
     }
   }
 
   if (localDb) {
-    console.log('[Storage Engine] Using local DB.');
     // Only run background reconciliation when the caller has not explicitly
     // requested to skip it (e.g. right after a restore so the restored data
     // is never overwritten by a remote pull in the same session).
@@ -431,17 +421,13 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
         console.warn("[Startup] Background remote reconciliation error:", e)
       );
     }
-    console.log('[Storage Engine] loadDBAsync finished: returned local DB.');
     return localDb;
   }
 
-  console.log('[Storage Engine] No local or remote DB found. Creating empty DB.');
   const newDb = createEmptyDB();
   await saveDBAsync(newDb).catch(e => console.error("[Startup] Initial save of empty DB failed (local or remote):", e));
-  console.log('[Storage Engine] loadDBAsync finished: returned new empty DB.');
   return newDb;
 }
-
 
 export interface ReconcileResult {
   action: SyncAction;
@@ -514,7 +500,7 @@ export async function reconcileWithRemoteAsync(
     result.pulledCount = 1;
 
     _dispatchSafe('db-reconciled-from-remote', remoteDb);
-  } else if (localDate >= remoteDate) {
+  } else if (localDate > remoteDate) {
     _dispatchSafe('backup-started', undefined, 'Event');
     try {
       await remoteSaveDb(localDb);
@@ -627,7 +613,6 @@ export async function retryOutboxAsync(currentDb?: UnifiedDB): Promise<void> {
 }
 
 export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean } = {}): Promise<void> {
-  console.log('[Storage Engine] saveDBAsync started', { options });
   window.dispatchEvent(new Event("backup-started"));
   validateCommitGate(db);
 
@@ -635,7 +620,6 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   const packed = packV3(db);
   const serialized = JSON.stringify(packed);
   const size = serialized.length;
-  console.log(`[Storage Engine] DB size: ${(size / 1024).toFixed(2)} KB`);
 
   const IDB_WARN_BYTES = 60 * 1024 * 1024;
   if (size > IDB_WARN_BYTES) {
@@ -645,7 +629,6 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
   const uniqueTmpKey = `${DB_KEY_TMP}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   await idbSet(uniqueTmpKey, serialized);
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  console.log('[Storage Engine] Wrote to temporary key in IndexedDB.');
 
   const tmpVerify = await idbGet<string>(uniqueTmpKey);
   if (!tmpVerify) {
@@ -670,14 +653,12 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
       );
     }
   }
-  console.log('[Storage Engine] Temporary write verified.');
 
   const currentMain = await idbGet<string>(DB_KEY_MAIN);
   if (currentMain) {
     await idbSet(DB_KEY_PREV, currentMain).catch((err) =>
       console.warn("Failed to snapshot IDB PREV:", err)
     );
-    console.log('[Storage Engine] Created backup of previous version.');
   }
 
   db.integrity = {
@@ -690,7 +671,6 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
 
   await idbSet(DB_KEY_MAIN, finalSerialized);
   await idbRemove(uniqueTmpKey).catch(() => {});
-  console.log('[Storage Engine] Wrote to main key in IndexedDB.');
 
   try {
     const lsSize = finalSerialized.length;
@@ -700,39 +680,30 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
         console.warn(`localStorage backup: at ${(usageRatio * 100).toFixed(1)}% of 5 MB limit. Primary store is IDB.`);
       }
       localStorage.setItem(DB_KEY_MAIN, finalSerialized);
-      console.log('[Storage Engine] Wrote to localStorage as a backup.');
-    } else {
-        await remoteSaveDb(db)
     }
   } catch {
     //noop
   }
   
   if (!options.skipRemote) {
-    console.log('[Storage Engine] Saving to remote...');
     const user = await getCurrentUser();
     if (user) {
       await remoteSaveDb(db)
         .then(async () => {
           await clearPackedSyncPending().catch(() => {});
           window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
-          console.log('[Storage Engine] Remote save successful.');
         })
         .catch(async (err) => {
           await markPackedSyncPending(err).catch(() => {});
           window.dispatchEvent(new Event("backup-failed"));
-          console.error('[Storage Engine] Remote save failed.', err);
         });
     } else {
       await markPackedSyncPending(new Error("User not authenticated")).catch(() => {});
       window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
-      console.log('[Storage Engine] User not authenticated. Marked for outbox sync.');
     }
   } else {
     window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'local' } }));
-    console.log('[Storage Engine] Skipped remote save.');
   }
-  console.log('[Storage Engine] saveDBAsync finished.');
 }
 
 
@@ -853,10 +824,9 @@ export async function restoreFromPrevAsync(): Promise<boolean> {
       }
     } catch (e) {
       console.error("Failed to parse and push previous DB:", e);
-      // NOTE: Do not fall back to a local-only restore here. If saveDBAsync
-      // has completed, the remote is already updated. Falling back would
-      // create a local/remote inconsistency that is hard to recover from.
-      // The sync engine will eventually reconcile the state on next cycle.
+      // Fallback to local-only restore if parsing/pushing fails
+      await idbSet(DB_KEY_MAIN, prev);
+      try { localStorage.setItem(DB_KEY_MAIN, prev); } catch {}
     }
 
     return true;

@@ -478,20 +478,32 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                 if (p.status) facility.residents[p.mrn].status = validStatus;
                 if (p.payor) facility.residents[p.mrn].payor = p.payor;
                 if (p.dob) facility.residents[p.mrn].dob = p.dob;
-                if (validStatus === 'Active') {
-                  facility.residents[p.mrn].isHistorical = false;
-                  facility.residents[p.mrn].backOfficeOnly = false;
-                }
               } else if (choice === 'replace') {
                 facility.residents[p.mrn].currentRoom = p.room || undefined;
                 facility.residents[p.mrn].currentUnit = p.unit || undefined;
                 facility.residents[p.mrn].status = validStatus;
                 facility.residents[p.mrn].payor = p.payor || undefined;
                 facility.residents[p.mrn].dob = p.dob || undefined;
-                if (validStatus === 'Active') {
-                  facility.residents[p.mrn].isHistorical = false;
-                  facility.residents[p.mrn].backOfficeOnly = false;
-                }
+              }
+              
+              if (facility.residents[p.mrn].status === 'Active') {
+                facility.residents[p.mrn].isHistorical = false;
+                facility.residents[p.mrn].backOfficeOnly = false;
+              } else {
+                Object.values(facility.infections || {}).forEach(ip => {
+                  if (ip.residentRef.id === p.mrn && ip.status === 'active') {
+                    ip.status = 'resolved';
+                    ip.resolvedAt = now;
+                    ip.updatedAt = now;
+                  }
+                });
+                Object.values(facility.abts || {}).forEach(abt => {
+                  if (abt.residentRef.id === p.mrn && abt.status === 'active') {
+                    abt.status = 'discontinued';
+                    abt.endDate = now;
+                    abt.updatedAt = now;
+                  }
+                });
               }
               facility.residents[p.mrn].updatedAt = now;
             } else {
@@ -582,6 +594,21 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
 
           resident.status = 'Discharged';
           resident.updatedAt = now;
+          
+          Object.values(facility.infections || {}).forEach(ip => {
+            if (ip.residentRef.id === resident.mrn && ip.status === 'active') {
+              ip.status = 'resolved';
+              ip.resolvedAt = now;
+              ip.updatedAt = now;
+            }
+          });
+          Object.values(facility.abts || {}).forEach(abt => {
+            if (abt.residentRef.id === resident.mrn && abt.status === 'active') {
+              abt.status = 'discontinued';
+              abt.endDate = now;
+              abt.updatedAt = now;
+            }
+          });
         });
       }
     });

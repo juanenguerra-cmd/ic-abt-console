@@ -10,15 +10,14 @@ import {
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 
-// Your web app's Firebase configuration
+// WARNING: Replace this with your actual Firebase config object.
 const firebaseConfig = {
-  apiKey: "AIzaSyAkHhm5rS2QNsOTPzqlgkViMcMXwujLl0Y",
-  authDomain: "infection-control-progra-6110a.firebaseapp.com",
-  projectId: "infection-control-progra-6110a",
-  storageBucket: "infection-control-progra-6110a.firebasestorage.app",
-  messagingSenderId: "9546433510",
-  appId: "1:9546433510:web:8e3eccd34f857da027cc27",
-  measurementId: "G-K2HGQCMZYY"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA...",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "your-project",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "...",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "...",
 };
 
 let app: FirebaseApp;

@@ -2,21 +2,9 @@ import { UnifiedDB } from "../domain/models";
 import { getCurrentUser } from "./firebase";
 import { StorageRepository, STORAGE_SLICES } from "../storage/repository";
 
-const waitUntilAuthenticated = async (timeout = 5000): Promise<boolean> => {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-        const user = await getCurrentUser();
-        if (user) {
-            return true;
-        }
-        await new Promise(resolve => setTimeout(resolve, 250));
-    }
-    return false;
-};
-
 export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
-    const isAuthenticated = await waitUntilAuthenticated();
-    if (!isAuthenticated) {
+    const user = await getCurrentUser();
+    if (!user) {
         console.warn("Attempted to fetch remote DB without an authenticated user. Returning null.");
         return null;
     }
@@ -54,19 +42,11 @@ export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
 };
 
 export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
-    const isAuthenticated = await waitUntilAuthenticated();
-    if (!isAuthenticated) {
+    const user = await getCurrentUser();
+    if (!user) {
         console.warn("Attempted to save remote DB without an authenticated user. Skipping.");
         return;
     }
 
     await StorageRepository.saveMetadata(db);
-
-    const activeFacilityId = db.data.facilities?.activeFacilityId;
-    if (activeFacilityId) {
-        const store = db.data.facilityData[activeFacilityId];
-        if (store) {
-            await StorageRepository.saveSlices(activeFacilityId, store, STORAGE_SLICES);
-        }
-    }
 };
