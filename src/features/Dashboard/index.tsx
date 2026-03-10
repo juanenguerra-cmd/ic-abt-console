@@ -388,7 +388,7 @@ export const Dashboard: React.FC = () => {
     facility,
     isFluSeason, fluCoverage, covidCoverage, fluVaxMrns, covidVaxMrns, totalActiveResidents, fluSeasonStart, fluSeasonEnd,
     residentCount, capacityRate, activePrecautionsCount, outbreakCount, residentsNeedingScreeningCount, abtCount,
-    setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal,
+    setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal, setShowScreeningModal,
     auditsLast30, openCorrectiveActions, nonCompliantItems,
     totalDotDays, dotPer1000, residentVaxCoverage, residentVaxGiven, residentVaxTotal, vaxLabel, staffVaxCoverage, staffVaxGiven, staffVaxTotal,
     newNotificationsCount, abtNeedsReviewCount,

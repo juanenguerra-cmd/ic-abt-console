@@ -43,7 +43,7 @@ export const SeasonBannerWidget: React.FC<WidgetProps> = ({ navigate, isFluSeaso
 
 // --- Facility Overview Widget ---
 
-export const FacilityOverviewWidget: React.FC<WidgetProps> = ({ navigate, residentCount, capacityRate, activePrecautionsCount, outbreakCount, residentsNeedingScreeningCount, abtCount, setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal }) => {
+export const FacilityOverviewWidget: React.FC<WidgetProps> = ({ navigate, residentCount, capacityRate, activePrecautionsCount, outbreakCount, residentsNeedingScreeningCount, abtCount, setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal, setShowScreeningModal }) => {
   return (
     <div>
       <h2 className="text-lg font-bold text-neutral-900 mb-4">Facility Overview</h2>
@@ -89,7 +89,7 @@ export const FacilityOverviewWidget: React.FC<WidgetProps> = ({ navigate, reside
             </div>
           </div>
         </div>
-        <div onClick={() => navigate('/notifications', { state: { category: 'ADMISSION_SCREENING' } })} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
+        <div onClick={() => setShowScreeningModal(true)} className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-neutral-500 group-hover:text-indigo-600 transition-colors">Admission Screening</p>
