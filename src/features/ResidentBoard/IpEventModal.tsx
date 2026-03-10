@@ -152,20 +152,30 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
 
       if (existingIp.notes) {
         try {
-          const match = existingIp.notes.match(/--- EXTENDED DATA ---\n(.*)/s);
-          if (match) {
-            const ext = JSON.parse(match[1]);
-            if (ext.protocol === "ebp" || ext.protocol === "isolation") setProtocol(ext.protocol);
-            if (ext.deviceTypes) setDeviceTypes(ext.deviceTypes);
-            if (ext.ebpDetailOther) setEbpDetailOther(ext.ebpDetailOther);
-            if (ext.woundLocation) setWoundLocation(ext.woundLocation);
-            if (ext.mdroType) setMdroType(ext.mdroType);
-            if (ext.sourceOther) setSourceOther(ext.sourceOther);
-            if (ext.labOutcomeNote) setLabOutcomeNote(ext.labOutcomeNote);
-            if (ext.onsetDate) setOnsetDate(ext.onsetDate);
-            if (ext.eventDetectedDate) setEventDetectedDate(ext.eventDetectedDate);
-            if (ext.precautionStartDate) setPrecautionStartDate(ext.precautionStartDate);
-            setNotes(existingIp.notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, "").trim());
+          const parts = existingIp.notes.split('--- EXTENDED DATA ---\n');
+          if (parts.length > 1) {
+            let ext = null;
+            for (let i = parts.length - 1; i > 0; i--) {
+              try {
+                ext = JSON.parse(parts[i]);
+                break;
+              } catch (e) {}
+            }
+            if (ext) {
+              if (ext.protocol === "ebp" || ext.protocol === "isolation") setProtocol(ext.protocol);
+              if (ext.deviceTypes) setDeviceTypes(ext.deviceTypes);
+              if (ext.ebpDetailOther) setEbpDetailOther(ext.ebpDetailOther);
+              if (ext.woundLocation) setWoundLocation(ext.woundLocation);
+              if (ext.mdroType) setMdroType(ext.mdroType);
+              if (ext.sourceOther) setSourceOther(ext.sourceOther);
+              if (ext.labOutcomeNote) setLabOutcomeNote(ext.labOutcomeNote);
+              if (ext.onsetDate) setOnsetDate(ext.onsetDate);
+              if (ext.eventDetectedDate) setEventDetectedDate(ext.eventDetectedDate);
+              if (ext.precautionStartDate) setPrecautionStartDate(ext.precautionStartDate);
+              setNotes(parts[0].trim());
+            } else {
+              setNotes(existingIp.notes);
+            }
           } else {
             setNotes(existingIp.notes);
           }

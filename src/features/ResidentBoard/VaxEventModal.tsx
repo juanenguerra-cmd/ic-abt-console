@@ -65,18 +65,28 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
 
       if (existingVax.notes) {
         try {
-          const match = existingVax.notes.match(/--- EXTENDED DATA ---\n(.*)/s);
-          if (match) {
-            const ext = JSON.parse(match[1]);
-            setAdministrationSource(ext.administrationSource || 'in_house');
-            setSeriesComplete(ext.seriesComplete);
-            setDeclineReasonOther(ext.declineReasonOther || "");
-            setOfferedBy(ext.offeredBy || "");
-            setPermanentDeclination(ext.permanentDeclination || false);
-            setOfferAgainDate(ext.offerAgainDate || "");
-            setNextDoseNeeded(ext.nextDoseNeeded || 'complete');
-            setScheduledDate(ext.scheduledDate || "");
-            setNotes(existingVax.notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, "").trim());
+          const parts = existingVax.notes.split('--- EXTENDED DATA ---\n');
+          if (parts.length > 1) {
+            let ext = null;
+            for (let i = parts.length - 1; i > 0; i--) {
+              try {
+                ext = JSON.parse(parts[i]);
+                break;
+              } catch (e) {}
+            }
+            if (ext) {
+              setAdministrationSource(ext.administrationSource || 'in_house');
+              setSeriesComplete(ext.seriesComplete);
+              setDeclineReasonOther(ext.declineReasonOther || "");
+              setOfferedBy(ext.offeredBy || "");
+              setPermanentDeclination(ext.permanentDeclination || false);
+              setOfferAgainDate(ext.offerAgainDate || "");
+              setNextDoseNeeded(ext.nextDoseNeeded || 'complete');
+              setScheduledDate(ext.scheduledDate || "");
+              setNotes(parts[0].trim());
+            } else {
+              setNotes(existingVax.notes);
+            }
           } else {
             setNotes(existingVax.notes);
           }

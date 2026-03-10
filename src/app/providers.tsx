@@ -108,6 +108,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   // Guard: set to true during restore/import to prevent concurrent sync from
   // overwriting the freshly-restored state before the page reloads.
   const isRestoringRef = useRef(false);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -122,6 +123,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
       try {
         const loadedDb = await loadDBAsync({ skipRemoteReconciliation: justRestored });
+        dbRef.current = loadedDb; // Update ref immediately
         setDb(loadedDb);
         const facId = loadedDb.data.facilities.activeFacilityId;
         _setActiveFacilityId(facId);
@@ -276,6 +278,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (!remoteDb) return;
       console.log('[Sync] db-reconciled-from-remote: updating live React state.');
       syncLog({ label: 'db-reconciled-from-remote' });
+      dbRef.current = remoteDb; // Update ref immediately
       setDb(remoteDb);
       const facId = remoteDb.data?.facilities?.activeFacilityId;
       if (facId) {
@@ -298,15 +301,20 @@ export function AppProviders({ children }: { children: ReactNode }) {
         meta,
       );
 
+      dbRef.current = nextDb; // Update ref immediately for synchronous calls
       setDb(nextDb); // Optimistic update
 
-      try {
-        await commandHandlers.saveDatabase(nextDb, activeFacilityId, changedSlices, mainChanged);
-        setSaveErrorToast(null);
-      } catch (e: any) {
-        console.error("Failed to save database:", e);
-        setSaveErrorToast(e.message || "An unknown error occurred during save.");
-      }
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          await commandHandlers.saveDatabase(nextDb, activeFacilityId, changedSlices, mainChanged);
+          setSaveErrorToast(null);
+        } catch (e: any) {
+          console.error("Failed to save database:", e);
+          setSaveErrorToast(e.message || "An unknown error occurred during save.");
+        }
+      });
+      
+      await saveQueueRef.current;
     },
     [activeFacilityId],
   );
@@ -323,12 +331,21 @@ export function AppProviders({ children }: { children: ReactNode }) {
       // Save all slices to Firestore and the packed DB locally/remotely
       const newFacId = newDb.data.facilities.activeFacilityId;
       const store = newDb.data.facilityData[newFacId];
-      if (store) {
-        await commandHandlers.saveDatabase(newDb, newFacId, [...STORAGE_SLICES], true);
-      } else {
-        await saveDBAsync(newDb);
-      }
       
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          if (store) {
+            await commandHandlers.saveDatabase(newDb, newFacId, [...STORAGE_SLICES], true);
+          } else {
+            await saveDBAsync(newDb);
+          }
+        } catch (e: any) {
+          console.error("Failed to save database during restore:", e);
+        }
+      });
+      await saveQueueRef.current;
+      
+      dbRef.current = newDb; // Update ref immediately
       setDb(newDb);
       _setActiveFacilityId(newFacId);
       localStorage.setItem(LS_ACTIVE_FACILITY_ID, newFacId);
