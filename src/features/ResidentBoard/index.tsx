@@ -345,6 +345,14 @@ export const ResidentBoard: React.FC = () => {
     });
   };
 
+  // Calculate unassigned active residents (ignoring current board filters)
+  const unassignedActiveCount = useMemo(() => {
+    return residents.filter(r => 
+      isActiveCensusResident(r) && 
+      (!r.currentUnit || r.currentUnit.trim() === '' || r.currentUnit.toLowerCase() === 'unassigned')
+    ).length;
+  }, [residents]);
+
   const buildResidentBoardSpec = (): PdfSpec => {
     const activeResidents = residents.filter(isActiveCensusResident);
     
@@ -597,14 +605,6 @@ export const ResidentBoard: React.FC = () => {
   if (view === 'report') {
     return <ShiftReport onBack={() => setView('board')} />;
   }
-
-  // Calculate unassigned active residents (ignoring current board filters)
-  const unassignedActiveCount = useMemo(() => {
-    return residents.filter(r => 
-      isActiveCensusResident(r) && 
-      (!r.currentUnit || r.currentUnit.trim() === '' || r.currentUnit.toLowerCase() === 'unassigned')
-    ).length;
-  }, [residents]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
