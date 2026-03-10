@@ -1001,6 +1001,29 @@ export const ResidentBoard: React.FC = () => {
                             >
                               <Syringe className="w-3.5 h-3.5" />
                             </button>
+                            {isHistoricalResident && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Activate ${resident.displayName} and move to active census?`)) {
+                                    updateDB(draft => {
+                                      const facId = draft.data.facilities.activeFacilityId;
+                                      const r = draft.data.facilityData[facId].residents[resident.mrn];
+                                      if (r) {
+                                        r.isHistorical = false;
+                                        r.backOfficeOnly = false;
+                                        r.status = 'Active';
+                                        r.updatedAt = new Date().toISOString();
+                                      }
+                                    });
+                                  }
+                                }}
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                title="Activate Resident"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <span className="text-xs font-bold text-neutral-700 bg-neutral-100 px-1.5 py-0.5 rounded shrink-0 ml-1">
                               {resident.currentRoom || "N/A"}
                             </span>

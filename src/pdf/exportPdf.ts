@@ -506,6 +506,7 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
   };
 
   const pageIds: number[] = [];
+  const contentIds: number[] = [];
   let currentRowIdx = 0;
   
   while (currentRowIdx < rowText.length) {
@@ -571,7 +572,8 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
       
       const rowHeight = Math.max(1, ...wrappedCells.map(c => c.length)) * 11 + 10;
       
-      if (currentY - rowHeight < 80) { // Leave space for footer
+      const footerThreshold = spec.showSignatureLines ? 160 : 80;
+      if (currentY - rowHeight < footerThreshold) { // Leave space for footer
         break;
       }
 
@@ -625,11 +627,14 @@ const buildActivePrecautionsPdf = (spec: PdfSpec): Blob => {
     const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
     const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
     pageIds.push(pageId);
+    contentIds.push(contentId);
   }
 
   const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   pageIds.forEach(id => {
     objects[id - 1] = objects[id - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
+  });
+  contentIds.forEach(id => {
     objects[id - 1] = objects[id - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
   });
 
@@ -700,6 +705,7 @@ const buildResidentBoardPdf = (spec: PdfSpec): Blob => {
   };
 
   const pageIds: number[] = [];
+  const contentIds: number[] = [];
   let currentRowIdx = 0;
   
   while (currentRowIdx < rowText.length) {
@@ -780,11 +786,14 @@ const buildResidentBoardPdf = (spec: PdfSpec): Blob => {
     const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
     const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
     pageIds.push(pageId);
+    contentIds.push(contentId);
   }
 
   const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   pageIds.forEach(id => {
     objects[id - 1] = objects[id - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
+  });
+  contentIds.forEach(id => {
     objects[id - 1] = objects[id - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
   });
 
