@@ -119,7 +119,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const InfoItem = ({ label, value }: { label: string, value: React.ReactNode }) => (
     <div>
       <p className="text-sm text-neutral-500">{label}</p>
-      <p className="font-medium text-neutral-900">{value}</p>
+      <div className="font-medium text-neutral-900">{value}</div>
     </div>
   );
 
@@ -151,6 +151,10 @@ export const ResidentProfileModal: React.FC<Props> = ({
           r.currentUnit = currentUnit.trim() || undefined;
           r.currentRoom = currentRoom.trim() || undefined;
           r.status = status;
+          if (status === 'Active') {
+            r.isHistorical = false;
+            r.backOfficeOnly = false;
+          }
           r.payor = payor.trim() || undefined;
           r.primaryDiagnosis = primaryDiagnosis.trim() || undefined;
           r.attendingMD = attendingMD.trim() || undefined;
@@ -183,6 +187,8 @@ export const ResidentProfileModal: React.FC<Props> = ({
                                 const r = draft.data.facilityData[activeFacilityId].residents[residentId];
                                 if (r) {
                                     r.status = "Active";
+                                    r.isHistorical = false;
+                                    r.backOfficeOnly = false;
                                     r.updatedAt = new Date().toISOString();
                                 }
                             }, { action: 'update', entityType: 'Resident', entityId: residentId });
@@ -296,7 +302,23 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 <InfoItem label="DOB / Age" value={`${resident.dob || "Unknown"} (${getAge(resident.dob)} yrs)`} />
                 <InfoItem label="Sex" value={resident.sex || "Unknown"} />
                 <InfoItem label="Location" value={`${resident.currentUnit || "Unassigned"} - ${resident.currentRoom || "No Room"}`} />
-                <InfoItem label="Status" value={resident.status} />
+                <InfoItem label="Status" value={
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${resident.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-600'}`}>
+                      {resident.status}
+                    </span>
+                    {resident.isHistorical && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider border border-amber-200">
+                        Historical
+                      </span>
+                    )}
+                    {resident.backOfficeOnly && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-100 text-violet-800 uppercase tracking-wider border border-violet-200">
+                        Back-Office
+                      </span>
+                    )}
+                  </div>
+                } />
                 <InfoItem label="Admission Date" value={resident.admissionDate ? new Date(resident.admissionDate).toLocaleDateString() : "N/A"} />
                 <InfoItem label="Length of Stay" value={resident.admissionDate ? `${Math.floor((new Date().getTime() - new Date(resident.admissionDate).getTime()) / (1000 * 3600 * 24))} days` : "N/A"} />
                 <InfoItem label="Primary Diagnosis" value={resident.primaryDiagnosis || "None recorded"} />

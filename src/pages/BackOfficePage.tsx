@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDatabase, useFacilityData } from '../app/providers';
+import { alertService } from '../services/alertService';
 import { Resident, IPEvent, ABTCourse, VaxEvent } from '../domain/models';
 import { Search, Plus, Edit, Activity, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,7 +42,8 @@ export const BackOfficePage: React.FC = () => {
     lastKnownRoom: '',
     lastKnownAttendingMD: '',
     dischargedAt: '',
-    notes: ''
+    notes: '',
+    isActiveCensus: false
   });
 
   const allResidents = Object.values(store.residents || {}) as Resident[];
@@ -67,7 +69,8 @@ export const BackOfficePage: React.FC = () => {
         lastKnownRoom: resident.lastKnownRoom || '',
         lastKnownAttendingMD: resident.lastKnownAttendingMD || '',
         dischargedAt: resident.dischargedAt || '',
-        notes: '' // Assuming notes aren't directly on resident for now, or we can add it
+        notes: '', // Assuming notes aren't directly on resident for now, or we can add it
+        isActiveCensus: !resident.backOfficeOnly && !resident.isHistorical
       });
     } else {
       setEditingResident(null);
@@ -80,7 +83,8 @@ export const BackOfficePage: React.FC = () => {
         lastKnownRoom: '',
         lastKnownAttendingMD: '',
         dischargedAt: '',
-        notes: ''
+        notes: '',
+        isActiveCensus: false
       });
     }
     setIsModalOpen(true);
@@ -118,8 +122,9 @@ export const BackOfficePage: React.FC = () => {
         lastKnownRoom: formData.lastKnownRoom,
         lastKnownAttendingMD: formData.lastKnownAttendingMD,
         dischargedAt: formData.dischargedAt,
-        isHistorical: true,
-        backOfficeOnly: true,
+        isHistorical: !formData.isActiveCensus,
+        backOfficeOnly: !formData.isActiveCensus,
+        status: formData.isActiveCensus ? 'Active' : (editingResident?.status || 'Discharged'),
         historicalSource: 'manual',
         updatedAt: new Date().toISOString()
       };
@@ -315,6 +320,25 @@ export const BackOfficePage: React.FC = () => {
                             </td>
                             <td className="px-6 py-4 text-right space-x-4">
                               <button
+                                onClick={() => {
+                                  if (confirm(`Activate ${resident.displayName} and move to active census?`)) {
+                                    updateDB(draft => {
+                                      const facId = draft.data.facilities.activeFacilityId;
+                                      const r = draft.data.facilityData[facId].residents[resident.mrn];
+                                      if (r) {
+                                        r.isHistorical = false;
+                                        r.backOfficeOnly = false;
+                                        r.status = 'Active';
+                                        r.updatedAt = new Date().toISOString();
+                                      }
+                                    });
+                                  }
+                                }}
+                                className="text-emerald-600 hover:text-emerald-900 font-medium text-sm"
+                              >
+                                Activate
+                              </button>
+                              <button
                                 onClick={() => setSelectedResident(resident)}
                                 className="text-indigo-600 hover:text-indigo-900 font-medium text-sm"
                               >
@@ -482,6 +506,19 @@ export const BackOfficePage: React.FC = () => {
                     onChange={e => setFormData({...formData, notes: e.target.value})}
                     className="w-full border-neutral-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   />
+                </div>
+
+                <div className="flex items-center gap-2 py-2">
+                  <input
+                    type="checkbox"
+                    id="is-active-census"
+                    checked={formData.isActiveCensus}
+                    onChange={e => setFormData({...formData, isActiveCensus: e.target.checked})}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-neutral-300 rounded"
+                  />
+                  <label htmlFor="is-active-census" className="text-sm font-medium text-neutral-700">
+                    Move to Active Census (Show on Resident Board)
+                  </label>
                 </div>
               </form>
             </div>

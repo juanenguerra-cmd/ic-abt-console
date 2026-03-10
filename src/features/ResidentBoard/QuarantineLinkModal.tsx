@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Link as LinkIcon } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
+import { alertService } from '../../services/alertService';
 import { Resident } from '../../domain/models';
 
 interface Props {
@@ -30,10 +31,19 @@ export const QuarantineLinkModal: React.FC<Props> = ({ quarantineId, onClose }) 
     
     updateDB(draft => {
       const facility = draft.data.facilityData[activeFacilityId];
+      const resident = facility.residents[selectedMrn];
+      if (resident) {
+        // If linking to a historical resident, activate them
+        resident.status = 'Active';
+        resident.isHistorical = false;
+        resident.backOfficeOnly = false;
+        resident.updatedAt = new Date().toISOString();
+      }
       // Move any data from quarantine to the resident if needed
       // For now, just delete from quarantine
       delete facility.quarantine[quarantineId];
     });
+    alertService.show(`Resident linked and activated.`, { type: 'success' });
     onClose();
   };
 
@@ -56,6 +66,7 @@ export const QuarantineLinkModal: React.FC<Props> = ({ quarantineId, onClose }) 
       
       delete facility.quarantine[quarantineId];
     });
+    alertService.show(`Resident linked and activated.`, { type: 'success' });
     onClose();
   };
 

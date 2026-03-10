@@ -478,12 +478,20 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                 if (p.status) facility.residents[p.mrn].status = validStatus;
                 if (p.payor) facility.residents[p.mrn].payor = p.payor;
                 if (p.dob) facility.residents[p.mrn].dob = p.dob;
+                if (validStatus === 'Active') {
+                  facility.residents[p.mrn].isHistorical = false;
+                  facility.residents[p.mrn].backOfficeOnly = false;
+                }
               } else if (choice === 'replace') {
                 facility.residents[p.mrn].currentRoom = p.room || undefined;
                 facility.residents[p.mrn].currentUnit = p.unit || undefined;
                 facility.residents[p.mrn].status = validStatus;
                 facility.residents[p.mrn].payor = p.payor || undefined;
                 facility.residents[p.mrn].dob = p.dob || undefined;
+                if (validStatus === 'Active') {
+                  facility.residents[p.mrn].isHistorical = false;
+                  facility.residents[p.mrn].backOfficeOnly = false;
+                }
               }
               facility.residents[p.mrn].updatedAt = now;
             } else {
@@ -521,6 +529,11 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                     ? []
                     : p.allergies.split(",").map((a: string) => a.trim());
                 }
+                // If importing clinical details for an active resident, ensure flags are cleared
+                if (facility.residents[p.mrn].status === 'Active') {
+                  facility.residents[p.mrn].isHistorical = false;
+                  facility.residents[p.mrn].backOfficeOnly = false;
+                }
               } else if (choice === 'replace') {
                 facility.residents[p.mrn].sex = p.gender || undefined;
                 facility.residents[p.mrn].admissionDate = p.admissionDate || undefined;
@@ -529,6 +542,10 @@ export const CensusParserModal: React.FC<Props> = ({ onClose }) => {
                 facility.residents[p.mrn].allergies = p.allergies && p.allergies !== "No Known Allergies"
                   ? p.allergies.split(",").map((a: string) => a.trim())
                   : [];
+                if (facility.residents[p.mrn].status === 'Active') {
+                  facility.residents[p.mrn].isHistorical = false;
+                  facility.residents[p.mrn].backOfficeOnly = false;
+                }
               }
               facility.residents[p.mrn].updatedAt = now;
             } else {

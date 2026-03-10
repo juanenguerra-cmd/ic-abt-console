@@ -17,6 +17,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
 import { computeSymptomIndicators } from "../../utils/symptomIndicators";
 import { getActiveABT, getVaxDue, isActiveCensusResident, filterActiveResidents, isHistoricalOrBackOffice, normalizeStatus, getAbtDays } from "../../utils/countCardDataHelpers";
+import { alertService } from "../../services/alertService";
 import { ContactTraceCaseModal } from "../ContactTracing/ContactTraceCaseModal";
 import { v4 as uuidv4 } from "uuid";
 import { getDeviceDay, normalizeClinicalDevices, formatDeviceDayLabel } from "../../utils/clinicalDevices";
@@ -912,7 +913,7 @@ export const ResidentBoard: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {unitResidents.map(resident => {
                   const hasAllergies = resident.allergies && resident.allergies.length > 0;
-                  const isActive = resident.status === "Active";
+                  const isActive = isActiveCensusResident(resident);
                   const isHistoricalResident = isHistoricalOrBackOffice(resident);
                   const sigs = signalMap[resident.mrn] || { hasActivePrecaution: false, hasEbp: false, hasActiveAbt: false, hasDueVax: false, hasRecentSymptoms96h: false, strip: 'none' as const };
                   const tileColor = isHistoricalResident ? HISTORICAL_TILE_COLOR : (TILE_COLORS[sigs.strip] ?? TILE_COLORS.none);
