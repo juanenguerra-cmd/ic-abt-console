@@ -824,9 +824,10 @@ export async function restoreFromPrevAsync(): Promise<boolean> {
       }
     } catch (e) {
       console.error("Failed to parse and push previous DB:", e);
-      // Fallback to local-only restore if parsing/pushing fails
-      await idbSet(DB_KEY_MAIN, prev);
-      try { localStorage.setItem(DB_KEY_MAIN, prev); } catch {}
+      // NOTE: Do not fall back to a local-only restore here. If saveDBAsync
+      // has completed, the remote is already updated. Falling back would
+      // create a local/remote inconsistency that is hard to recover from.
+      // The sync engine will eventually reconcile the state on next cycle.
     }
 
     return true;
