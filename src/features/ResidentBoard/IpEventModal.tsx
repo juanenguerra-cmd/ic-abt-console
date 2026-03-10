@@ -183,7 +183,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       setInfectionCategory("");
       setDeviceTypes([]);
     } else if (newProtocol === "ebp") {
-      setIsolationTypes(["Indwelling Catheter"]);
+      setIsolationTypes([]);
       setInfectionCategory("");
       setDeviceTypes([]);
     }
@@ -214,13 +214,18 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     setDeviceTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
   };
 
+  const toggleIsolationType = (type: string) => {
+    setIsolationTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+  };
+
   const toggleSourceTag = (source: string) => {
     setSourceTags(prev => prev.includes(source) ? prev.filter(t => t !== source) : [...prev, source]);
   };
 
   useEffect(() => {
     if (protocol !== "ebp" || isolationTypes.length === 0) return;
-    const primary = isolationTypes[0];
+    // For multi-select EBP, auto-set category from the most recently added indication
+    const primary = isolationTypes[isolationTypes.length - 1];
     if (primary === "Indwelling Catheter") setInfectionCategory("Device-associated");
     else if (primary === "Wound") setInfectionCategory("Wound infection");
     else if (primary === "MDRO") setInfectionCategory("MDRO colonization/infection");
@@ -541,10 +546,10 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                 {(protocol === "ebp" ? ["Indwelling Catheter", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
                   <label key={type} className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer bg-white px-3 py-1.5 rounded border border-neutral-200 shadow-sm hover:border-amber-300">
                     <input 
-                      type="radio"
+                      type={protocol === "ebp" ? "checkbox" : "radio"}
                       name="isolation-selection"
-                      checked={isolationTypes[0] === type}
-                      onChange={() => setIsolationTypes([type])}
+                      checked={protocol === "ebp" ? isolationTypes.includes(type) : isolationTypes[0] === type}
+                      onChange={() => protocol === "ebp" ? toggleIsolationType(type) : setIsolationTypes([type])}
                       className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
                     />
                     {type}

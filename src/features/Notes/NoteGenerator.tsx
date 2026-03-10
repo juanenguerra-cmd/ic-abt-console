@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useFacilityData } from '../../app/providers';
 import { Resident, ABTCourse, IPEvent } from '../../domain/models';
-import { FileText, Copy, CheckSquare } from 'lucide-react';
+import { FileText, Copy, CheckSquare, Download } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { formatDateLikeForDisplay, todayLocalDateInputValue } from '../../lib/dateUtils';
+import { exportPdfDocument } from '../../pdf/exportPdf';
 
 // --- Note Configuration System ---
 
@@ -75,9 +77,9 @@ const NOTE_CONFIGS: Record<string, NoteConfig> = {
         if (activeAbt) {
           const medDetail = `${activeAbt.medication}${activeAbt.route ? ` ${activeAbt.route}` : ''}${activeAbt.frequency ? ` ${activeAbt.frequency}` : ''}`;
           const dayCount = activeAbt.startDate ? getDaysDiff(activeAbt.startDate) : '[#]';
-          parts.push(`\nCurrent antibiotic therapy includes ${medDetail} initiated on ${activeAbt.startDate ? new Date(activeAbt.startDate).toLocaleDateString() : '[Start Date]'}. Current day of therapy is ${dayCount}.`);
+          parts.push(`\nCurrent antibiotic therapy includes ${medDetail} initiated on ${activeAbt.startDate ? formatDateLikeForDisplay(activeAbt.startDate) : '[Start Date]'}. Current day of therapy is ${dayCount}.`);
           if (activeAbt.endDate) {
-            parts.push(` Expected stop date is ${new Date(activeAbt.endDate).toLocaleDateString()}.`);
+            parts.push(` Expected stop date is ${formatDateLikeForDisplay(activeAbt.endDate)}.`);
           }
         } else {
           parts.push(`\n[No active antibiotic record found for this resident.]`);
@@ -220,7 +222,7 @@ const NOTE_CONFIGS: Record<string, NoteConfig> = {
       }
 
       if (opts.has('admissionDetails')) {
-        const admDate = resident.admissionDate ? new Date(resident.admissionDate).toLocaleDateString() : '[Admission Date]';
+        const admDate = resident.admissionDate ? formatDateLikeForDisplay(resident.admissionDate) : '[Admission Date]';
         parts.push(` admitted on ${admDate}. Primary diagnosis: ${resident.primaryDiagnosis || '[Primary Dx]'}.`);
       } else {
         parts.push(`.`);
@@ -409,6 +411,30 @@ export const NoteGenerator: React.FC = () => {
     }
   };
 
+  const handleExportPdf = () => {
+    if (!noteContent.trim()) return;
+    const resident = selectedMrn ? store.residents[selectedMrn] : null;
+    const title = currentConfig?.label || 'Progress Note';
+    const residentName = resident?.displayName || 'Resident';
+    const today = formatDateLikeForDisplay(todayLocalDateInputValue());
+    // Split the note into lines for the PDF text section
+    const noteLines = noteContent.split('\n');
+    exportPdfDocument({
+      title,
+      orientation: 'portrait',
+      template: 'PORTRAIT_TEMPLATE_V1',
+      subtitleLines: [`Resident: ${residentName}`, `Date: ${today}`],
+      sections: [
+        {
+          type: 'text',
+          lines: noteLines,
+        },
+      ],
+      filename: `${title.replace(/\s+/g, '_')}_${residentName.replace(/\s+/g, '_')}_${today.replace(/\//g, '-')}.pdf`,
+      showSignatureLines: true,
+    });
+  };
+
   const currentConfig = NOTE_CONFIGS[noteType];
 
   return (
@@ -503,6 +529,14 @@ export const NoteGenerator: React.FC = () => {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={handleExportPdf}
+              disabled={!noteContent.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-neutral-700 text-white rounded-md hover:bg-neutral-800 disabled:bg-neutral-300 text-sm font-medium transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export PDF
+            </button>
             <button
               onClick={handleCopy}
               disabled={!noteContent.trim()}
