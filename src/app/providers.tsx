@@ -378,6 +378,17 @@ export function AppProviders({ children }: { children: ReactNode }) {
     setSyncStatus(getSyncStatus());
   }, []);
 
+  // ── Manual Sync Trigger ────────────────────────────────────────────────────
+  useEffect(() => {
+    (window as any).triggerManualSync = triggerSync;
+    console.log('[ManualSync] Manual sync trigger function is now available on the window object as `triggerManualSync()`.');
+
+    return () => {
+      delete (window as any).triggerManualSync;
+    }
+  }, [triggerSync]);
+
+
   if (isMigrationRequired) {
     return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-red-50 text-red-900">
