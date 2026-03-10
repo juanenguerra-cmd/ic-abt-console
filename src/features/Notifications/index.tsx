@@ -5,6 +5,7 @@ import { AppNotification } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
 import { runDetectionPipeline } from './detectionPipeline';
 import { AddToLineListModal } from './AddToLineListModal';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 export const useNotifications = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -302,7 +303,7 @@ export const NotificationsPage: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `notifications_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `notifications_export_${todayLocalDateInputValue()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

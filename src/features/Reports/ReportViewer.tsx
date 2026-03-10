@@ -3,6 +3,7 @@ import { useFacilityData } from '../../app/providers';
 import { REPORT_REGISTRY } from './registry';
 import { Download, Printer, Filter as FilterIcon, FileText } from 'lucide-react';
 import { exportPDF } from '../../utils/pdfExport';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   reportId: string;
@@ -50,7 +51,7 @@ export const ReportViewer: React.FC<Props> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${report.id}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `${report.id}_${todayLocalDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

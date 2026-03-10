@@ -5,6 +5,7 @@ import { Plus, Upload, Download, Edit2, X, Check, ChevronDown, ChevronRight, Syr
 import { v4 as uuidv4 } from 'uuid';
 import { EmptyState } from '../../components/EmptyState';
 import { SkeletonTable } from '../../components/SkeletonLoader';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface UploadResult {
   added: number;
@@ -296,7 +297,7 @@ const StaffPage: React.FC = () => {
   };
 
   const bulkMarkVaccine = (vaccine: string, vaxStatus: 'given' | 'declined' | 'contraindicated') => {
-    const date = new Date().toISOString().split('T')[0];
+    const date = todayLocalDateInputValue();
     updateDB(draft => {
       const facilityStore = draft.data.facilityData[activeFacilityId];
       if (!facilityStore.staffVaxEvents) facilityStore.staffVaxEvents = {};
@@ -606,7 +607,7 @@ const StaffPage: React.FC = () => {
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <h4 className="text-sm font-semibold text-neutral-700 flex items-center gap-1"><Syringe className="w-4 h-4" aria-hidden="true" /> Vaccine History</h4>
-                              <button onClick={() => setVaxForm({ staffId: staff.id, vaccine: 'Influenza', status: 'given', date: new Date().toISOString().split('T')[0] })} aria-label="Add vaccine record" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">+ Add</button>
+                              <button onClick={() => setVaxForm({ staffId: staff.id, vaccine: 'Influenza', status: 'given', date: todayLocalDateInputValue() })} aria-label="Add vaccine record" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">+ Add</button>
                             </div>
                             {(['Influenza', 'Pneumonia', 'Covid-19'] as const).map(vax => {
                               const latest = getLatestVax(staff.id, vax);
@@ -646,7 +647,7 @@ const StaffPage: React.FC = () => {
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <h4 className="text-sm font-semibold text-neutral-700 flex items-center gap-1"><Shield className="w-4 h-4" aria-hidden="true" /> Face Fit Testing</h4>
-                              <button onClick={() => setFitForm({ staffId: staff.id, status: 'Pass', date: new Date().toISOString().split('T')[0] })} aria-label="Add fit test record" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">+ Add</button>
+                              <button onClick={() => setFitForm({ staffId: staff.id, status: 'Pass', date: todayLocalDateInputValue() })} aria-label="Add fit test record" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">+ Add</button>
                             </div>
                             {latestFit ? (
                               <div className="text-sm">

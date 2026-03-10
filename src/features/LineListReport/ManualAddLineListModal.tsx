@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { X, Save, AlertCircle } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { LineListEvent, SymptomClass, SymptomTag } from '../../domain/models';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface ManualAddLineListModalProps {
   symptomClass: SymptomClass;
@@ -20,7 +21,7 @@ export const ManualAddLineListModal: React.FC<ManualAddLineListModalProps> = ({
   const { updateDB } = useDatabase();
 
   const [residentId, setResidentId] = useState('');
-  const [onsetDate, setOnsetDate] = useState(new Date().toISOString().slice(0, 10));
+  const [onsetDate, setOnsetDate] = useState(todayLocalDateInputValue());
   const [checkedSymptoms, setCheckedSymptoms] = useState<SymptomTag[]>([]);
   const [fever, setFever] = useState<boolean | undefined>(undefined);
   const [isolationInitiated, setIsolationInitiated] = useState(false);

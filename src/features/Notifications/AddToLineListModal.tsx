@@ -3,6 +3,7 @@ import { X, Save, AlertCircle } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { AppNotification, LineListEvent, SymptomClass, SymptomTag } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   notification: AppNotification;
@@ -42,7 +43,7 @@ export const AddToLineListModal: React.FC<Props> = ({ notification, onClose, onS
   );
 
   const [notes, setNotes] = useState('');
-  const [onsetDate, setOnsetDate] = useState(new Date().toISOString().slice(0, 10));
+  const [onsetDate, setOnsetDate] = useState(todayLocalDateInputValue());
   const [checkedSymptoms, setCheckedSymptoms] = useState<SymptomTag[]>(notification.payload?.symptoms || []);
   const [fever, setFever] = useState<boolean | undefined>(undefined);
   const [isolationInitiated, setIsolationInitiated] = useState(false);

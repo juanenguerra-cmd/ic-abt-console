@@ -4,6 +4,7 @@ import { useDatabase, useFacilityData } from '../../app/providers';
 import { ABTCourse, Resident } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
 import { detectMedicationClass, MEDICATION_CLASS_OPTIONS } from '../../utils/medicationClassMap';
+import { todayLocalDateInputValue, toLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -21,8 +22,8 @@ export const HistoricalAbtEventModal: React.FC<Props> = ({ onClose, prefilledRes
   const [route, setRoute] = useState(existingEvent?.route || 'PO');
   const [dose, setDose] = useState(existingEvent?.dose || '');
   const [frequency, setFrequency] = useState(existingEvent?.frequency || '');
-  const [startDate, setStartDate] = useState(existingEvent?.startDate ? new Date(existingEvent.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(existingEvent?.endDate ? new Date(existingEvent.endDate).toISOString().split('T')[0] : '');
+  const [startDate, setStartDate] = useState(toLocalDateInputValue(existingEvent?.startDate) || todayLocalDateInputValue());
+  const [endDate, setEndDate] = useState(toLocalDateInputValue(existingEvent?.endDate) || '');
   const [indication, setIndication] = useState(existingEvent?.indication || '');
   const [syndromeCategory, setSyndromeCategory] = useState(existingEvent?.syndromeCategory || '');
   const [infectionSource, setInfectionSource] = useState(existingEvent?.infectionSource || '');

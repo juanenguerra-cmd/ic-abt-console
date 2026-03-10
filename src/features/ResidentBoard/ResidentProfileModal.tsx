@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { X, Save, Edit2, User, GitBranch, AlertTriangle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { Resident } from "../../domain/models";
-import { formatDateLikeForDisplay } from '../../lib/dateUtils';
+import {  formatDateLikeForDisplay , todayLocalDateInputValue } from '../../lib/dateUtils';
 import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices } from '../../utils/clinicalDevices';
 import { ResidentTimeline } from './ResidentTimeline';
 import { useResidentAlerts } from "../../hooks/useResidentAlerts";
@@ -443,7 +443,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                   {onStartContactTrace && (
                     <button 
                       onClick={() => {
-                        const dateStr = window.prompt("Enter symptom onset date (YYYY-MM-DD):", new Date().toISOString().slice(0, 10));
+                        const dateStr = window.prompt("Enter symptom onset date (YYYY-MM-DD):", todayLocalDateInputValue());
                         if (dateStr) {
                           const d = new Date(dateStr);
                           if (!isNaN(d.getTime())) {

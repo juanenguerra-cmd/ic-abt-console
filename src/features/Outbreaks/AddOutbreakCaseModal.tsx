@@ -3,6 +3,7 @@ import { X, Save } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { OutbreakCase } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   outbreakId: string;
@@ -15,7 +16,7 @@ export const AddOutbreakCaseModal: React.FC<Props> = ({ outbreakId, onClose, onS
   const { updateDB } = useDatabase();
 
   const [residentId, setResidentId] = useState('');
-  const [onsetDate, setOnsetDate] = useState(new Date().toISOString().slice(0, 10));
+  const [onsetDate, setOnsetDate] = useState(todayLocalDateInputValue());
   const [caseStatus, setCaseStatus] = useState<'probable' | 'confirmed' | 'ruled_out'>('probable');
 
   const residents = Object.values(store.residents).sort((a, b) => 

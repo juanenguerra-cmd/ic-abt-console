@@ -3,6 +3,7 @@ import { X, Save } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { OutbreakExposure } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   outbreakId: string;
@@ -15,7 +16,7 @@ export const AddOutbreakExposureModal: React.FC<Props> = ({ outbreakId, onClose,
   const { updateDB } = useDatabase();
 
   const [residentId, setResidentId] = useState('');
-  const [exposureDate, setExposureDate] = useState(new Date().toISOString().slice(0, 10));
+  const [exposureDate, setExposureDate] = useState(todayLocalDateInputValue());
   const [exposureType, setExposureType] = useState('');
   const [monitoringUntil, setMonitoringUntil] = useState('');
 

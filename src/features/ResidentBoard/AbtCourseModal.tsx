@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { detectMedicationClass, MEDICATION_CLASS_OPTIONS } from "../../utils/medicationClassMap";
 import { resolveMedication, MedicationMatch, MEDICATION_LIBRARY } from "../../utils/medicationLibrary";
 import { parseAbtString, ParsedABT } from "../../utils/abtParser";
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   residentId: string;
@@ -50,7 +51,7 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
     existingAbt?.frequency && !FREQUENCY_OPTIONS.includes(existingAbt.frequency) ? existingAbt.frequency : ""
   );
   const [indication, setIndication] = useState(existingAbt?.indication || "");
-  const [startDate, setStartDate] = useState(existingAbt?.startDate || new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(existingAbt?.startDate || todayLocalDateInputValue());
   const [endDate, setEndDate] = useState(existingAbt?.endDate || "");
   const [medicationClass, setMedicationClass] = useState(existingAbt?.medicationClass || "");
   const [syndromeCategory, setSyndromeCategory] = useState(existingAbt?.syndromeCategory || "");

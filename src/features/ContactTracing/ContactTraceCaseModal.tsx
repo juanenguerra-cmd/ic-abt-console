@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { ContactTraceCase, ContactTraceExposure } from '../../domain/models';
 import { PersonTypeahead, PersonRef } from './PersonTypeahead';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   caseId: string;
@@ -29,7 +30,7 @@ export const ContactTraceCaseModal: React.FC<Props> = ({ caseId, onClose }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [typeaheadQuery, setTypeaheadQuery] = useState('');
   const [selectedPerson, setSelectedPerson] = useState<PersonRef | null>(null);
-  const [exposureStart, setExposureStart] = useState(new Date().toISOString().slice(0, 10));
+  const [exposureStart, setExposureStart] = useState(todayLocalDateInputValue());
   const [exposureEnd, setExposureEnd] = useState('');
   const [location, setLocation] = useState('');
   const [risk, setRisk] = useState<ContactTraceExposure['risk']>('medium');
@@ -91,7 +92,7 @@ export const ContactTraceCaseModal: React.FC<Props> = ({ caseId, onClose }) => {
     // Reset form
     setSelectedPerson(null);
     setTypeaheadQuery('');
-    setExposureStart(new Date().toISOString().slice(0, 10));
+    setExposureStart(todayLocalDateInputValue());
     setExposureEnd('');
     setLocation('');
     setRisk('medium');

@@ -3,6 +3,7 @@ import { Download } from 'lucide-react';
 import { useFacilityData } from '../app/providers';
 import { IPEvent, ABTCourse, Resident } from '../domain/models';
 import { exportToCsv } from '../utils/csvExport';
+import { todayLocalDateInputValue } from '../lib/dateUtils';
 
 export const LineListExportButton: React.FC<{ label?: string; compact?: boolean }> = ({ 
   label = "Generate Line List (CSV)", 
@@ -76,7 +77,7 @@ export const LineListExportButton: React.FC<{ label?: string; compact?: boolean 
       ];
     });
 
-    exportToCsv(`Line_List_${new Date().toISOString().split('T')[0]}`, [headers, ...rows]);
+    exportToCsv(`Line_List_${todayLocalDateInputValue()}`, [headers, ...rows]);
   };
 
   return (

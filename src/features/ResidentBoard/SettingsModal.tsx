@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2 } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { runMigrations, packV3 } from "../../storage/engine";
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -72,7 +73,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose }) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `ic-abt-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `ic-abt-backup-${todayLocalDateInputValue()}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

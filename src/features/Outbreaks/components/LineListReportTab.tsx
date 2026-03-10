@@ -3,6 +3,7 @@ import { useFacilityData, useDatabase } from '../../../app/providers';
 import { Outbreak, LineListEvent, ABTCourse, VaxEvent, Resident, SymptomTag } from '../../../domain/models';
 import { ILILineListTable } from './ILILineListTable';
 import { GILineListTable } from './GILineListTable';
+import { todayLocalDateInputValue } from '../../../lib/dateUtils';
 
 // ─── RowModel ────────────────────────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ export function EditableCell({
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function today(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayLocalDateInputValue();
 }
 
 function computeAge(dob: string | undefined, onsetDateISO: string): string {

@@ -5,7 +5,6 @@ import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { useFacilityData } from '../../app/providers';
 import { ABTCourse, Resident, ResidentNote } from '../../domain/models';
 import { useNavigate } from 'react-router-dom';
-import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -102,7 +101,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
                       return [
                         resident?.displayName || 'Unknown',
                         abt.medication,
-                        abt.startDate ? formatDateLikeForDisplay(abt.startDate) : 'N/A',
+                        abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'N/A',
                         abt.indication || 'N/A',
                         [dueReview ? 'Due ABT Stewardship Review' : '', newAbt ? 'New ABT (last 48 hours)' : ''].filter(Boolean).join('; ') || '—',
                       ];
@@ -118,7 +117,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
                       const endDate = new Date(abt.endDate!);
                       const diffTime = today.getTime() - endDate.getTime();
                       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                      return [resident?.displayName || 'Unknown', abt.medication, formatDateLikeForDisplay(abt.endDate), diffDays];
+                      return [resident?.displayName || 'Unknown', abt.medication, endDate.toLocaleDateString(), diffDays];
                     }),
                   },
                 ],
@@ -154,7 +153,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
                       <tr key={abt.id} className="bg-white border-b hover:bg-neutral-50">
                         <td className="px-6 py-4 font-medium text-neutral-900">{resident?.displayName || 'Unknown'}</td>
                         <td className="px-6 py-4">{abt.medication}</td>
-                        <td className="px-6 py-4">{abt.startDate ? formatDateLikeForDisplay(abt.startDate) : 'N/A'}</td>
+                        <td className="px-6 py-4">{abt.startDate ? new Date(abt.startDate).toLocaleDateString() : 'N/A'}</td>
                         <td className="px-6 py-4">{abt.indication || 'N/A'}</td>
                         <td className="px-6 py-4 space-y-2">
                           {dueReview && resident?.mrn && (
@@ -206,7 +205,7 @@ export const ActiveAbtModal: React.FC<Props> = ({ onClose }) => {
                       <tr key={abt.id} className="bg-white border-b hover:bg-neutral-50">
                         <td className="px-6 py-4 font-medium text-neutral-900">{resident?.displayName || 'Unknown'}</td>
                         <td className="px-6 py-4">{abt.medication}</td>
-                        <td className="px-6 py-4">{formatDateLikeForDisplay(abt.endDate)}</td>
+                        <td className="px-6 py-4">{endDate.toLocaleDateString()}</td>
                         <td className="px-6 py-4">{diffDays}</td>
                       </tr>
                     );

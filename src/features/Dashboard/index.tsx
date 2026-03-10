@@ -24,6 +24,7 @@ import {
 import { LS_LAST_BACKUP_TS } from '../../constants/storageKeys';
 import { DetectionRules } from '../../services/detectionRules';
 import { CustomizeDashboardModal } from './CustomizeDashboardModal';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 const CELL_WIDTH = 100;
 const CELL_HEIGHT = 52;
@@ -251,7 +252,7 @@ export const Dashboard: React.FC = () => {
   const qCount = Object.keys(store.quarantine || {}).length;
 
   // Today's work queue counts
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalDateInputValue();
   const newNotificationsCount = Object.values(store.notifications || {}).filter(n => n && n.status === 'unread').length;
   const abtNeedsReviewCount = activeAbtCourses.filter(a => a && a.reviewDate && a.reviewDate <= today).length;
 
@@ -388,7 +389,7 @@ export const Dashboard: React.FC = () => {
     facility,
     isFluSeason, fluCoverage, covidCoverage, fluVaxMrns, covidVaxMrns, totalActiveResidents, fluSeasonStart, fluSeasonEnd,
     residentCount, capacityRate, activePrecautionsCount, outbreakCount, residentsNeedingScreeningCount, abtCount,
-    setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal, setShowScreeningModal,
+    setShowCensusModal, setShowPrecautionsModal, setShowOutbreakModal, setShowAbtModal,
     auditsLast30, openCorrectiveActions, nonCompliantItems,
     totalDotDays, dotPer1000, residentVaxCoverage, residentVaxGiven, residentVaxTotal, vaxLabel, staffVaxCoverage, staffVaxGiven, staffVaxTotal,
     newNotificationsCount, abtNeedsReviewCount,

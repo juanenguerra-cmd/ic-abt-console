@@ -5,7 +5,6 @@ import { IPEvent, Resident } from '../../domain/models';
 import { normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
-import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -95,7 +94,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                                 : null;
                             
                             if (catheterDate) {
-                              duration += `\n(Changed: ${formatDateLikeForDisplay(catheterDate)})`;
+                              duration += `\n(Changed: ${new Date(catheterDate).toLocaleDateString()})`;
                             }
                           }
                         }
@@ -149,7 +148,7 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                       <td className="px-4 py-4">{resident?.currentRoom || 'N/A'} / {resident?.currentUnit || 'N/A'}</td>
                       <td className="px-4 py-4">{ip.ebp ? 'EBP' : 'Isolation'}</td>
                       <td className="px-4 py-4">{ip.isolationType || ip.sourceOfInfection || 'N/A'}</td>
-                      <td className="px-4 py-4">{formatDateLikeForDisplay(ip.createdAt)}</td>
+                      <td className="px-4 py-4">{new Date(ip.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-4">{ip.organism || 'N/A'}</td>
                       <td className="px-4 py-4">{ip.status}</td>
                     </tr>

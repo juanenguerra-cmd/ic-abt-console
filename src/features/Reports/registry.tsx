@@ -3,6 +3,7 @@ import { FacilityStore, IPEvent, ABTCourse, Resident, ResidentNote, VaxEvent, Sh
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { SYMPTOM_HASHTAG_LIBRARY, getSymptomClassForHashtag } from '../../utils/symptomHashtagLibrary';
 import { PdfTemplate, PdfOrientation } from '../../pdf/exportPdf';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 export type FilterType = 'date' | 'dateRange' | 'select' | 'text' | 'boolean';
 
@@ -132,10 +133,10 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
     description: 'Admission Screening Due (<72h)',
     category: 'daily',
     filterSchema: [
-      { id: 'reportDate', label: 'Report Date', type: 'date', defaultValue: new Date().toISOString().split('T')[0] }
+      { id: 'reportDate', label: 'Report Date', type: 'date', defaultValue: todayLocalDateInputValue() }
     ],
     datasetResolver: (store, filters) => {
-      const reportDate = filters.reportDate || new Date().toISOString().split('T')[0];
+      const reportDate = filters.reportDate || todayLocalDateInputValue();
       const reportDateObj = new Date(reportDate + 'T00:00:00');
       const threeDaysBeforeReport = new Date(reportDateObj);
       threeDaysBeforeReport.setDate(threeDaysBeforeReport.getDate() - 3);

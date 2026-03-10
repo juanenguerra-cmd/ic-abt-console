@@ -4,7 +4,6 @@ import { useFacilityData } from '../../app/providers';
 import { Outbreak, OutbreakCase, Resident } from '../../domain/models';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
-import { formatDateLikeForDisplay } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -48,7 +47,7 @@ export const OutbreakDrilldownModal: React.FC<Props> = ({ onClose }) => {
                         return [
                           resident?.displayName || "Unknown",
                           caseItem.caseStatus || "N/A",
-                          caseItem.symptomOnsetDate ? formatDateLikeForDisplay(caseItem.symptomOnsetDate) : "N/A",
+                          caseItem.symptomOnsetDate ? new Date(caseItem.symptomOnsetDate).toLocaleDateString() : "N/A",
                         ];
                       }),
                   })),
@@ -81,7 +80,7 @@ export const OutbreakDrilldownModal: React.FC<Props> = ({ onClose }) => {
                       <tr key={caseItem.id} className="bg-white border-b hover:bg-neutral-50">
                         <td className="px-6 py-4 font-medium text-neutral-900">{resident?.displayName || 'Unknown'}</td>
                         <td className="px-6 py-4">{caseItem.caseStatus}</td>
-                        <td className="px-6 py-4">{caseItem.symptomOnsetDate ? formatDateLikeForDisplay(caseItem.symptomOnsetDate) : 'N/A'}</td>
+                        <td className="px-6 py-4">{caseItem.symptomOnsetDate ? new Date(caseItem.symptomOnsetDate).toLocaleDateString() : 'N/A'}</td>
                       </tr>
                     );
                   })}

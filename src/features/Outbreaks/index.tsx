@@ -8,6 +8,7 @@ import { LineListExportButton } from "../../components/LineListExportButton";
 import { AddOutbreakCaseModal } from "./AddOutbreakCaseModal";
 import { AddOutbreakExposureModal } from "./AddOutbreakExposureModal";
 import { SitrepEditModal } from "./SitrepEditModal";
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 export const OutbreakManager: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
@@ -327,7 +328,7 @@ const SitrepView: React.FC<{ outbreakId: string }> = ({ outbreakId }) => {
     updateDB((draft) => {
       const id = uuidv4();
       const facilityId = draft.data.facilities.activeFacilityId;
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayLocalDateInputValue();
       
       draft.data.facilityData[facilityId].outbreakDailyStatuses[id] = {
         id,

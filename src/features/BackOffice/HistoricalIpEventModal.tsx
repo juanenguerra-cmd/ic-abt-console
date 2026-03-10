@@ -3,6 +3,7 @@ import { X, Save } from 'lucide-react';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+import { todayLocalDateInputValue, toLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   onClose: () => void;
@@ -18,8 +19,8 @@ export const HistoricalIpEventModal: React.FC<Props> = ({ onClose, prefilledResi
   const [precautionType, setPrecautionType] = useState(existingEvent?.isolationType || 'Contact');
   const [infectionType, setInfectionType] = useState(existingEvent?.infectionSite || '');
   const [organism, setOrganism] = useState(existingEvent?.organism || '');
-  const [onsetDate, setOnsetDate] = useState(existingEvent?.onsetDate ? new Date(existingEvent.onsetDate).toISOString().split('T')[0] : (existingEvent?.createdAt ? new Date(existingEvent.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]));
-  const [resolutionDate, setResolutionDate] = useState(existingEvent?.resolvedAt ? new Date(existingEvent.resolvedAt).toISOString().split('T')[0] : '');
+  const [onsetDate, setOnsetDate] = useState(toLocalDateInputValue(existingEvent?.onsetDate || existingEvent?.createdAt) || todayLocalDateInputValue());
+  const [resolutionDate, setResolutionDate] = useState(toLocalDateInputValue(existingEvent?.resolvedAt) || '');
   const [unit, setUnit] = useState(existingEvent?.locationSnapshot?.unit || '');
   const [room, setRoom] = useState(existingEvent?.locationSnapshot?.room || '');
   const [deviceType, setDeviceType] = useState('None');

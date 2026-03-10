@@ -6,8 +6,9 @@ import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionCont
 import { AUDIT_CATEGORIES, infectionControlAuditTemplates, InfectionControlAuditCategory } from "../constants/infectionControlAuditTemplates";
 import { DrilldownHeader } from "../components/DrilldownHeader";
 import { ExportPdfButton } from "../components/ExportPdfButton";
+import { todayLocalDateInputValue } from '../lib/dateUtils';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => todayLocalDateInputValue();
 const RESPONSE_OPTIONS: InfectionControlAuditResponse[] = ["COMPLIANT", "NON_COMPLIANT", "NA"];
 
 const CATEGORY_LABEL: Record<InfectionControlAuditCategory, string> = {

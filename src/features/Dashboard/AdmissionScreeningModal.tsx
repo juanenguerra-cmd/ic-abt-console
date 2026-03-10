@@ -2,8 +2,6 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { useFacilityData } from '../../app/providers';
 import { Resident, ResidentNote } from '../../domain/models';
-import { formatDateLikeForDisplay } from '../../lib/dateUtils';
-import { useNavigate } from 'react-router-dom';
 
 interface Props {
   onClose: () => void;
@@ -11,7 +9,6 @@ interface Props {
 
 export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
-  const navigate = useNavigate();
 
   const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
   const notes = Object.values(store.notes) as ResidentNote[];
@@ -29,11 +26,6 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
     );
     return !hasScreeningNote;
   });
-
-  const handleGenerateNote = (mrn: string) => {
-    onClose();
-    navigate(`/note-generator?mrn=${encodeURIComponent(mrn)}&noteType=ADMISSION_SCREENING`);
-  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -53,16 +45,10 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
               <li key={r.mrn} className="py-2 flex justify-between items-center text-sm">
                 <div>
                   <p className="font-medium text-neutral-800">{r.displayName}</p>
-                  <p className="text-neutral-500">Admitted: {formatDateLikeForDisplay(r.admissionDate) || 'N/A'}</p>
+                  <p className="text-neutral-500">Admitted: {new Date(r.admissionDate!).toLocaleDateString()}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-red-600 font-semibold">Screening Due</span>
-                  <button
-                    onClick={() => handleGenerateNote(r.mrn)}
-                    className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
-                  >
-                    Generate Note
-                  </button>
                 </div>
               </li>
             ))}

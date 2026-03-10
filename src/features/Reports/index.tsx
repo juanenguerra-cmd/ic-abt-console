@@ -16,6 +16,7 @@ import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { ReportViewer } from './ReportViewer';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -286,7 +287,7 @@ const SurveyPacketsReport: React.FC = () => {
 
 const DailyReport: React.FC = () => {
   const { store } = useFacilityData();
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportDate, setReportDate] = useState(todayLocalDateInputValue());
   const reportDateObj = useMemo(() => new Date(reportDate + 'T00:00:00'), [reportDate]);
   const threeDaysBeforeReport = useMemo(() => { const d = new Date(reportDateObj); d.setDate(d.getDate() - 3); return d; }, [reportDateObj]);
 
@@ -408,7 +409,7 @@ const DailyReport: React.FC = () => {
 
 const WeeklyReport: React.FC = () => {
   const { store } = useFacilityData();
-  const defaultEnd = new Date().toISOString().split('T')[0];
+  const defaultEnd = todayLocalDateInputValue();
   const defaultStart = (() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
@@ -783,7 +784,7 @@ const OnDemandReport: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${dataset}_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `${dataset}_report_${todayLocalDateInputValue()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

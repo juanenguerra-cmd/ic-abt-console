@@ -3,6 +3,7 @@ import { X, Save, Syringe, Calendar, AlertTriangle } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
 import { VaxEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 interface Props {
   residentId: string;
@@ -124,9 +125,9 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
         residentRef,
         vaccine: (vaccine === 'Other' ? `Other: ${vaccineOther.trim() || 'Unspecified'}` : vaccine).trim(),
         status: finalStatus as VaxEvent["status"],
-        dateGiven: (status === 'given' || status === 'historical') ? (dateGiven || new Date().toISOString().split('T')[0]) : undefined,
+        dateGiven: (status === 'given' || status === 'historical') ? (dateGiven || todayLocalDateInputValue()) : undefined,
         dueDate: (status === 'given' && nextDoseNeeded === 'due') || (status === 'historical' && seriesComplete === false) ? dueDate || undefined : undefined,
-        offerDate: status === 'declined' ? (offerDate || new Date().toISOString().split('T')[0]) : undefined,
+        offerDate: status === 'declined' ? (offerDate || todayLocalDateInputValue()) : undefined,
         declineReason: status === 'declined' ? declineReason || undefined : undefined,
         notes: finalNotes,
         createdAt: existingVax?.createdAt || now,
@@ -255,7 +256,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Date Given (required)</label>
                 <input 
                   type="date" 
-                  value={dateGiven || new Date().toISOString().split('T')[0]} 
+                  value={dateGiven || todayLocalDateInputValue()} 
                   onChange={e => setDateGiven(e.target.value)} 
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
                   required 
@@ -312,7 +313,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
                 <input 
                   type="date" 
                   value={dateGiven || ''} 
-                  max={new Date().toISOString().split('T')[0]}
+                  max={todayLocalDateInputValue()}
                   onChange={e => setDateGiven(e.target.value)} 
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
                   required 
@@ -366,7 +367,7 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
                 <label className="block text-sm font-medium text-neutral-700 mb-1">Date of Declination (required)</label>
                 <input 
                   type="date" 
-                  value={offerDate || new Date().toISOString().split('T')[0]} 
+                  value={offerDate || todayLocalDateInputValue()} 
                   onChange={e => setOfferDate(e.target.value)} 
                   className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-purple-500 focus:border-purple-500"
                   required 

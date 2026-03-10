@@ -22,6 +22,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDeviceDay, normalizeClinicalDevices, formatDeviceDayLabel } from "../../utils/clinicalDevices";
 import { ExportPdfButton } from "../../components/ExportPdfButton";
 import { PdfSpec, DEFAULT_FACILITY } from "../../pdf/exportPdf";
+import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
 /**
  * Colour lookup for Kanban tile strips and tinted backgrounds.
@@ -177,7 +178,7 @@ export const ResidentBoard: React.FC = () => {
   const activeInfections = (Object.values(store.infections || {}) as any[]).filter(i => i && i.status === 'active');
   const activeABTs = getActiveABT(Object.values(store.abts || {})) as any[];
   const vaxEvents = (Object.values(store.vaxEvents || {}) as any[]).filter(v => v);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalDateInputValue();
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   // Pre-compute symptom map + signal map once per store snapshot
