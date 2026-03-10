@@ -514,7 +514,7 @@ export async function reconcileWithRemoteAsync(
     result.pulledCount = 1;
 
     _dispatchSafe('db-reconciled-from-remote', remoteDb);
-  } else if (localDate > remoteDate) {
+  } else if (localDate >= remoteDate) {
     _dispatchSafe('backup-started', undefined, 'Event');
     try {
       await remoteSaveDb(localDb);
@@ -701,6 +701,8 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
       }
       localStorage.setItem(DB_KEY_MAIN, finalSerialized);
       console.log('[Storage Engine] Wrote to localStorage as a backup.');
+    } else {
+        await remoteSaveDb(db)
     }
   } catch {
     //noop

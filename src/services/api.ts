@@ -61,4 +61,12 @@ export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
     }
 
     await StorageRepository.saveMetadata(db);
+
+    const activeFacilityId = db.data.facilities?.activeFacilityId;
+    if (activeFacilityId) {
+        const store = db.data.facilityData[activeFacilityId];
+        if (store) {
+            await StorageRepository.saveSlices(activeFacilityId, store, STORAGE_SLICES);
+        }
+    }
 };

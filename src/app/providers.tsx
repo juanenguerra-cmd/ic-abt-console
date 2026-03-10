@@ -100,6 +100,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const [saveErrorToast, setSaveErrorToast] = useState<string | null>(null);
   const [appToast, setAppToast] = useState<{ message: string; type: string } | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus);
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
 
   // Stable ref so async callbacks always access the latest db without stale closures.
   const dbRef = useRef(db);
@@ -112,13 +113,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    if (!isAuthLoaded) return;
     const bootstrapApp = async () => {
       const justRestored = sessionStorage.getItem(LS_JUST_RESTORED_FLAG) === "true";
       
       if (justRestored) {
         console.info("[Bootstrap] Skipping remote reconciliation: backup was just restored.");
-        // Clear immediately so subsequent reloads behave normally.
-        sessionStorage.removeItem(LS_JUST_RESTORED_FLAG);
+        // We are removing the line that clears the flag immediately
       }
 
       try {
@@ -159,15 +160,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
     
     bootstrapApp();
-  }, []); // Runs once on mount.
+  }, [isAuthLoaded]); 
 
   // ── Auth state ─────────────────────────────────────────────────────────────
-  // Registered ONCE. Uses dbRef to avoid stale closures; never re-registers
-  // on db changes (which would cause rapid subscribe/unsubscribe churn).
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       const uid = user?.uid ?? null;
       setUserId(uid);
+      setIsAuthLoaded(true); // Signal that auth state has been determined
       syncLog({ label: 'auth-state-changed', userId: uid });
       if (user && dbRef.current && !isRestoringRef.current) {
         reconcileWithRemoteAsync(dbRef.current, 'auth').then(async () => {
@@ -177,15 +177,18 @@ export function AppProviders({ children }: { children: ReactNode }) {
       }
     });
     return () => unsub();
-  }, []); // Empty deps — registered once for the component lifetime.
+  }, []); 
+  
+  useEffect(() => {
+    const oneTimeAutoSyncTimer = setTimeout(() => {
+        if (isRestoringRef.current) return;
+        triggerSync();
+    }, 5000);
+
+    return () => clearTimeout(oneTimeAutoSyncTimer);
+  }, []);
 
   // ── Firestore sync-signal listener ────────────────────────────────────────
-  // Depends on userId and activeFacilityId ONLY (not `db`). Re-creating this
-  // listener on every db change was the primary trigger of Firestore's
-  // "INTERNAL ASSERTION FAILED: Unexpected state" error. The callback uses
-  // dbRef.current so it always reads the latest state without re-subscribing.
-  //
-  // Path mirrors StorageRepository.writeSyncSignal: users/{uid}/meta/sync
   useEffect(() => {
     if (!userId || !activeFacilityId) return;
 
@@ -194,16 +197,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     let unsub: (() => void) | null = null;
     try {
-      // Path must match StorageRepository.writeSyncSignal exactly:
-      //   users/{uid}/meta/sync
       unsub = onSnapshot(fsDoc(firestoreDb, 'users', userId, 'meta', 'sync'), (snap) => {
         if (!snap.exists()) return;
         const signal = snap.data();
-        // Skip signals produced by this tab to avoid pointless reconciliation.
         if (signal.sessionId === SESSION_ID) return;
         const currentDb = dbRef.current;
         if (!currentDb || isRestoringRef.current) return;
-        // Compare using lastUpdatedAt — the field written by writeSyncSignal.
         if ((signal.lastUpdatedAt || '') > (currentDb.updatedAt || '')) {
           syncLog({ label: 'onSnapshot-triggered-reconcile', userId, facilityId: activeFacilityId });
           reconcileWithRemoteAsync(currentDb).then(async (result) => {
@@ -225,19 +224,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
         unsub();
       }
     };
-  }, [userId, activeFacilityId]); // Re-attach only on user/facility change, NOT every db mutation.
+  }, [userId, activeFacilityId]);
 
   // ── Periodic sync timer ────────────────────────────────────────────────────
-  // Registered ONCE. DbGetter returns null during restore, which syncService
-  // handles by skipping the reconciliation cycle (see _runCycle: if (!db) return).
   useEffect(() => {
     startSyncTimer(() => (isRestoringRef.current ? null : dbRef.current));
     return () => stopSyncTimer();
-  }, []); // Empty deps — timer registered once.
+  }, []);
 
   // ── Cross-tab sync via BroadcastChannel ───────────────────────────────────
-  // Registered ONCE. Channel is properly closed on cleanup (not just the
-  // listener removed) to prevent resource leaks.
   useEffect(() => {
     const channel = new BroadcastChannel('ic_console_sync');
     const handler = (event: MessageEvent) => {
@@ -252,9 +247,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     channel.addEventListener('message', handler);
     return () => {
       channel.removeEventListener('message', handler);
-      channel.close(); // Properly close, not just remove the listener.
+      channel.close();
     };
-  }, []); // Empty deps — registered once.
+  }, []);
 
   // ── App-toast event (from alertService.show) ─────────────────────────────
   useEffect(() => {
@@ -262,18 +257,15 @@ export function AppProviders({ children }: { children: ReactNode }) {
       const { message, type } = (e as CustomEvent<{ message: string; type: string }>).detail ?? {};
       if (!message) return;
       setAppToast({ message, type: type ?? 'info' });
-      // Auto-dismiss after the configured TTL.
       setTimeout(() => setAppToast(null), TOAST_AUTO_DISMISS_MS);
     };
     window.addEventListener('app-toast', handler);
     return () => window.removeEventListener('app-toast', handler);
-  }, []); // Empty deps — registered once.
-  // When reconciliation pulls a newer DB from the remote, it saves to IDB and
-  // fires this event. Without this handler the React state would remain stale
-  // for the rest of the session.
+  }, []);
+  
   useEffect(() => {
     const handler = (e: Event) => {
-      if (isRestoringRef.current) return; // Don't let a remote pull clobber an in-flight restore.
+      if (isRestoringRef.current) return;
       const remoteDb = (e as CustomEvent<UnifiedDB>).detail;
       if (!remoteDb) return;
       console.log('[Sync] db-reconciled-from-remote: updating live React state.');
@@ -288,7 +280,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
     window.addEventListener('db-reconciled-from-remote', handler);
     return () => window.removeEventListener('db-reconciled-from-remote', handler);
-  }, []); // Empty deps — registered once.
+  }, []);
 
   const updateDB = useCallback(
     async (updater: (draft: UnifiedDB) => void, meta?: MutationMeta) => {
@@ -301,8 +293,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         meta,
       );
 
-      dbRef.current = nextDb; // Update ref immediately for synchronous calls
-      setDb(nextDb); // Optimistic update
+      dbRef.current = nextDb;
+      setDb(nextDb);
 
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
@@ -320,15 +312,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   const setDB = useCallback(async (newDb: UnifiedDB) => {
-    // Activate restore guard: prevents concurrent sync from overwriting the
-    // restored state before the page reloads (typically within ~1.5 seconds).
     isRestoringRef.current = true;
     syncLog({ label: 'setDB-restore-guard-on' });
     try {
-      // Bump the updatedAt timestamp so this restored backup is considered the newest version by all devices
       newDb.updatedAt = new Date().toISOString();
       
-      // Save all slices to Firestore and the packed DB locally/remotely
       const newFacId = newDb.data.facilities.activeFacilityId;
       const store = newDb.data.facilityData[newFacId];
       
@@ -345,13 +333,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
       });
       await saveQueueRef.current;
       
-      dbRef.current = newDb; // Update ref immediately
+      dbRef.current = newDb;
       setDb(newDb);
       _setActiveFacilityId(newFacId);
       localStorage.setItem(LS_ACTIVE_FACILITY_ID, newFacId);
     } finally {
-      // Keep the guard active for RESTORE_GUARD_TTL_MS so any in-flight async
-      // effects triggered by the state change still see it before the page reloads.
       setTimeout(() => {
         isRestoringRef.current = false;
         syncLog({ label: 'setDB-restore-guard-off' });
@@ -372,13 +358,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const triggerSync = useCallback(async () => {
     if (!dbRef.current) return;
     setSyncStatus((s) => ({ ...s, isSyncing: true }));
-    // triggerManualSync expects a DbGetter — a function that returns the current DB.
     await triggerManualSync(() => dbRef.current);
     await refreshSyncStatusFromStorage();
     setSyncStatus(getSyncStatus());
   }, []);
 
-  // ── Manual Sync Trigger ────────────────────────────────────────────────────
   useEffect(() => {
     (window as any).triggerManualSync = triggerSync;
     console.log('[ManualSync] Manual sync trigger function is now available on the window object as `triggerManualSync()`.');
@@ -415,7 +399,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
      );
   }
 
-  if (!db || !activeFacilityId) {
+  if (!db || !activeFacilityId || !isAuthLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
