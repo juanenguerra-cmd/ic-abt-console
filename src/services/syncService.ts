@@ -23,6 +23,8 @@ import { UnifiedDB } from "../domain/models";
 import { reconcileWithRemoteAsync, ReconcileResult } from "../storage/engine";
 import { hasOutboxItems } from "../storage/syncOutbox";
 import { getRecentConflicts, getLastSuccessfulSyncAt } from "../storage/syncLog";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db, getCurrentUser } from "./firebase";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -75,6 +77,10 @@ const _status: SyncStatus = {
 let _timer: ReturnType<typeof setTimeout> | null = null;
 let _consecutiveFailures = 0;
 let _currentIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
+
+// Add session ID and unsubscribe function for signal listener
+let _unsubscribeFromSyncSignal: (() => void) | null = null;
+const _sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -134,7 +140,7 @@ async function _runCycle(
   _patchStatus({ isSyncing: true, lastError: null });
 
   try {
-    const result = await reconcileWithRemoteAsync(db, triggeredBy);
+    const result = await reconcileWithRemoteAsync(db, triggeredBy, _sessionId);
 
     _consecutiveFailures = 0;
 
@@ -167,6 +173,66 @@ async function _runCycle(
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Sync Signal Listener
+// ---------------------------------------------------------------------------
+
+/**
+ * Stop listening for remote sync signals.
+ */
+function _stopSyncSignalListener(): void {
+  if (_unsubscribeFromSyncSignal) {
+    _unsubscribeFromSyncSignal();
+    _unsubscribeFromSyncSignal = null;
+    console.log('[SyncService] Remote sync signal listener stopped.');
+  }
+}
+
+/**
+ * Listen for sync signals written to Firestore by other devices.
+ *
+ * When a signal is detected from another session, it triggers a local
+ * reconciliation cycle to pull the remote changes.
+ */
+async function _startSyncSignalListener(getDb: DbGetter): Promise<void> {
+  _stopSyncSignalListener(); // Ensure any existing listener is stopped first.
+
+  const user = await getCurrentUser();
+  if (!user) {
+    // Cannot listen if the user is not authenticated.
+    return;
+  }
+
+  const signalRef = doc(db, 'users', user.uid, 'meta', 'sync');
+
+  _unsubscribeFromSyncSignal = onSnapshot(signalRef, (snapshot) => {
+    const data = snapshot.data();
+    if (data) {
+      const { sessionId, lastUpdatedAt, facilityId, changedSlices } = data;
+      console.log(
+        `[SyncService] Received sync signal from session '${sessionId}' ` +
+        `(updated: ${lastUpdatedAt}, facility: ${facilityId}, slices: [${(changedSlices || []).join(', ')}]).`
+      );
+
+      // Ignore signals from the current session to avoid a loop.
+      if (sessionId === _sessionId) {
+        return;
+      }
+      
+      // Trigger a reconciliation cycle to pull the remote changes.
+      console.log('[SyncService] Triggering reconciliation due to remote signal.');
+      _runCycle(getDb, 'signal').catch((err) => {
+        console.error('[SyncService] Reconciliation triggered by signal failed:', err);
+      });
+    }
+  }, (err) => {
+    console.error('[SyncService] Sync signal listener failed:', err);
+  });
+
+  console.log('[SyncService] Remote sync signal listener started.');
+}
+
 
 // ---------------------------------------------------------------------------
 // Timer management
@@ -204,12 +270,16 @@ export function startSyncTimer(
   _clearTimer();
   _currentIntervalMs = intervalMs;
   _scheduleNext(getDb, intervalMs);
+   _startSyncSignalListener(getDb).catch((err) => { // Start the signal listener
+    console.error('[SyncService] Failed to start sync signal listener:', err);
+  });
   console.log(`[SyncService] Periodic sync started (interval: ${intervalMs / 1000}s).`);
 }
 
 /** Stop the periodic background sync timer. */
 export function stopSyncTimer(): void {
   _clearTimer();
+  _stopSyncSignalListener(); // Stop the signal listener
   console.log('[SyncService] Periodic sync stopped.');
 }
 

@@ -1,6 +1,7 @@
 import { UnifiedDB } from "../domain/models";
-import { getCurrentUser } from "./firebase";
+import { getCurrentUser, db } from "./firebase";
 import { StorageRepository, STORAGE_SLICES } from "../storage/repository";
+import { doc, setDoc } from "firebase/firestore";
 
 export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
     const user = await getCurrentUser();
@@ -41,7 +42,7 @@ export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
     return db;
 };
 
-export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
+export const remoteSaveDb = async (db: UnifiedDB, sessionId?: string): Promise<void> => {
     const user = await getCurrentUser();
     if (!user) {
         console.warn("Attempted to save remote DB without an authenticated user. Skipping.");
@@ -52,10 +53,27 @@ export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
     
     const activeFacilityId = db.data.facilities.activeFacilityId;
     const store = db.data.facilityData[activeFacilityId];
+    const slicesToSave = [...STORAGE_SLICES];
+
     if (store) {
-        const sliceResult = await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
+        const sliceResult = await StorageRepository.saveSlices(activeFacilityId, store, slicesToSave);
         if (!sliceResult.allSucceeded) {
-            throw new Error("Partial slice save failure during remote save.");
+            console.warn(`Partial slice save failure during remote save. Failed: ${sliceResult.failedSlices.join(', ')}`);
+        }
+    }
+
+    if (sessionId) {
+        const signalRef = doc(db, 'users', user.uid, 'meta', 'sync');
+        try {
+            await setDoc(signalRef, {
+                sessionId: sessionId,
+                lastUpdatedAt: db.updatedAt,
+                facilityId: activeFacilityId,
+                changedSlices: slicesToSave,
+            });
+            console.log(`[API] Fired sync signal for session ${sessionId}.`);
+        } catch (e) {
+            console.error('[API] Failed to fire sync signal:', e);
         }
     }
 };

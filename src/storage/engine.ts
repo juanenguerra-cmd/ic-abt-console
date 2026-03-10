@@ -439,6 +439,7 @@ export interface ReconcileResult {
 export async function reconcileWithRemoteAsync(
   localDb: UnifiedDB,
   triggeredBy = 'unknown',
+  sessionId: string,
 ): Promise<ReconcileResult> {
   const startedAt = new Date().toISOString();
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -503,15 +504,7 @@ export async function reconcileWithRemoteAsync(
   } else if (localDate > remoteDate) {
     _dispatchSafe('backup-started', undefined, 'Event');
     try {
-      await remoteSaveDb(localDb);
-      const activeFacilityId = localDb.data.facilities.activeFacilityId;
-      const store = localDb.data.facilityData[activeFacilityId];
-      if (store) {
-        const sliceResult = await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
-        if (!sliceResult.allSucceeded) {
-          throw new Error("Partial slice save failure during reconciliation push.");
-        }
-      }
+      await remoteSaveDb(localDb, sessionId); 
       await clearPackedSyncPending().catch(() => {});
       result.action = 'push';
       result.pushedCount = 1;
