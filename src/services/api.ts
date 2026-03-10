@@ -49,4 +49,13 @@ export const remoteSaveDb = async (db: UnifiedDB): Promise<void> => {
     }
 
     await StorageRepository.saveMetadata(db);
+    
+    const activeFacilityId = db.data.facilities.activeFacilityId;
+    const store = db.data.facilityData[activeFacilityId];
+    if (store) {
+        const sliceResult = await StorageRepository.saveSlices(activeFacilityId, store, [...STORAGE_SLICES]);
+        if (!sliceResult.allSucceeded) {
+            throw new Error("Partial slice save failure during remote save.");
+        }
+    }
 };
