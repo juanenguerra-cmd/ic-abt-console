@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => {
   const buildId = `${new Date().toISOString().slice(0, 19).replace('T', '_')}_${Math.random().toString(36).slice(2, 8)}`;
 
   return {
+    base: '/',
     envPrefix: 'VITE_',
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
