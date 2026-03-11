@@ -277,6 +277,49 @@ export function AppProviders({ children }: { children: ReactNode }) {
     };
   }, []); // Empty deps — registered once.
 
+  // ── Online / window-focus triggers ────────────────────────────────────────
+  // Reconcile and refresh status when the browser comes back online or the
+  // user returns to this tab. Registered ONCE — uses dbRef for latest db.
+  useEffect(() => {
+    const handleOnline = () => {
+      const currentDb = dbRef.current;
+      if (!currentDb || isRestoringRef.current) return;
+      syncLog({ label: 'online-triggered-reconcile' });
+      reconcileWithRemoteAsync(currentDb, 'online').then(async () => {
+        await refreshSyncStatusFromStorage();
+        setSyncStatus(getSyncStatus());
+      }).catch(err => console.warn('[Sync] Online-triggered reconciliation failed:', err));
+    };
+    const handleFocus = () => {
+      const currentDb = dbRef.current;
+      if (!currentDb || isRestoringRef.current) return;
+      syncLog({ label: 'focus-triggered-reconcile' });
+      reconcileWithRemoteAsync(currentDb, 'focus').then(async () => {
+        await refreshSyncStatusFromStorage();
+        setSyncStatus(getSyncStatus());
+      }).catch(err => console.warn('[Sync] Focus-triggered reconciliation failed:', err));
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []); // Empty deps — registered once.
+
+  // ── Sync-status-changed event ──────────────────────────────────────────────
+  // The syncService module fires 'sync-status-changed' after every timer-based
+  // or manually-triggered sync cycle. Without this listener the React state
+  // (and therefore the SyncStatusIndicator) would remain stale between explicit
+  // reconciliation calls above.
+  useEffect(() => {
+    const handler = () => {
+      setSyncStatus(getSyncStatus());
+    };
+    window.addEventListener('sync-status-changed', handler);
+    return () => window.removeEventListener('sync-status-changed', handler);
+  }, []); // Empty deps — registered once.
+
   // ── App-toast event (from alertService.show) ─────────────────────────────
   useEffect(() => {
     const handler = (e: Event) => {

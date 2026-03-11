@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { CheckCircle, RefreshCw, AlertTriangle, Cloud, Upload, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { RefreshCw, AlertTriangle, Cloud, Upload, AlertCircle, WifiOff, Loader } from 'lucide-react';
 import { useSyncStatus } from '../app/providers';
 
-type VisualState = 'synced' | 'syncing' | 'pending' | 'error' | 'local' | 'conflict';
+type VisualState = 'initializing' | 'offline' | 'synced' | 'syncing' | 'pending' | 'error' | 'conflict';
 
 function formatRelativeTime(isoString: string | null): string {
   if (!isoString) return '';
@@ -19,17 +19,35 @@ function formatRelativeTime(isoString: string | null): string {
 const SyncStatusIndicator: React.FC = () => {
   const { syncStatus, triggerSync } = useSyncStatus();
   const [isTriggeringSync, setIsTriggeringSync] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
-  const { isSyncing, lastSyncedAt, lastSyncAction, lastError, hasPendingWrites, recentConflictCount } = syncStatus;
+  // Subscribe to browser online/offline events so the indicator reacts
+  // immediately when network connectivity changes.
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const { isSyncing, lastSyncedAt, lastSyncAction, lastError, hasPendingWrites, failedWrites, recentConflictCount } = syncStatus;
 
   const visualState: VisualState = (() => {
+    // Offline: browser reports no network connection, or last sync action was offline.
+    if (!isOnline || lastSyncAction === 'offline') return 'offline';
     if (isSyncing || isTriggeringSync) return 'syncing';
     if (lastError && lastSyncAction === 'error') return 'error';
     if (recentConflictCount > 0) return 'conflict';
     if (hasPendingWrites) return 'pending';
+    if (lastSyncAction === null) return 'initializing';
     if (lastSyncAction === 'pull' || lastSyncAction === 'push') return 'synced';
     if (lastSyncAction === 'noop') return 'synced';
-    if (lastSyncAction === 'offline') return 'local';
     return 'synced';
   })();
 
@@ -45,6 +63,20 @@ const SyncStatusIndicator: React.FC = () => {
 
   const getIndicator = () => {
     switch (visualState) {
+      case 'initializing':
+        return {
+          Icon: Loader,
+          text: 'Initializing…',
+          className: 'text-neutral-400',
+          iconClass: 'animate-spin',
+        };
+      case 'offline':
+        return {
+          Icon: WifiOff,
+          text: 'Offline',
+          className: 'text-neutral-500',
+          iconClass: '',
+        };
       case 'syncing':
         return {
           Icon: RefreshCw,
@@ -55,14 +87,14 @@ const SyncStatusIndicator: React.FC = () => {
       case 'pending':
         return {
           Icon: Upload,
-          text: 'Pending sync',
+          text: failedWrites > 0 ? `${failedWrites} write${failedWrites !== 1 ? 's' : ''} pending` : 'Pending sync',
           className: 'text-amber-500',
           iconClass: '',
         };
       case 'error':
         return {
           Icon: AlertTriangle,
-          text: 'Sync error',
+          text: 'Sync issue',
           className: 'text-red-500',
           iconClass: '',
         };
@@ -71,13 +103,6 @@ const SyncStatusIndicator: React.FC = () => {
           Icon: AlertCircle,
           text: `${recentConflictCount} conflict${recentConflictCount !== 1 ? 's' : ''}`,
           className: 'text-orange-500',
-          iconClass: '',
-        };
-      case 'local':
-        return {
-          Icon: CheckCircle,
-          text: 'Saved locally',
-          className: 'text-blue-600',
           iconClass: '',
         };
       case 'synced':
