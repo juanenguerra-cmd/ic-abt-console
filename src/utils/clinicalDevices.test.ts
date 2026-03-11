@@ -146,4 +146,45 @@ describe('buildDeviceUtilizationReport', () => {
     expect(result.totals[0].device).toBe('Oxygen');
     expect(result.totals[0].count).toBe(1);
   });
+
+  test('includes new device types (centralLine, trach, peg, woundVac, dialysisAccess, ostomy)', () => {
+    const residents: Resident[] = [
+      makeResident({
+        mrn: 'A1',
+        displayName: 'Alice',
+        clinicalDevices: {
+          centralLine: { active: true, insertedDate: null },
+          trach: { active: true, insertedDate: null },
+          peg: { active: true, insertedDate: null },
+          woundVac: { active: true, insertedDate: null },
+          dialysisAccess: { active: true, insertedDate: null },
+          ostomy: { active: true, insertedDate: null },
+        } as any,
+      }),
+    ];
+
+    const result = buildDeviceUtilizationReport(residents);
+    expect(result.rows).toHaveLength(1);
+    const deviceNames = result.rows[0].devices;
+    expect(deviceNames).toContain('Central Line');
+    expect(deviceNames).toContain('Tracheostomy');
+    expect(deviceNames).toContain('PEG / Feeding Tube');
+    expect(deviceNames).toContain('Wound Vac');
+    expect(deviceNames).toContain('Dialysis Access');
+    expect(deviceNames).toContain('Ostomy');
+    expect(result.totals.map((t) => t.device)).toEqual(
+      expect.arrayContaining(['Central Line', 'Tracheostomy', 'PEG / Feeding Tube', 'Wound Vac', 'Dialysis Access', 'Ostomy']),
+    );
+  });
+
+  test('normalizeClinicalDevices returns defaults for new fields when absent', () => {
+    const resident = makeResident({ mrn: 'A1', displayName: 'Alice' });
+    const devices = normalizeClinicalDevices(resident);
+    expect(devices.centralLine).toEqual({ active: false, insertedDate: null });
+    expect(devices.trach).toEqual({ active: false, insertedDate: null });
+    expect(devices.peg).toEqual({ active: false, insertedDate: null });
+    expect(devices.woundVac).toEqual({ active: false, insertedDate: null });
+    expect(devices.dialysisAccess).toEqual({ active: false, insertedDate: null });
+    expect(devices.ostomy).toEqual({ active: false, insertedDate: null });
+  });
 });

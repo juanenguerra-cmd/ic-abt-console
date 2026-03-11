@@ -70,6 +70,17 @@ export const ResidentProfileModal: React.FC<Props> = ({
   const [piccInsertedDate, setPiccInsertedDate] = useState("");
   const [piv, setPiv] = useState(false);
   const [pivInsertedDate, setPivInsertedDate] = useState("");
+  const [centralLine, setCentralLine] = useState(false);
+  const [centralLineInsertedDate, setCentralLineInsertedDate] = useState("");
+  const [trach, setTrach] = useState(false);
+  const [trachInsertedDate, setTrachInsertedDate] = useState("");
+  const [peg, setPeg] = useState(false);
+  const [pegInsertedDate, setPegInsertedDate] = useState("");
+  const [woundVac, setWoundVac] = useState(false);
+  const [woundVacInsertedDate, setWoundVacInsertedDate] = useState("");
+  const [dialysisAccess, setDialysisAccess] = useState(false);
+  const [dialysisAccessInsertedDate, setDialysisAccessInsertedDate] = useState("");
+  const [ostomy, setOstomy] = useState(false);
 
   const clinicalDevices = useMemo<ClinicalDevices>(() => ({
     oxygen: {
@@ -81,7 +92,13 @@ export const ResidentProfileModal: React.FC<Props> = ({
     midline: { active: midline, insertedDate: midline ? (midlineInsertedDate || null) : null },
     picc: { active: picc, insertedDate: picc ? (piccInsertedDate || null) : null },
     piv: { active: piv, insertedDate: piv ? (pivInsertedDate || null) : null },
-  }), [oxygenEnabled, oxygenMode, urinaryCatheter, urinaryCatheterInsertedDate, indwellingCatheter, indwellingCatheterInsertedDate, midline, midlineInsertedDate, picc, piccInsertedDate, piv, pivInsertedDate]);
+    centralLine: { active: centralLine, insertedDate: centralLine ? (centralLineInsertedDate || null) : null },
+    trach: { active: trach, insertedDate: trach ? (trachInsertedDate || null) : null },
+    peg: { active: peg, insertedDate: peg ? (pegInsertedDate || null) : null },
+    woundVac: { active: woundVac, insertedDate: woundVac ? (woundVacInsertedDate || null) : null },
+    dialysisAccess: { active: dialysisAccess, insertedDate: dialysisAccess ? (dialysisAccessInsertedDate || null) : null },
+    ostomy: { active: ostomy, insertedDate: null },
+  }), [oxygenEnabled, oxygenMode, urinaryCatheter, urinaryCatheterInsertedDate, indwellingCatheter, indwellingCatheterInsertedDate, midline, midlineInsertedDate, picc, piccInsertedDate, piv, pivInsertedDate, centralLine, centralLineInsertedDate, trach, trachInsertedDate, peg, pegInsertedDate, woundVac, woundVacInsertedDate, dialysisAccess, dialysisAccessInsertedDate, ostomy]);
 
 
   useEffect(() => {
@@ -111,6 +128,17 @@ export const ResidentProfileModal: React.FC<Props> = ({
       setPiccInsertedDate(residentDevices.picc.insertedDate || "");
       setPiv(Boolean(residentDevices.piv.active));
       setPivInsertedDate(residentDevices.piv.insertedDate || "");
+      setCentralLine(Boolean(residentDevices.centralLine.active));
+      setCentralLineInsertedDate(residentDevices.centralLine.insertedDate || "");
+      setTrach(Boolean(residentDevices.trach.active));
+      setTrachInsertedDate(residentDevices.trach.insertedDate || "");
+      setPeg(Boolean(residentDevices.peg.active));
+      setPegInsertedDate(residentDevices.peg.insertedDate || "");
+      setWoundVac(Boolean(residentDevices.woundVac.active));
+      setWoundVacInsertedDate(residentDevices.woundVac.insertedDate || "");
+      setDialysisAccess(Boolean(residentDevices.dialysisAccess.active));
+      setDialysisAccessInsertedDate(residentDevices.dialysisAccess.insertedDate || "");
+      setOstomy(Boolean(residentDevices.ostomy.active));
     }
   }, [resident]);
 
@@ -428,6 +456,23 @@ export const ResidentProfileModal: React.FC<Props> = ({
 
                       <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={piv} onChange={e => { const checked = e.target.checked; setPiv(checked); if (!checked) setPivInsertedDate(""); }} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
                       {piv && <input type="date" value={pivInsertedDate} onChange={e => setPivInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={centralLine} onChange={e => { const checked = e.target.checked; setCentralLine(checked); if (!checked) setCentralLineInsertedDate(""); }} className="rounded border-neutral-300" />Central Line</label>
+                      {centralLine && <input type="date" value={centralLineInsertedDate} onChange={e => setCentralLineInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={trach} onChange={e => { const checked = e.target.checked; setTrach(checked); if (!checked) setTrachInsertedDate(""); }} className="rounded border-neutral-300" />Tracheostomy</label>
+                      {trach && <input type="date" value={trachInsertedDate} onChange={e => setTrachInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={peg} onChange={e => { const checked = e.target.checked; setPeg(checked); if (!checked) setPegInsertedDate(""); }} className="rounded border-neutral-300" />PEG / Feeding Tube</label>
+                      {peg && <input type="date" value={pegInsertedDate} onChange={e => setPegInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={woundVac} onChange={e => { const checked = e.target.checked; setWoundVac(checked); if (!checked) setWoundVacInsertedDate(""); }} className="rounded border-neutral-300" />Wound Vac</label>
+                      {woundVac && <input type="date" value={woundVacInsertedDate} onChange={e => setWoundVacInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={dialysisAccess} onChange={e => { const checked = e.target.checked; setDialysisAccess(checked); if (!checked) setDialysisAccessInsertedDate(""); }} className="rounded border-neutral-300" />Dialysis Access</label>
+                      {dialysisAccess && <input type="date" value={dialysisAccessInsertedDate} onChange={e => setDialysisAccessInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+
+                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={ostomy} onChange={e => setOstomy(e.target.checked)} className="rounded border-neutral-300" />Ostomy (Colostomy / Ileostomy)</label>
                     </div>
                   </div>
                 </div>
@@ -447,7 +492,13 @@ export const ResidentProfileModal: React.FC<Props> = ({
                     {clinicalDevices.midline.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Midline {clinicalDevices.midline.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.midline.insertedDate)})` : ''}</span>}
                     {clinicalDevices.picc.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">PICC Line {clinicalDevices.picc.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.picc.insertedDate)})` : ''}</span>}
                     {clinicalDevices.piv.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Peripheral IV (PIV) {clinicalDevices.piv.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.piv.insertedDate)})` : ''}</span>}
-                    {!clinicalDevices.oxygen.enabled && !clinicalDevices.urinaryCatheter.active && !clinicalDevices.indwellingCatheter.active && !clinicalDevices.midline.active && !clinicalDevices.picc.active && !clinicalDevices.piv.active && (
+                    {clinicalDevices.centralLine.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Central Line {clinicalDevices.centralLine.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.centralLine.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.trach.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Tracheostomy {clinicalDevices.trach.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.trach.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.peg.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">PEG / Feeding Tube {clinicalDevices.peg.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.peg.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.woundVac.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Wound Vac {clinicalDevices.woundVac.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.woundVac.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.dialysisAccess.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Dialysis Access {clinicalDevices.dialysisAccess.insertedDate ? `(${formatDateLikeForDisplay(clinicalDevices.dialysisAccess.insertedDate)})` : ''}</span>}
+                    {clinicalDevices.ostomy.active && <span className="px-2 py-1 bg-neutral-100 text-neutral-700 text-xs font-medium rounded border border-neutral-200">Ostomy</span>}
+                    {!clinicalDevices.oxygen.enabled && !clinicalDevices.urinaryCatheter.active && !clinicalDevices.indwellingCatheter.active && !clinicalDevices.midline.active && !clinicalDevices.picc.active && !clinicalDevices.piv.active && !clinicalDevices.centralLine.active && !clinicalDevices.trach.active && !clinicalDevices.peg.active && !clinicalDevices.woundVac.active && !clinicalDevices.dialysisAccess.active && !clinicalDevices.ostomy.active && (
                       <p className="text-sm text-neutral-900 italic">No clinical devices documented.</p>
                     )}
                   </div>

@@ -35,6 +35,12 @@ export type ClinicalDevices = {
   midline: DeviceEntry;
   picc: DeviceEntry;
   piv: DeviceEntry;
+  centralLine: DeviceEntry;
+  trach: DeviceEntry;
+  peg: DeviceEntry;
+  woundVac: DeviceEntry;
+  dialysisAccess: DeviceEntry;
+  ostomy: DeviceEntry;
 };
 
 export const EMPTY_CLINICAL_DEVICES: ClinicalDevices = {
@@ -44,6 +50,12 @@ export const EMPTY_CLINICAL_DEVICES: ClinicalDevices = {
   midline: { active: false, insertedDate: null },
   picc: { active: false, insertedDate: null },
   piv: { active: false, insertedDate: null },
+  centralLine: { active: false, insertedDate: null },
+  trach: { active: false, insertedDate: null },
+  peg: { active: false, insertedDate: null },
+  woundVac: { active: false, insertedDate: null },
+  dialysisAccess: { active: false, insertedDate: null },
+  ostomy: { active: false, insertedDate: null },
 };
 
 const toDeviceEntry = (value: unknown): DeviceEntry => {
@@ -74,6 +86,12 @@ export const normalizeClinicalDevices = (resident?: Resident | null): ClinicalDe
     midline: toDeviceEntry((raw as any).midline),
     picc: toDeviceEntry((raw as any).picc),
     piv: toDeviceEntry((raw as any).piv),
+    centralLine: toDeviceEntry((raw as any).centralLine),
+    trach: toDeviceEntry((raw as any).trach),
+    peg: toDeviceEntry((raw as any).peg),
+    woundVac: toDeviceEntry((raw as any).woundVac),
+    dialysisAccess: toDeviceEntry((raw as any).dialysisAccess),
+    ostomy: toDeviceEntry((raw as any).ostomy),
   };
 };
 
@@ -114,6 +132,12 @@ export function buildDeviceUtilizationReport(
       if (devices.midline.active) deviceList.push(formatDeviceDayLabel('Midline', devices.midline.insertedDate));
       if (devices.picc.active) deviceList.push(formatDeviceDayLabel('PICC', devices.picc.insertedDate));
       if (devices.piv.active) deviceList.push(formatDeviceDayLabel('PIV', devices.piv.insertedDate));
+      if (devices.centralLine.active) deviceList.push(formatDeviceDayLabel('Central Line', devices.centralLine.insertedDate));
+      if (devices.trach.active) deviceList.push(formatDeviceDayLabel('Tracheostomy', devices.trach.insertedDate));
+      if (devices.peg.active) deviceList.push(formatDeviceDayLabel('PEG / Feeding Tube', devices.peg.insertedDate));
+      if (devices.woundVac.active) deviceList.push(formatDeviceDayLabel('Wound Vac', devices.woundVac.insertedDate));
+      if (devices.dialysisAccess.active) deviceList.push(formatDeviceDayLabel('Dialysis Access', devices.dialysisAccess.insertedDate));
+      if (devices.ostomy.active) deviceList.push('Ostomy');
 
       return {
         residentId: r.mrn,
