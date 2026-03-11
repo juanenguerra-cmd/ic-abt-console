@@ -17,8 +17,10 @@ import { HomePage } from "../features/Home/HomePage";
 import { NotificationsPage, useNotifications } from "../features/Notifications";
 import StaffPage from '../features/Staff';
 import ReportsConsole from '../features/Reports';
+import DeviceUtilizationReport from '../features/Reports/DeviceUtilizationReport';
 import InfectionControlAuditCenter from "../pages/InfectionControlAuditCenter";
 import { GlobalSearch } from "../components/GlobalSearch";
+import SyncStatusIndicator from "../components/SyncStatusIndicator";
 import { UndoToastProvider } from "../components/UndoToast";
 import { BackOfficePage } from "../pages/BackOfficePage";
 import { AntibiogramPage } from "../pages/AntibiogramPage";
@@ -53,7 +55,8 @@ import {
   AlertTriangle,
   BarChart3,
   Users2,
-  Home
+  Home,
+  Cpu
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -264,6 +267,10 @@ const AppShell = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex">
+            <SyncStatusIndicator />
+          </div>
+
           <GlobalSearch />
 
           <div className="relative" ref={facilitySwitcherRef}>
@@ -375,6 +382,7 @@ const AppShell = () => {
               {(can('write:outbreaks') || can('write:audits')) && (
                 <SidebarAccordion icon={FileBarChart} title="Reports & Audits">
                   {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
+                  {can('write:outbreaks') && <SidebarLink to="/reports/devices" icon={Cpu} label="Device Reports" />}
                   {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
                   {can('write:outbreaks') && <SidebarLink to="/admission-screening" icon={ClipboardCheck} label="Admission Screening" />}
                   {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
@@ -413,6 +421,7 @@ const AppShell = () => {
                 <Route path="/notifications" element={<PageTransition><NotificationsPage /></PageTransition>} />
                 <Route path="/outbreaks" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><OutbreakManager /></RoleGuard></PageTransition>} />
                 <Route path="/reports" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><ReportsConsole /></RoleGuard></PageTransition>} />
+                <Route path="/reports/devices" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><div className="p-6 max-w-6xl mx-auto"><DeviceUtilizationReport /></div></RoleGuard></PageTransition>} />
                 <Route path="/reports/antibiogram" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AntibiogramPage /></RoleGuard></PageTransition>} />
                 <Route path="/admission-screening" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><AdmissionScreeningPage /></RoleGuard></PageTransition>} />
                 <Route path="/linelist-report" element={<PageTransition><RoleGuard allowedRoles={['Nurse','ICLead','Admin']}><LineListReportPage /></RoleGuard></PageTransition>} />
