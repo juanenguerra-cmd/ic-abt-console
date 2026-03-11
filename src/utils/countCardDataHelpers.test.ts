@@ -1,6 +1,6 @@
-import { test, expect, describe } from 'vitest';
+import { test, expect, describe, vi, afterEach } from 'vitest';
 import { computeResidentSignals } from './residentSignals';
-import { getActiveABT, getVaxDue, isActiveCensusResident, filterActiveResidents } from './countCardDataHelpers';
+import { getActiveABT, getVaxDue, isActiveCensusResident, filterActiveResidents, getAbtDays } from './countCardDataHelpers';
 import { FacilityStore, Resident } from '../domain/models';
 
 const makeResident = (overrides: Partial<Resident>): Resident => ({
@@ -149,4 +149,64 @@ test('computeResidentSignals uses normalized ABT/VAX helper rules', () => {
   const signals = computeResidentSignals('R1', store, Date.now(), { R1: { respiratory: false, gi: false } });
   expect(signals.hasActiveAbt).toBe(true);
   expect(signals.hasDueVax).toBe(true);
+});
+
+describe('getAbtDays – correct off-by-one fix', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('3/11/2026 to 3/18/2026 → total = 7, currentDay = 1 on 3/11/2026', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-11T12:00:00'));
+    const result = getAbtDays('2026-03-11', '2026-03-18');
+    expect(result?.total).toBe(7);
+    expect(result?.current).toBe(1);
+  });
+
+  test('3/11/2026 to 3/18/2026 → currentDay = 7 on 3/17/2026 (last treatment day)', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-17T12:00:00'));
+    const result = getAbtDays('2026-03-11', '2026-03-18');
+    expect(result?.total).toBe(7);
+    expect(result?.current).toBe(7);
+  });
+
+  test('currentDay is clamped to total when today is past endDate', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-25T12:00:00'));
+    const result = getAbtDays('2026-03-11', '2026-03-18');
+    expect(result?.total).toBe(7);
+    expect(result?.current).toBe(7);
+  });
+
+  test('same-day course (start = end - 1 day) → total = 1', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-11T12:00:00'));
+    const result = getAbtDays('2026-03-11', '2026-03-12');
+    expect(result?.total).toBe(1);
+    expect(result?.current).toBe(1);
+  });
+
+  test('no endDate → total is null, current counts up from start', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-13T12:00:00'));
+    const result = getAbtDays('2026-03-11');
+    expect(result?.total).toBeNull();
+    expect(result?.current).toBe(3);
+  });
+
+  test('returns null when startDate is missing', () => {
+    const result = getAbtDays(undefined, '2026-03-18');
+    expect(result).toBeNull();
+  });
+
+  test('future startDate → currentDay is clamped to 1', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-10T12:00:00'));
+    const result = getAbtDays('2026-03-11', '2026-03-18');
+    // current would be 0 without clamping; must be at least 1
+    expect(result?.current).toBe(1);
+    expect(result?.total).toBe(7);
+  });
 });

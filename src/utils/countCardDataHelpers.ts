@@ -68,17 +68,27 @@ export const getAbtDays = (startDate?: string, endDate?: string): { current: num
   now.setHours(0, 0, 0, 0);
   
   const diffTime = now.getTime() - start.getTime();
-  const current = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  let current = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  if (current < 1) current = 1;
   
   let total: number | null = null;
   if (endDate) {
     const end = new Date(endDate);
     if (!isNaN(end.getTime())) {
+      // Normalize to midnight before any date arithmetic
       end.setHours(0, 0, 0, 0);
-      const totalDiff = end.getTime() - start.getTime();
-      total = Math.floor(totalDiff / (1000 * 60 * 60 * 24)) + 1;
+      // endDate is the stop boundary (exclusive), not an additional full treatment day.
+      // The last actual treatment day is endDate - 1.
+      const lastTreatmentDay = new Date(end);
+      lastTreatmentDay.setDate(lastTreatmentDay.getDate() - 1);
+      lastTreatmentDay.setHours(0, 0, 0, 0);
+      const totalDiff = lastTreatmentDay.getTime() - start.getTime();
+      total = Math.max(1, Math.floor(totalDiff / (1000 * 60 * 60 * 24)) + 1);
     }
   }
+
+  // Clamp current day so it never exceeds total
+  if (total !== null && current > total) current = total;
   
-  return { current: current > 0 ? current : 1, total: total && total > 0 ? total : null };
+  return { current, total };
 };
