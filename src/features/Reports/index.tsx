@@ -19,6 +19,7 @@ import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
 import MonthlySurveillanceLog from './MonthlySurveillanceLog';
 import QuarterlyRateReport from './QuarterlyRateReport';
+import DeviceUtilizationReport from './DeviceUtilizationReport';
 import {
   computeVaccineCoverage,
   getActiveResidentMrns,
@@ -144,6 +145,12 @@ const ReportsConsole: React.FC = () => {
             className={`${activeTab === 'quarterly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
             Quarterly Rate
           </button>
+          <button
+            data-testid="device-utilization-tab-button"
+            onClick={() => handleTabChange('deviceutilization')}
+            className={`${activeTab === 'deviceutilization' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Device Utilization
+          </button>
         </nav>
       </div>
 
@@ -160,6 +167,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'vaxreoffer' && <VaxReofferList />}
         {activeTab === 'surveillance' && <MonthlySurveillanceLog />}
         {activeTab === 'quarterly' && <QuarterlyRateReport />}
+        {activeTab === 'deviceutilization' && <DeviceUtilizationReport />}
       </div>
     </div>
   );
