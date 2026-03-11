@@ -6,7 +6,7 @@ import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { commandHandlers, MutationMeta, SESSION_ID } from "../services/commandHandlers";
 import { onSnapshot, doc as fsDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, db as firestoreDb } from "../services/firebase";
+import { auth, db as firestoreDb, waitForAuthReady } from "../services/firebase";
 import {
   startSyncTimer,
   stopSyncTimer,
@@ -228,12 +228,24 @@ export function AppProviders({ children }: { children: ReactNode }) {
   }, [userId, activeFacilityId]); // Re-attach only on user/facility change, NOT every db mutation.
 
   // ── Periodic sync timer ────────────────────────────────────────────────────
-  // Registered ONCE. DbGetter returns null during restore, which syncService
-  // handles by skipping the reconciliation cycle (see _runCycle: if (!db) return).
   useEffect(() => {
-    startSyncTimer(() => (isRestoringRef.current ? null : dbRef.current));
-    return () => stopSyncTimer();
-  }, []); // Empty deps — timer registered once.
+    const startTimer = async () => {
+      const user = await waitForAuthReady();
+      if (user) {
+        console.log('Auth ready, starting periodic sync for uid:', user.uid);
+        // DbGetter returns null during restore, which syncService handles by skipping the cycle.
+        startSyncTimer(() => (isRestoringRef.current ? null : dbRef.current));
+      } else {
+        console.warn('Skipping periodic sync: auth is not available.');
+      }
+    };
+
+    startTimer();
+
+    return () => {
+      stopSyncTimer();
+    };
+  }, [userId]); // Re-runs when the user signs in/out
 
   // ── Cross-tab sync via BroadcastChannel ───────────────────────────────────
   // Registered ONCE. Channel is properly closed on cleanup (not just the
@@ -441,7 +453,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               }`}>
                   <div className="flex-1 text-sm">{appToast.message}</div>
                   <button onClick={() => setAppToast(null)} className="ml-4">
-                      <X className="h-4 w-4" />
+                      <X className="h-4 h-4" />
                   </button>
               </div>
             )}

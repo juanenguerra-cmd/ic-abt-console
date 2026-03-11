@@ -1,61 +1,69 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getAuth, connectAuthEmulator, User } from "firebase/auth";
-import { 
-  getFirestore, 
-  connectFirestoreEmulator, 
-  clearIndexedDbPersistence, 
-  terminate, 
-  Firestore 
-} from "firebase/firestore";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
+import {
+  getAuth,
+  User,
+  onAuthStateChanged,
+  signInAnonymously,
+} from "firebase/auth";
+import { getFirestore, Firestore, terminate, clearIndexedDbPersistence } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage";
 
-// WARNING: Replace this with your actual Firebase config object.
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyA...",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "your-project.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "your-project",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "your-project.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "...",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "...",
-};
-
-let app: FirebaseApp;
-let auth: any;
-let db: Firestore;
-let functions: any;
-let storage: any;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  functions = getFunctions(app);
-  storage = getStorage(app);
-} catch (e) {
-  console.error("Firebase initialization failed:", e);
-  // In a real app, you might want to show a global error message.
-}
-
-if (window.location.hostname === "localhost" && db) {
-  try {
-    connectFirestoreEmulator(db, 'localhost', 8080);
-    connectAuthEmulator(auth, "http://localhost:9099");
-    connectFunctionsEmulator(functions, "localhost", 5001);
-    connectStorageEmulator(storage, "localhost", 9199);
-    console.log("Connected to Firebase emulators");
-  } catch (e) {
-    console.error("Firebase emulator connection failed:", e);
+function requireEnv(name: string): string {
+  const value = import.meta.env[name];
+  if (!value) {
+    throw new Error(`Missing Firebase env var: ${name}`);
   }
+  return value;
 }
 
-/**
- * A utility function to get the current signed-in user.
- * @returns The current Firebase user object or null.
- */
-export const getCurrentUser = (): User | null => {
-  return auth.currentUser;
+const firebaseConfig = {
+  apiKey: requireEnv("VITE_FIREBASE_API_KEY"),
+  authDomain: requireEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  projectId: requireEnv("VITE_FIREBASE_PROJECT_ID"),
+  storageBucket: requireEnv("VITE_FIREBASE_STORAGE_BUCKET"),
+  messagingSenderId: requireEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
+  appId: requireEnv("VITE_FIREBASE_APP_ID"),
 };
+
+const app: FirebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db: Firestore = getFirestore(app);
+const functions = getFunctions(app);
+const storage = getStorage(app);
+
+let authReadyPromise: Promise<User | null> | null = null;
+
+export function waitForAuthReady(): Promise<User | null> {
+  if (!authReadyPromise) {
+    authReadyPromise = new Promise((resolve) => {
+      const unsub = onAuthStateChanged(auth, async (user) => {
+        try {
+          if (user) {
+            unsub();
+            resolve(user);
+            return;
+          }
+
+          // Anonymous fallback for internal/local-first use
+          const cred = await signInAnonymously(auth);
+          unsub();
+          resolve(cred.user);
+        } catch (error) {
+          console.error("Auth bootstrap failed:", error);
+          unsub();
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  return authReadyPromise;
+}
+
+export async function getCurrentUser(): Promise<User | null> {
+  return auth.currentUser ?? (await waitForAuthReady());
+}
 
 /**
  * Shuts down the active Firestore instance and clears its local IndexedDB cache.
