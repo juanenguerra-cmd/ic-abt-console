@@ -8,6 +8,7 @@ import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-rea
 import { useLocation } from 'react-router-dom';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
+import { QuarterlyInfectionRateReport } from './QuarterlyInfectionRateReport';
 import { HistoricalVaxEventModal } from '../BackOffice/HistoricalVaxEventModal';
 import { exportPDF } from '../../utils/pdfExport';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
@@ -130,6 +131,12 @@ const ReportsConsole: React.FC = () => {
             <Syringe className="h-4 w-4" />
             Vax Re-offer
           </button>
+          <button
+            data-testid="quarterly-infection-tab-button"
+            onClick={() => handleTabChange('quarterly')}
+            className={`${activeTab === 'quarterly' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Quarterly Infection Rate
+          </button>
         </nav>
       </div>
 
@@ -144,6 +151,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'clinical' && <ClinicalReports />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
         {activeTab === 'vaxreoffer' && <VaxReofferList />}
+        {activeTab === 'quarterly' && <QuarterlyInfectionRateReport />}
       </div>
     </div>
   );
