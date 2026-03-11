@@ -19,15 +19,24 @@ export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
   if (activeFacilityId) {
     db.data.facilityData[activeFacilityId] = {} as any;
 
-    await Promise.all(
+    const sliceResults = await Promise.allSettled(
       STORAGE_SLICES.map(async (slice) => {
-        const data = await StorageRepository.loadSlice(user.uid, activeFacilityId, slice);
-        if (data) {
+        const data = await StorageRepository.loadSlice(activeFacilityId, slice);
+        return { slice, data };
+      })
+    );
+
+    for (const result of sliceResults) {
+      if (result.status === 'fulfilled') {
+        const { slice, data } = result.value;
+        if (data != null) {
           // @ts-ignore
           db.data.facilityData[activeFacilityId][slice] = data;
         }
-      })
-    );
+      } else {
+        console.error('[remoteFetchDb] Slice load failed:', result.reason);
+      }
+    }
 
     const facMeta = await StorageRepository.loadFacilityMeta(activeFacilityId);
     if (facMeta) {

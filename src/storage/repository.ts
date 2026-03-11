@@ -1,5 +1,5 @@
 
-import { collection, doc, getDocs, setDoc, writeBatch, serverTimestamp, DocumentReference, getDoc, query, limit } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, writeBatch, query, limit } from "firebase/firestore";
 import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
@@ -56,40 +56,16 @@ const SLICE_SAVE_MAX_RETRIES = 2;
 /** Base delay (ms) for exponential back-off between retries. */
 const SLICE_SAVE_RETRY_BASE_MS = 500;
 
-type SlicePayload = unknown;
+const inflightSliceLoads = new Map<string, Promise<Record<string, any> | null>>();
 
-const inflightSliceLoads = new Map<string, Promise<any | null>>();
-
-function sliceDocRef(uid: string, facilityId: string, sliceName: string): DocumentReference {
-  const safeUid = requirePathPart('uid', uid);
-  const safeFacilityId = requirePathPart('facilityId', facilityId);
-  const safeSliceName = requirePathPart('sliceName', sliceName);
-
-  return doc(db, 'users', safeUid, 'facilities', safeFacilityId, 'slices', safeSliceName);
-}
-
-function legacyRefs(uid: string, facilityId: string, sliceName: string): DocumentReference[] {
-  return [
-    doc(db, 'users', uid, 'facilities', facilityId, 'slices', sliceName),
-    doc(db, 'users', uid, 'slices', sliceName),
-    doc(db, 'userdbs', uid, 'slices', sliceName),
-    doc(db, 'userdbs', uid, 'facilities', facilityId, 'slices', sliceName),
-    doc(db, 'users', uid, 'facilityData', facilityId, 'slices', sliceName),
-  ];
-}
-
-async function readDocData(ref: DocumentReference): Promise<any | null> {
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  return snap.data();
-}
-
-function extractSlicePayload(raw: any): SlicePayload | null {
-  if (!raw) return null;
-  if (raw.data !== undefined) return raw.data;
-  if (raw.payload !== undefined) return raw.payload;
-  if (raw.items !== undefined) return raw.items;
-  return raw;
+/** Returns true when a Firestore error is a permission-denied error. */
+function isPermissionDenied(err: unknown): boolean {
+  return !!(
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: string }).code === 'permission-denied'
+  );
 }
 
 export class StorageRepository {
@@ -210,63 +186,88 @@ export class StorageRepository {
     console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
-  static async loadSlice(uid: string, facilityId: string, sliceName: StorageSlice): Promise<SlicePayload | null> {
-    const canonicalRef = sliceDocRef(uid, facilityId, sliceName);
-    const candidates = legacyRefs(uid, facilityId, sliceName);
+  static loadSlice(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+    // Deduplicate concurrent in-flight loads for the same slice.
+    // getCurrentUser is called inside _loadSliceInternal so the dedup key must be
+    // computed asynchronously; we store the whole outer promise in the map so that
+    // any subsequent caller that arrives before the first resolves gets the same result.
+    const pendingKey = `pending::${facilityId}::${sliceName}`;
+    const inflight = inflightSliceLoads.get(pendingKey);
+    if (inflight) return inflight;
 
-    console.log(`[loadSlice] uid=${uid} facility=${facilityId} slice=${sliceName}`);
-
-    const canonicalRaw = await readDocData(canonicalRef);
-    if (canonicalRaw) {
-      console.log(`[loadSlice] FOUND canonical slice at users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
-      return extractSlicePayload(canonicalRaw);
-    }
-
-    console.warn(`[Migration] Slice '${sliceName}' not found at facility-scoped path. Checking legacy paths.`);
-
-    for (const ref of candidates.slice(1)) {
-      const path = ref.path;
-      console.log(`[loadSlice] probing legacyPath=${path}`);
-
-      const raw = await readDocData(ref);
-      if (!raw) continue;
-
-      const payload = extractSlicePayload(raw);
-      if (payload == null) continue;
-
-      console.log(`[Migration] FOUND legacy slice '${sliceName}' at ${path}`);
-      console.log(`[Migration] Promoting '${sliceName}' -> users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
-
-      await setDoc(
-        canonicalRef,
-        {
-          data: payload,
-          migratedFrom: path,
-          migratedAt: serverTimestamp(),
-          sliceName,
-          facilityId,
-          uid,
-        },
-        { merge: true }
-      );
-
-      return payload;
-    }
-
-    console.warn(`[loadSlice] Slice '${sliceName}' not found in scoped or legacy path.`);
-    return null;
+    const promise = this._loadSliceInternal(facilityId, sliceName).finally(() => {
+      inflightSliceLoads.delete(pendingKey);
+    });
+    inflightSliceLoads.set(pendingKey, promise);
+    return promise;
   }
 
-  static loadSliceCached(uid: string, facilityId: string, sliceName: StorageSlice) {
-    const key = `${uid}::${facilityId}::${sliceName}`;
-    if (inflightSliceLoads.has(key)) {
-      return inflightSliceLoads.get(key)!;
+  private static async _loadSliceInternal(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+    const user = await getCurrentUser();
+    if (!user) return null;
+
+    const uid = user.uid;
+
+    // 1. Try facility-scoped collection: users/{uid}/facilities/{facilityId}/{sliceName}
+    const facilityCol = collection(db, 'users', uid, 'facilities', facilityId, sliceName);
+    const facilitySnap = await getDocs(facilityCol);
+
+    if (!facilitySnap.empty) {
+      const result: Record<string, any> = {};
+      facilitySnap.docs.forEach(d => {
+        if (d.id) result[d.id] = d.data();
+      });
+      return result;
     }
-    const p = this.loadSlice(uid, facilityId, sliceName).finally(() => {
-      inflightSliceLoads.delete(key);
+
+    // 2. Fall back to legacy path: users/{uid}/{sliceName}
+    //    A permission-denied error means the path doesn't exist or isn't accessible —
+    //    treat it as "not found" and continue rather than aborting the whole load.
+    let legacySnap;
+    try {
+      const legacyCol = collection(db, 'users', uid, sliceName);
+      legacySnap = await getDocs(legacyCol);
+    } catch (err) {
+      if (isPermissionDenied(err)) {
+        console.warn(`[loadSlice] Permission denied on legacy path users/${uid}/${sliceName}. Skipping legacy probe.`);
+        return null;
+      }
+      throw err;
+    }
+
+    if (legacySnap.empty) {
+      return null;
+    }
+
+    // Build result from legacy docs
+    const result: Record<string, any> = {};
+    legacySnap.docs.forEach(d => {
+      if (d.id) result[d.id] = d.data();
     });
-    inflightSliceLoads.set(key, p);
-    return p;
+
+    if (Object.keys(result).length === 0) {
+      return null;
+    }
+
+    // 3. Auto-migrate to facility-scoped path (non-destructive: legacy data is NOT deleted)
+    try {
+      const targetCol = collection(db, 'users', uid, 'facilities', facilityId, sliceName);
+      const batch = writeBatch(db);
+      legacySnap.docs.forEach(d => {
+        if (d.id) batch.set(doc(targetCol, d.id), d.data());
+      });
+      await batch.commit();
+      console.log(`[Migration] Slice '${sliceName}' promoted to facility-scoped path for facility '${facilityId}'.`);
+    } catch (err) {
+      console.warn(`[Migration] Failed to promote slice '${sliceName}':`, err);
+    }
+
+    return result;
+  }
+
+  /** @deprecated Use {@link StorageRepository.loadSlice} directly — deduplication is now built-in. */
+  static loadSliceCached(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+    return this.loadSlice(facilityId, sliceName);
   }
 
   static async probeUserRoots(uid: string, facilityId: string) {
