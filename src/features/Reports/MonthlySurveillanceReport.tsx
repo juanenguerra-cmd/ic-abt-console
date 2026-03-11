@@ -232,7 +232,7 @@ export const MonthlySurveillanceReport: React.FC = () => {
           {report.residentDays !== null && (
             <StatBlock
               value={`${((report.totals.totalCases / report.residentDays) * 1000).toFixed(2)}/1000`}
-              label="Infection Rate / 1 000 res-days"
+              label="Infection Rate / 1,000 res-days"
               colorClass="text-indigo-700"
             />
           )}
