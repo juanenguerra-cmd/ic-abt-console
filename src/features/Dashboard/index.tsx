@@ -296,12 +296,27 @@ export const Dashboard: React.FC = () => {
   const capacityRate = (facility as any)?.bedCapacity ? ((residentCount / (facility as any).bedCapacity) * 100).toFixed(1) : null;
 
   // E1: Days-of-Therapy (DOT) calculator
+  const thirtyDaysAgoForDot = new Date(nowForDot.getTime() - 30 * 24 * 60 * 60 * 1000);
+
   const totalDotDays = (Object.values(store.abts || {}) as any[]).reduce((sum: number, abt: any) => {
-    if (normalizeStatus(abt.status) !== 'active' || !abt.startDate) return sum;
+    if (!abt.startDate) return sum;
+
     const start = new Date(abt.startDate);
-    const days = Math.max(0, Math.floor((nowForDot.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    const stop = abt.stopDate ? new Date(abt.stopDate) : nowForDot;
+
+    const effectiveStart = start > thirtyDaysAgoForDot ? start : thirtyDaysAgoForDot;
+    const effectiveEnd = stop < nowForDot ? stop : nowForDot;
+
+    if (effectiveEnd < effectiveStart) {
+      return sum;
+    }
+
+    const diffMs = effectiveEnd.getTime() - effectiveStart.getTime();
+    const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
     return sum + days;
   }, 0);
+
   // DOT per 1,000 resident-days (rolling 30-day denominator = residentCount * 30)
   const dotPer1000 = residentCount > 0 ? ((totalDotDays / (residentCount * 30)) * 1000).toFixed(1) : null;
 

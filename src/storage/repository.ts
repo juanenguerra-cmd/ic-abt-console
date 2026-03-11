@@ -5,6 +5,7 @@ import { idbGet, idbSet } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
 import { eventBus } from '@/src/services/eventBus';
 import { getCurrentUser, db } from "../services/firebase";
+import { deepStripUndefined, findUndefinedPaths, normalizeSliceRecord, requirePathPart } from "../utils/firestoreUtils";
 
 export const STORAGE_SLICES = [
   "residents",
@@ -159,8 +160,14 @@ export class StorageRepository {
         if (slice === 'mutationLog') docId = `log_${index}_${item.timestamp}`;
 
         if (item && docId) {
+            const undefinedPaths = findUndefinedPaths(item);
+            if (undefinedPaths.length) {
+                console.warn(`[Sync] Record has undefined fields for slice '${slice}' id='${docId}':`, undefinedPaths);
+            }
+            const normalized = normalizeSliceRecord(slice, item);
+            const cleaned = deepStripUndefined(normalized);
             const docRef = doc(sliceCollection, docId);
-            operations.push({ docRef, data: item });
+            operations.push({ docRef, data: cleaned });
         } else {
             console.warn(`[Sync] Item in slice '${slice}' is missing an ID and will not be saved.`, item);
         }
