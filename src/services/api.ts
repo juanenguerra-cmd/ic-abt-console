@@ -21,7 +21,7 @@ export const remoteFetchDb = async (): Promise<UnifiedDB | null> => {
 
     await Promise.all(
       STORAGE_SLICES.map(async (slice) => {
-        const data = await StorageRepository.loadSlice(activeFacilityId, slice);
+        const data = await StorageRepository.loadSlice(user.uid, activeFacilityId, slice);
         if (data) {
           // @ts-ignore
           db.data.facilityData[activeFacilityId][slice] = data;

@@ -226,18 +226,22 @@ export class StorageRepository {
       console.log(`[Migration] FOUND legacy slice '${sliceName}' at ${path}`);
       console.log(`[Migration] Promoting '${sliceName}' -> users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
 
-      await setDoc(
-        canonicalRef,
-        {
-          data: payload,
-          migratedFrom: path,
-          migratedAt: serverTimestamp(),
-          sliceName,
-          facilityId,
-          uid,
-        },
-        { merge: true }
-      );
+      try {
+        await setDoc(
+          canonicalRef,
+          {
+            data: payload,
+            migratedFrom: path,
+            migratedAt: serverTimestamp(),
+            sliceName,
+            facilityId,
+            uid,
+          },
+          { merge: true }
+        );
+      } catch (migrationErr) {
+        console.warn(`[Migration] Failed to write migrated slice '${sliceName}':`, migrationErr);
+      }
 
       return payload;
     }

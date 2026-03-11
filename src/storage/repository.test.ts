@@ -21,8 +21,10 @@ vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
   doc: vi.fn(),
   getDocs: vi.fn(),
+  getDoc: vi.fn(),
   setDoc: vi.fn().mockResolvedValue(undefined),
   writeBatch: vi.fn(),
+  serverTimestamp: vi.fn().mockReturnValue('SERVER_TIMESTAMP'),
 }));
 
 vi.mock('../services/firebase', () => ({
@@ -44,7 +46,7 @@ vi.mock('./idb', () => ({
 // ---------------------------------------------------------------------------
 
 import { StorageRepository, STORAGE_SLICES } from './repository';
-import { collection, doc, getDocs, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { getCurrentUser } from '../services/firebase';
 import { eventBus } from '@/src/services/eventBus';
 
@@ -54,6 +56,7 @@ import { eventBus } from '@/src/services/eventBus';
 
 const mockCollection = vi.mocked(collection);
 const mockGetDocs = vi.mocked(getDocs);
+const mockGetDoc = vi.mocked(getDoc);
 const mockWriteBatch = vi.mocked(writeBatch);
 const mockDoc = vi.mocked(doc);
 const mockSetDoc = vi.mocked(setDoc);
@@ -111,8 +114,14 @@ beforeEach(() => {
   // Default: collection returns an identifier string for path assertions
   mockCollection.mockImplementation((_db: any, ...segments: string[]) => segments.join('/') as any);
 
+  // Default: doc returns an object with a path property for path assertions
+  mockDoc.mockImplementation((_db: any, ...segments: string[]) => ({ path: segments.join('/') }) as any);
+
   // Default: empty snapshot
   mockGetDocs.mockResolvedValue(makeSnapshot([]) as any);
+
+  // Default: single document does not exist
+  mockGetDoc.mockResolvedValue({ exists: () => false, data: () => null } as any);
 
   // Default: successful write batch
   mockWriteBatch.mockReturnValue(makeBatch());
@@ -193,117 +202,118 @@ describe('StorageRepository.saveSlice', () => {
 
 describe('StorageRepository.loadSlice', () => {
   test('reads from facility-scoped path first', async () => {
-    mockGetDocs.mockResolvedValue(makeSnapshot([{ id: 'r1' }]) as any);
+    mockGetDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ data: { r1: { id: 'r1' } } }) } as any);
 
-    await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    const firstCollectionCall = mockCollection.mock.calls[0];
-    expect(firstCollectionCall).toContain('facilities');
-    expect(firstCollectionCall).toContain(FACILITY_A);
+    // The first doc() call creates the canonical path reference
+    const firstDocCall = mockDoc.mock.calls[0];
+    expect(firstDocCall).toContain('facilities');
+    expect(firstDocCall).toContain(FACILITY_A);
+    expect(firstDocCall).toContain('slices');
+    expect(firstDocCall).toContain('residents');
   });
 
-  test('returns data keyed by document id from facility-scoped path', async () => {
-    const docs = [{ id: 'r1', name: 'Alice' }, { id: 'r2', name: 'Bob' }];
-    mockGetDocs.mockResolvedValue(makeSnapshot(docs) as any);
+  test('returns the data payload extracted from the facility-scoped document', async () => {
+    const sliceData = { r1: { id: 'r1', name: 'Alice' }, r2: { id: 'r2', name: 'Bob' } };
+    mockGetDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ data: sliceData }) } as any);
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    expect(result).toEqual({ r1: docs[0], r2: docs[1] });
+    expect(result).toEqual(sliceData);
   });
 
-  test('returns null when user is not authenticated', async () => {
-    mockGetCurrentUser.mockResolvedValue(null);
+  test('returns null when canonical doc does not exist and all legacy paths are empty', async () => {
+    // Default beforeEach: all getDoc calls return non-existing
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
     expect(result).toBeNull();
   });
 
-  test('falls back to legacy users/{uid}/{slice} when facility-scoped path is empty', async () => {
-    const legacyDocs = [{ id: 'r1', name: 'Legacy Resident' }];
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)      // facility-scoped: empty
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any); // legacy: has data
+  test('falls back to legacy path when facility-scoped path is empty', async () => {
+    const legacyData = { r1: { id: 'r1', name: 'Legacy Resident' } };
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)   // canonical: empty
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any); // first legacy
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    expect(result).toEqual({ r1: legacyDocs[0] });
+    expect(result).toEqual(legacyData);
   });
 
   test('auto-migrates legacy data to facility-scoped path after fallback read', async () => {
-    const legacyDocs = [{ id: 'r1' }];
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any);
+    const legacyData = { r1: { id: 'r1' } };
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any);
 
-    await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    // A writeBatch commit must have been issued for the migration write
-    const batch = mockWriteBatch.mock.results[0].value;
-    expect(batch.commit).toHaveBeenCalledTimes(1);
+    // setDoc must have been called for migration with merge option
+    expect(mockSetDoc).toHaveBeenCalledTimes(1);
+    expect(mockSetDoc.mock.calls[0][2]).toEqual({ merge: true });
   });
 
   test('migration writes to the facility-scoped path, not the legacy path', async () => {
-    const legacyDocs = [{ id: 'r1' }];
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any);
+    const legacyData = { r1: { id: 'r1' } };
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any);
 
-    await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    // The collection call for the migration write must include 'facilities'
-    const collectionCalls = mockCollection.mock.calls;
-    const migrationWriteCall = collectionCalls.find(c => c.includes('facilities'));
-    expect(migrationWriteCall).toBeDefined();
-    expect(migrationWriteCall).toContain(FACILITY_A);
+    // The first doc() call is for the canonical ref; setDoc should be called with it
+    expect(mockSetDoc).toHaveBeenCalledTimes(1);
+    const [migratedToRef] = mockSetDoc.mock.calls[0];
+    expect((migratedToRef as any).path).toContain('facilities');
+    expect((migratedToRef as any).path).toContain(FACILITY_A);
+    expect((migratedToRef as any).path).toContain('slices');
   });
 
-  test('migration is non-destructive: legacy data is NOT deleted', async () => {
-    const legacyDocs = [{ id: 'r1' }];
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any);
+  test('migration is non-destructive: only setDoc is called for migration, no delete', async () => {
+    const legacyData = { r1: { id: 'r1' } };
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any);
 
-    await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    const batch = mockWriteBatch.mock.results[0].value;
-    // Only one commit (the write to new path); no delete method used
-    expect(batch.commit).toHaveBeenCalledTimes(1);
-    expect(batch).not.toHaveProperty('delete');
+    // Migration uses setDoc (not writeBatch or deleteDoc)
+    expect(mockSetDoc).toHaveBeenCalledTimes(1);
+    expect(mockWriteBatch).not.toHaveBeenCalled();
   });
 
   test('returns null when both facility-scoped and legacy paths are empty', async () => {
-    mockGetDocs.mockResolvedValue(makeSnapshot([]) as any);
+    // Default beforeEach: all getDoc calls return non-existing
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
     expect(result).toBeNull();
   });
 
   test('returns legacy data even if the migration write fails', async () => {
-    const legacyDocs = [{ id: 'r1', name: 'Legacy' }];
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any);
+    const legacyData = { r1: { id: 'r1', name: 'Legacy' } };
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any);
 
-    // Migration write throws
-    const failingBatch = makeBatch(() => Promise.reject(new Error('Write failed')));
-    mockWriteBatch.mockReturnValue(failingBatch);
+    // Migration setDoc throws
+    mockSetDoc.mockRejectedValueOnce(new Error('Write failed'));
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
     // Legacy data must still be returned despite migration failure
-    expect(result).toEqual({ r1: legacyDocs[0] });
+    expect(result).toEqual(legacyData);
   });
 
-  test('docs missing an id property are excluded from the result', async () => {
-    const docs = [{ id: 'r1', name: 'Has ID' }, { name: 'No ID' }];
-    mockGetDocs.mockResolvedValue(makeSnapshot(docs) as any);
+  test('extracts the payload field when data field is absent', async () => {
+    const sliceData = { r1: { id: 'r1' } };
+    mockGetDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ payload: sliceData }) } as any);
 
-    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    expect(result).toEqual({ r1: docs[0] });
-    expect(Object.keys(result!)).toHaveLength(1);
+    expect(result).toEqual(sliceData);
   });
 });
 
@@ -589,35 +599,35 @@ describe('StorageRepository.loadSlice (startup reconciliation)', () => {
   }
 
   test('after auto-migration, subsequent load reads from facility-scoped path', async () => {
-    const legacyDocs = [{ id: 'r1', name: 'Migrated' }];
+    const legacyData = { r1: { id: 'r1', name: 'Migrated' } };
 
-    // First loadSlice: facility-scoped empty → fall back to legacy → auto-migrate
-    // Second loadSlice: facility-scoped now has data
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot([]) as any)          // 1st load, new path
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any)  // 1st load, legacy path
-      .mockResolvedValueOnce(makeSnapshot(legacyDocs) as any); // 2nd load, new path
+    // First loadSlice: canonical empty → fall back to legacy → auto-migrate
+    // Second loadSlice: canonical now has data
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => false, data: () => null } as any)         // 1st load, canonical: empty
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any) // 1st load, legacy
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: legacyData }) } as any); // 2nd load, canonical
 
-    const result1 = await StorageRepository.loadSlice(FACILITY_A, 'residents');
-    const result2 = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+    const result1 = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
+    const result2 = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
 
-    expect(result1).toEqual({ r1: legacyDocs[0] });
-    expect(result2).toEqual({ r1: legacyDocs[0] });
-    // Second load must not trigger the legacy fallback (only 3 getDocs calls total)
-    expect(mockGetDocs).toHaveBeenCalledTimes(3);
+    expect(result1).toEqual(legacyData);
+    expect(result2).toEqual(legacyData);
+    // Second load must not trigger the legacy fallback (only 3 getDoc calls total)
+    expect(mockGetDoc).toHaveBeenCalledTimes(3);
   });
 
   test('cross-facility isolation: switching facilityId reads the correct data', async () => {
-    const docsA = [{ id: 'a1', name: 'Facility A data' }];
-    const docsB = [{ id: 'b1', name: 'Facility B data' }];
+    const dataA = { a1: { id: 'a1', name: 'Facility A data' } };
+    const dataB = { b1: { id: 'b1', name: 'Facility B data' } };
 
     // Alternate responses so facility A and B return different data
-    mockGetDocs
-      .mockResolvedValueOnce(makeSnapshot(docsA) as any)
-      .mockResolvedValueOnce(makeSnapshot(docsB) as any);
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: dataA }) } as any)
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ data: dataB }) } as any);
 
-    const resultA = await StorageRepository.loadSlice(FACILITY_A, 'residents');
-    const resultB = await StorageRepository.loadSlice(FACILITY_B, 'residents');
+    const resultA = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_A, 'residents');
+    const resultB = await StorageRepository.loadSlice(MOCK_USER.uid, FACILITY_B, 'residents');
 
     expect(Object.keys(resultA!)).toContain('a1');
     expect(Object.keys(resultB!)).toContain('b1');
