@@ -9,11 +9,12 @@ interface Props {
   screenings: AdmissionScreeningRecord[];
   onNew: () => void;
   onOpen: (record: AdmissionScreeningRecord) => void;
+  onPrint?: (record: AdmissionScreeningRecord) => void;
 }
 
 type SortField = 'screeningDate' | 'admitDate' | 'name';
 
-const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) => {
+const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen, onPrint }) => {
   const [search, setSearch] = useState('');
   const [unitFilter, setUnitFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -189,7 +190,14 @@ const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) 
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => { onOpen(r); setTimeout(() => window.print(), 300); }}
+                          onClick={() => {
+                            if (onPrint) {
+                              onPrint(r);
+                            } else {
+                              onOpen(r);
+                              setTimeout(() => window.print(), 300);
+                            }
+                          }}
                           title="Print"
                           className="p-1 text-neutral-500 hover:bg-neutral-100 rounded"
                         >

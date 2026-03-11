@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AdmissionScreeningRecord } from '../../domain/models';
-import { X, AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AdmissionScreeningRecord, Resident } from '../../domain/models';
+import { useFacilityData } from '../../app/providers';
+import { X, AlertTriangle, CheckCircle, Search, Printer, UserCheck } from 'lucide-react';
+import AdmissionScreeningPrintView from './AdmissionScreeningPrintView';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -168,9 +170,13 @@ interface Props {
   record?: AdmissionScreeningRecord | null;
   onSave: (draft: DraftRecord) => void;
   onClose: () => void;
+  /** When true the form opens directly in print preview mode. */
+  initialPrintMode?: boolean;
 }
 
-const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) => {
+const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose, initialPrintMode = false }) => {
+  const { store } = useFacilityData();
+
   const [draft, setDraft] = useState<DraftRecord>(() => {
     if (record) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = record;
@@ -186,6 +192,65 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
 
   const [errors, setErrors] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
+  const [isPrintPreview, setIsPrintPreview] = useState(initialPrintMode);
+
+  // ── Resident typeahead ─────────────────────────────────────────────────────
+  const [residentQuery, setResidentQuery] = useState(record?.name ?? '');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const typeaheadRef = useRef<HTMLDivElement>(null);
+
+  const residentSuggestions = useMemo((): Resident[] => {
+    const q = residentQuery.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return (Object.values(store.residents || {}) as Resident[])
+      .filter(r => !r.isHistorical && !r.backOfficeOnly)
+      .filter(r =>
+        r.displayName?.toLowerCase().includes(q) ||
+        r.mrn?.toLowerCase().includes(q) ||
+        r.currentRoom?.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [residentQuery, store.residents]);
+
+  const handleResidentSelect = useCallback((r: Resident) => {
+    setDraft(prev => ({
+      ...prev,
+      residentId: r.mrn ?? null,
+      name: r.displayName ?? null,
+      mrn: r.mrn ?? null,
+      room: r.currentRoom ?? null,
+      unit: r.currentUnit ?? null,
+      admitDate: r.admissionDate ?? null,
+    }));
+    setResidentQuery(r.displayName ?? '');
+    setShowSuggestions(false);
+    setSaved(false);
+  }, []);
+
+  // Close typeahead dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (typeaheadRef.current && !typeaheadRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // ── Print handler ──────────────────────────────────────────────────────────
+  const handlePrint = useCallback(() => {
+    setIsPrintPreview(true);
+    const handler = () => {
+      setIsPrintPreview(false);
+      window.removeEventListener('afterprint', handler);
+    };
+    window.addEventListener('afterprint', handler);
+    // requestAnimationFrame ensures the print view has been painted before the
+    // browser print dialog opens; setTimeout provides an additional tick for
+    // browsers that need more time to fully render the new layout.
+    requestAnimationFrame(() => setTimeout(() => window.print(), 100));
+  }, []);
 
   // Auto-calculate daysSinceAdmit
   useEffect(() => {
@@ -213,6 +278,36 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
   };
 
   const isLate = (draft.daysSinceAdmit ?? 0) > MAX_SCREENING_DAYS && draft.admitDate;
+
+  // ── Print preview mode ─────────────────────────────────────────────────────
+  if (isPrintPreview) {
+    return (
+      <div className="fixed inset-0 bg-white z-[9999] overflow-auto">
+        {/* Toolbar — hidden when actually printing */}
+        <div className="print:hidden flex items-center gap-3 px-6 py-3 bg-neutral-100 border-b border-neutral-200 sticky top-0 shadow-sm">
+          <Printer className="w-4 h-4 text-neutral-600" />
+          <span className="text-sm font-semibold text-neutral-700">Print Preview</span>
+          <div className="flex-1" />
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-1.5 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700"
+          >
+            Print
+          </button>
+          <button
+            onClick={() => setIsPrintPreview(false)}
+            className="px-4 py-1.5 border border-neutral-300 text-neutral-700 rounded-md text-sm hover:bg-neutral-50"
+          >
+            Close Preview
+          </button>
+        </div>
+        {/* Paper content */}
+        <div className="p-8 max-w-[8.5in] mx-auto">
+          <AdmissionScreeningPrintView record={draft} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto">
@@ -259,8 +354,79 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
           {/* Section 1: Resident Header */}
           <div className="border border-neutral-200 rounded-lg mx-4 mt-4 overflow-hidden">
             <SectionHeader title="Resident Information" />
+
+            {/* Resident search typeahead */}
+            <div className="px-4 py-3 border-b border-neutral-100 bg-indigo-50">
+              <p className="text-xs font-medium text-indigo-700 mb-1.5">
+                Search active residents to auto-fill fields below:
+              </p>
+              <div ref={typeaheadRef} className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={residentQuery}
+                  onChange={e => {
+                    const v = e.target.value;
+                    setResidentQuery(v);
+                    set('name', v || null);
+                    if (draft.residentId) set('residentId', null); // unlink on manual edit
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => { if (residentQuery.trim().length >= 2) setShowSuggestions(true); }}
+                  placeholder="Type name, MRN, or room to search…"
+                  className="w-full pl-9 pr-3 py-2 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  autoComplete="off"
+                />
+                {draft.residentId && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-xs text-indigo-700 font-medium">
+                    <UserCheck className="w-3.5 h-3.5" /> Linked
+                  </span>
+                )}
+                {showSuggestions && (
+                  <ul className="absolute z-50 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {residentSuggestions.length > 0 ? (
+                      residentSuggestions.map(r => (
+                        <li
+                          key={r.mrn}
+                          className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-indigo-50 text-sm"
+                          onMouseDown={e => { e.preventDefault(); handleResidentSelect(r); }}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-neutral-900">{r.displayName}</span>
+                            {(r.currentUnit || r.currentRoom) && (
+                              <span className="ml-2 text-xs text-neutral-500">
+                                {[r.currentUnit, r.currentRoom].filter(Boolean).join(' / ')}
+                              </span>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-xs text-neutral-400 font-mono">{r.mrn}</span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-3 py-2 text-xs text-neutral-500">
+                        {residentQuery.trim().length >= 2
+                          ? Object.values(store.residents || {}).filter(r => !r.isHistorical && !r.backOfficeOnly).length === 0
+                            ? 'No active residents found in census. You can enter resident details manually below.'
+                            : 'No matching residents. You can enter details manually below.'
+                          : 'Type at least 2 characters to search…'}
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </div>
+            </div>
+
             <FormRow label="Resident Name" required>
-              <TextInput value={draft.name ?? ''} onChange={v => set('name', v || null)} placeholder="Full name" />
+              <TextInput
+                value={draft.name ?? ''}
+                onChange={v => {
+                  set('name', v || null);
+                  setResidentQuery(v);
+                  // Unlink the resident record when the name is manually edited
+                  if (draft.residentId) set('residentId', null);
+                }}
+                placeholder="Full name"
+              />
             </FormRow>
             <FormRow label="MRN">
               <TextInput value={draft.mrn ?? ''} onChange={v => set('mrn', v || null)} placeholder="Medical record number" />
@@ -436,6 +602,13 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
             className="px-4 py-2 text-sm border border-neutral-300 rounded-md hover:bg-neutral-50"
           >
             Cancel
+          </button>
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50"
+          >
+            <Printer className="w-4 h-4" />
+            Print
           </button>
           <button
             onClick={() => handleSave('draft')}

@@ -6,6 +6,25 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Admission Screening — print layout ────────────────────────────────────── */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.75in;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
 /* ── Editable line-list cells ──────────────────────────────────────────────── */
 
 /* Cell was auto-filled from app data, not yet manually edited */

@@ -54,6 +54,7 @@ const AdmissionScreeningPage: React.FC = () => {
 
   const [editingRecord, setEditingRecord] = useState<AdmissionScreeningRecord | null | undefined>(undefined);
   // undefined = list view, null = new form, record = edit form
+  const [printMode, setPrintMode] = useState(false);
 
   /** All normalized screening records for current facility */
   const screenings = useMemo((): AdmissionScreeningRecord[] => {
@@ -72,9 +73,10 @@ const AdmissionScreeningPage: React.FC = () => {
     }
   }, [store.admissionScreenings]);
 
-  const handleNew = () => setEditingRecord(null);
-  const handleOpen = (r: AdmissionScreeningRecord) => setEditingRecord(r);
-  const handleClose = () => setEditingRecord(undefined);
+  const handleNew = () => { setEditingRecord(null); setPrintMode(false); };
+  const handleOpen = (r: AdmissionScreeningRecord) => { setEditingRecord(r); setPrintMode(false); };
+  const handlePrint = (r: AdmissionScreeningRecord) => { setEditingRecord(r); setPrintMode(true); };
+  const handleClose = () => { setEditingRecord(undefined); setPrintMode(false); };
 
   const handleSave = (draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -133,6 +135,7 @@ const AdmissionScreeningPage: React.FC = () => {
           screenings={screenings}
           onNew={handleNew}
           onOpen={handleOpen}
+          onPrint={handlePrint}
         />
       )}
 
@@ -142,6 +145,7 @@ const AdmissionScreeningPage: React.FC = () => {
           record={editingRecord}
           onSave={handleSave}
           onClose={handleClose}
+          initialPrintMode={printMode}
         />
       )}
     </div>
