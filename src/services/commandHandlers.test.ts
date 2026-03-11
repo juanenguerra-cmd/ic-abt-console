@@ -20,10 +20,12 @@ if (typeof (global as any).window === 'undefined') {
 }
 (global as any).window.dispatchEvent = mockDispatchEvent;
 
-(global as any).BroadcastChannel = vi.fn().mockImplementation(() => ({
-  postMessage: mockBroadcastChannelPostMessage,
-  close: mockBroadcastChannelClose,
-}));
+(global as any).BroadcastChannel = vi.fn().mockImplementation(function () {
+  return {
+    postMessage: mockBroadcastChannelPostMessage,
+    close: mockBroadcastChannelClose,
+  };
+});
 
 (global as any).Event = class Event {
   type: string;
