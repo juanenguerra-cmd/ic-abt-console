@@ -2,6 +2,7 @@ import React from 'react';
 import { FacilityStore, IPEvent, ABTCourse, Resident, ResidentNote, VaxEvent, ShiftLogEntry } from '../../domain/models';
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { SYMPTOM_HASHTAG_LIBRARY, getSymptomClassForHashtag } from '../../utils/symptomHashtagLibrary';
+import { normalizeClinicalDevices, getDeviceDay } from '../../utils/clinicalDevices';
 import { PdfTemplate, PdfOrientation } from '../../pdf/exportPdf';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
 
@@ -658,7 +659,98 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
       template: 'LANDSCAPE_TEMPLATE_V1',
       orientation: 'landscape'
     }
-  }
+  },
+  'clinical-devices-support': {
+    id: 'clinical-devices-support',
+    title: 'Clinical Devices & Support',
+    description: 'Active residents with clinical devices or support equipment in use',
+    category: 'clinical',
+    filterSchema: [
+      {
+        id: 'deviceFilter',
+        label: 'Device',
+        type: 'select',
+        options: [
+          { label: 'Any Device', value: 'any' },
+          { label: 'Oxygen', value: 'oxygen' },
+          { label: 'Urinary Catheter (Foley)', value: 'urinaryCatheter' },
+          { label: 'Indwelling Catheter', value: 'indwellingCatheter' },
+          { label: 'Midline', value: 'midline' },
+          { label: 'PICC', value: 'picc' },
+          { label: 'PIV', value: 'piv' },
+        ],
+        defaultValue: 'any',
+      },
+    ],
+    datasetResolver: (store, filters) => {
+      const deviceFilter: string = filters.deviceFilter || 'any';
+
+      const formatDevice = (active: boolean, insertedDate: string | null, label: string): string => {
+        if (!active) return '—';
+        const day = getDeviceDay(insertedDate);
+        return day ? `${label} (Day ${day})` : label;
+      };
+
+      return (Object.values(store.residents) as Resident[])
+        .filter(r => !r.isHistorical && !r.backOfficeOnly && r.status !== 'Discharged')
+        .map(r => {
+          const dev = normalizeClinicalDevices(r);
+          return { r, dev };
+        })
+        .filter(({ dev }) => {
+          if (deviceFilter === 'oxygen') return dev.oxygen.enabled;
+          if (deviceFilter === 'urinaryCatheter') return dev.urinaryCatheter.active;
+          if (deviceFilter === 'indwellingCatheter') return dev.indwellingCatheter.active;
+          if (deviceFilter === 'midline') return dev.midline.active;
+          if (deviceFilter === 'picc') return dev.picc.active;
+          if (deviceFilter === 'piv') return dev.piv.active;
+          // 'any': at least one device active
+          return (
+            dev.oxygen.enabled ||
+            dev.urinaryCatheter.active ||
+            dev.indwellingCatheter.active ||
+            dev.midline.active ||
+            dev.picc.active ||
+            dev.piv.active
+          );
+        })
+        .sort((a, b) => {
+          const unitCmp = (a.r.currentUnit || '').localeCompare(b.r.currentUnit || '');
+          if (unitCmp !== 0) return unitCmp;
+          return a.r.displayName.localeCompare(b.r.displayName);
+        })
+        .map(({ r, dev }) => ({
+          resident: r.displayName,
+          mrn: r.mrn,
+          unit: r.currentUnit || '—',
+          room: r.currentRoom || '—',
+          oxygen: dev.oxygen.enabled ? (dev.oxygen.mode || 'Enabled') : '—',
+          urinaryCatheter: formatDevice(dev.urinaryCatheter.active, dev.urinaryCatheter.insertedDate, 'Foley'),
+          indwellingCatheter: formatDevice(dev.indwellingCatheter.active, dev.indwellingCatheter.insertedDate, 'Indwelling Cath'),
+          midline: formatDevice(dev.midline.active, dev.midline.insertedDate, 'Midline'),
+          picc: formatDevice(dev.picc.active, dev.picc.insertedDate, 'PICC'),
+          piv: formatDevice(dev.piv.active, dev.piv.insertedDate, 'PIV'),
+        }));
+    },
+    columns: [
+      { id: 'resident', header: 'Resident', accessor: (d) => d.resident },
+      { id: 'mrn', header: 'MRN', accessor: (d) => d.mrn },
+      { id: 'unit', header: 'Unit', accessor: (d) => d.unit },
+      { id: 'room', header: 'Room', accessor: (d) => d.room },
+      { id: 'oxygen', header: 'Oxygen', accessor: (d) => d.oxygen },
+      { id: 'urinaryCatheter', header: 'Foley/Urinary Cath', accessor: (d) => d.urinaryCatheter },
+      { id: 'indwellingCatheter', header: 'Indwelling Cath', accessor: (d) => d.indwellingCatheter },
+      { id: 'midline', header: 'Midline', accessor: (d) => d.midline },
+      { id: 'picc', header: 'PICC', accessor: (d) => d.picc },
+      { id: 'piv', header: 'PIV', accessor: (d) => d.piv },
+    ],
+    csvSupport: true,
+    printSupport: true,
+    pdfTemplateMapping: {
+      template: 'LANDSCAPE_TEMPLATE_V1',
+      orientation: 'landscape',
+    },
+  },
 };
 
 export function registerReport<T>(report: ReportDefinition<T>) {

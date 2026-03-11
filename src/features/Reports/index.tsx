@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
-import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../domain/models';
+import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote, SymptomClass } from '../../domain/models';
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-react';
+import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe, Plus } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
@@ -14,6 +14,7 @@ import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { LineListExportButton } from '../../components/LineListExportButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { ReportViewer } from './ReportViewer';
+import { ManualAddLineListModal } from '../LineListReport/ManualAddLineListModal';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
@@ -153,6 +154,11 @@ const ClinicalReports: React.FC = () => {
   return (
     <div className="space-y-6">
       <ReportViewer 
+        reportId="clinical-devices-support" 
+        headerColorClass="bg-cyan-50" 
+        textColorClass="text-cyan-900" 
+      />
+      <ReportViewer 
         reportId="mdro-tracking" 
         headerColorClass="bg-purple-50" 
         textColorClass="text-purple-900" 
@@ -188,6 +194,8 @@ const CombinedLineList: React.FC = () => {
 
 const SurveyPacketsReport: React.FC = () => {
   const { store } = useFacilityData();
+  const [showAddLineListEntry, setShowAddLineListEntry] = useState(false);
+  const [addLineListClass, setAddLineListClass] = useState<SymptomClass>('resp');
 
   const activePrecautionsCount = useMemo(() =>
     (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active' && ip.isolationType).length,
@@ -208,6 +216,25 @@ const SurveyPacketsReport: React.FC = () => {
           subtitle="Survey-ready active precautions and ABT courses"
           right={
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <select
+                  value={addLineListClass}
+                  onChange={e => setAddLineListClass(e.target.value as SymptomClass)}
+                  className="border border-indigo-300 rounded-md px-2 py-1 text-xs text-indigo-800 bg-white focus:ring-indigo-500 focus:border-indigo-500"
+                  title="Symptom class for new line list entry"
+                >
+                  <option value="resp">Resp (ILI)</option>
+                  <option value="gi">GI</option>
+                </select>
+                <button
+                  onClick={() => setShowAddLineListEntry(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-md text-xs font-medium hover:bg-emerald-700 transition-colors"
+                  title="Add a new line list entry"
+                >
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                  Add Line List Entry
+                </button>
+              </div>
               <LineListExportButton />
               <ExportPdfButton
                 label="Export PDF"
@@ -281,6 +308,14 @@ const SurveyPacketsReport: React.FC = () => {
           textColorClass="text-amber-900" 
         />
       </div>
+
+      {showAddLineListEntry && (
+        <ManualAddLineListModal
+          symptomClass={addLineListClass}
+          onClose={() => setShowAddLineListEntry(false)}
+          onSaved={() => setShowAddLineListEntry(false)}
+        />
+      )}
     </div>
   );
 };
