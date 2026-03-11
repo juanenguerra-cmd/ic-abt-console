@@ -21,7 +21,7 @@
 
 import { UnifiedDB } from "../domain/models";
 import { reconcileWithRemoteAsync, ReconcileResult } from "../storage/engine";
-import { hasOutboxItems } from "../storage/syncOutbox";
+import { getOutboxState } from "../storage/syncOutbox";
 import { getRecentConflicts, getLastSuccessfulSyncAt } from "../storage/syncLog";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +52,8 @@ export interface SyncStatus {
   lastError: string | null;
   /** Whether there are writes pending in the outbox. */
   hasPendingWrites: boolean;
+  /** Number of writes that failed and are queued for retry. */
+  failedWrites: number;
   /** Number of conflicts detected in recent history. */
   recentConflictCount: number;
 }
@@ -71,6 +73,7 @@ const _status: SyncStatus = {
   lastSyncAction: null,
   lastError: null,
   hasPendingWrites: false,
+  failedWrites: 0,
   recentConflictCount: 0,
 };
 
@@ -140,18 +143,21 @@ async function _runCycle(
 
     _consecutiveFailures = 0;
 
-    const [lastSyncedAt, recentConflicts] = await Promise.all([
+    const [lastSyncedAt, recentConflicts, outboxState] = await Promise.all([
       getLastSuccessfulSyncAt().catch(() => null),
       getRecentConflicts(20).catch(() => []),
+      getOutboxState().catch(() => ({ hasPendingPackedSync: false, pendingSlices: [] })),
     ]);
 
-    const hasPendingWrites = await hasOutboxItems().catch(() => false);
+    const hasPendingWrites = outboxState.hasPendingPackedSync || outboxState.pendingSlices.length > 0;
+    const failedWrites = outboxState.pendingSlices.length + (outboxState.hasPendingPackedSync ? 1 : 0);
 
     _patchStatus({
       isSyncing: false,
       lastSyncAction: result.action,
       lastSyncedAt,
       hasPendingWrites,
+      failedWrites,
       recentConflictCount: recentConflicts.length,
       lastError: result.action === 'error' ? 'Remote sync failed. Changes queued for retry.' : null,
     });
@@ -246,14 +252,17 @@ export async function triggerManualSync(
  * reflects the persisted last-synced timestamp before the first sync cycle.
  */
 export async function refreshSyncStatusFromStorage(): Promise<void> {
-  const [lastSyncedAt, recentConflicts, hasPendingWrites] = await Promise.all([
+  const [lastSyncedAt, recentConflicts, outboxState] = await Promise.all([
     getLastSuccessfulSyncAt().catch(() => null),
     getRecentConflicts(20).catch(() => []),
-    hasOutboxItems().catch(() => false),
+    getOutboxState().catch(() => ({ hasPendingPackedSync: false, pendingSlices: [] })),
   ]);
+  const hasPendingWrites = outboxState.hasPendingPackedSync || outboxState.pendingSlices.length > 0;
+  const failedWrites = outboxState.pendingSlices.length + (outboxState.hasPendingPackedSync ? 1 : 0);
   _patchStatus({
     lastSyncedAt,
     recentConflictCount: recentConflicts.length,
     hasPendingWrites,
+    failedWrites,
   });
 }
