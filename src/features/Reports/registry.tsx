@@ -4,6 +4,7 @@ import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { SYMPTOM_HASHTAG_LIBRARY, getSymptomClassForHashtag } from '../../utils/symptomHashtagLibrary';
 import { PdfTemplate, PdfOrientation } from '../../pdf/exportPdf';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
+import { buildMonthlyInfectionSurveillanceLog } from '../../lib/analytics/surveillanceAggregator';
 
 export type FilterType = 'date' | 'dateRange' | 'select' | 'text' | 'boolean';
 
@@ -658,6 +659,77 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
       template: 'LANDSCAPE_TEMPLATE_V1',
       orientation: 'landscape'
     }
+  },
+  'monthly-infection-surveillance-log': {
+    id: 'monthly-infection-surveillance-log',
+    title: 'Monthly Infection Surveillance Log',
+    description: 'Case-level surveillance detail for a selected month and optional unit',
+    category: 'surveillance',
+    filterSchema: [
+      {
+        id: 'month',
+        label: 'Month',
+        type: 'select' as const,
+        options: Array.from({ length: 12 }, (_, i) => ({
+          label: new Date(2000, i, 1).toLocaleString('default', { month: 'long' }),
+          value: String(i + 1),
+        })),
+        defaultValue: String(new Date().getMonth() + 1),
+      },
+      {
+        id: 'year',
+        label: 'Year',
+        type: 'select' as const,
+        options: Array.from({ length: 5 }, (_, i) => {
+          const y = new Date().getFullYear() - i;
+          return { label: String(y), value: String(y) };
+        }),
+        defaultValue: String(new Date().getFullYear()),
+      },
+    ],
+    datasetResolver: (store: FacilityStore, filters: Record<string, string>) => {
+      const month = parseInt(filters.month || String(new Date().getMonth() + 1), 10);
+      const year = parseInt(filters.year || String(new Date().getFullYear()), 10);
+      const unit = filters.unit || null;
+      const result = buildMonthlyInfectionSurveillanceLog(store, month, year, unit);
+      return result.rows;
+    },
+    columns: [
+      { id: 'eventDate', header: 'Date', accessor: (r) => r.eventDate ?? '—', exportValue: (r) => r.eventDate ?? '' },
+      { id: 'residentName', header: 'Resident', accessor: (r) => r.residentName, exportValue: (r) => r.residentName },
+      { id: 'mrn', header: 'MRN', accessor: (r) => r.mrn || '—', exportValue: (r) => r.mrn },
+      { id: 'unit', header: 'Unit', accessor: (r) => r.unit, exportValue: (r) => r.unit },
+      { id: 'room', header: 'Room', accessor: (r) => r.room || '—', exportValue: (r) => r.room },
+      { id: 'infectionCategory', header: 'Category', accessor: (r) => r.infectionCategory, exportValue: (r) => r.infectionCategory },
+      { id: 'rawInfectionType', header: 'Type', accessor: (r) => r.rawInfectionType || '—', exportValue: (r) => r.rawInfectionType },
+      { id: 'organism', header: 'Organism', accessor: (r) => r.organism || '—', exportValue: (r) => r.organism },
+      {
+        id: 'labStatus',
+        header: 'Lab Status',
+        accessor: (r) => {
+          const labels: Record<string, string> = { confirmed: 'Confirmed', suspected: 'Suspected', unknown: '—' };
+          const badges: Record<string, string> = {
+            confirmed: 'bg-green-100 text-green-800',
+            suspected: 'bg-amber-100 text-amber-800',
+            unknown: 'bg-neutral-100 text-neutral-600',
+          };
+          return (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${badges[r.labStatus] ?? badges.unknown}`}>
+              {labels[r.labStatus] ?? '—'}
+            </span>
+          );
+        },
+        exportValue: (r) => r.labStatus,
+      },
+      { id: 'precautions', header: 'Precautions', accessor: (r) => r.precautions || '—', exportValue: (r) => r.precautions },
+      { id: 'outcome', header: 'Outcome', accessor: (r) => r.outcome, exportValue: (r) => r.outcome },
+    ],
+    csvSupport: true,
+    printSupport: true,
+    pdfTemplateMapping: {
+      template: 'PORTRAIT_TEMPLATE_V1',
+      orientation: 'portrait',
+    },
   }
 };
 

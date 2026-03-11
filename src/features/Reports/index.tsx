@@ -14,6 +14,7 @@ import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { LineListExportButton } from '../../components/LineListExportButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
 import { ReportViewer } from './ReportViewer';
+import { MonthlySurveillanceReport } from './MonthlySurveillanceReport';
 import { getDeviceDay, normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { getActiveABT, getAbtDays } from '../../utils/countCardDataHelpers';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
@@ -130,6 +131,12 @@ const ReportsConsole: React.FC = () => {
             <Syringe className="h-4 w-4" />
             Vax Re-offer
           </button>
+          <button
+            data-testid="surveillance-tab-button"
+            onClick={() => handleTabChange('surveillance')}
+            className={`${activeTab === 'surveillance' ? 'border-teal-500 text-teal-600' : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm active:scale-95`}>
+            Surveillance
+          </button>
         </nav>
       </div>
 
@@ -144,6 +151,7 @@ const ReportsConsole: React.FC = () => {
         {activeTab === 'clinical' && <ClinicalReports />}
         {activeTab === 'vaxcoverage' && <VaccineCoverageReport />}
         {activeTab === 'vaxreoffer' && <VaxReofferList />}
+        {activeTab === 'surveillance' && <MonthlySurveillanceReport />}
       </div>
     </div>
   );
