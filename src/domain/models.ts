@@ -595,6 +595,42 @@ export interface MutationLogEntry {
   entityId: string;
 }
 
+/** IP Admission Screening record — captures infection-prevention assessment within 72h of admission. */
+export interface AdmissionScreeningRecord {
+  id: string;
+  residentId?: string | null;
+  mrn?: string | null;
+  name?: string | null;
+  room?: string | null;
+  unit?: string | null;
+  admitDate?: string | null;
+  screeningDate?: string | null;
+  daysSinceAdmit?: number | null;
+  screeningStatus?: 'draft' | 'completed';
+  completedBy?: string | null;
+  completedByTitle?: string | null;
+  notes?: string | null;
+  createdAt: ISO;
+  updatedAt: ISO;
+
+  admissionSource?: string | null;
+  recentHospitalization?: boolean | null;
+  transferFromFacility?: boolean | null;
+  currentSymptoms?: string[] | null;
+  currentDiagnosis?: string | null;
+  isolationStatus?: string | null;
+  precautionType?: string | null;
+  mdroHistory?: boolean | null;
+  mdroOrganism?: string | null;
+  recentAntibiotics?: boolean | null;
+  antibioticDetails?: string | null;
+  devicesPresent?: string[] | null;
+  vaccinationReviewed?: boolean | null;
+  vaccinationNotes?: string | null;
+  followUpActions?: string | null;
+  recommendations?: string | null;
+}
+
 export interface FacilityStore {
   /** Current user role for RBAC. Defaults to 'Nurse' when absent. */
   currentRole?: UserRole;
@@ -629,6 +665,8 @@ export interface FacilityStore {
     lastDetectionRunAtISO?: string;
     lastSeenEventAtISO?: string;
   };
+  /** IP Admission Screening records — indexed by id. Optional for backward compatibility. */
+  admissionScreenings?: Record<string, AdmissionScreeningRecord>;
 }
 
 export interface UnifiedDB {
