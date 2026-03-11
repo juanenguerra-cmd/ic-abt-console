@@ -305,6 +305,32 @@ describe('StorageRepository.loadSlice', () => {
     expect(result).toEqual({ r1: docs[0] });
     expect(Object.keys(result!)).toHaveLength(1);
   });
+
+  test('returns null — not throws — when the legacy path responds with permission-denied', async () => {
+    const permDenied = Object.assign(new Error('Missing or insufficient permissions'), {
+      code: 'permission-denied',
+    });
+
+    mockGetDocs
+      .mockResolvedValueOnce(makeSnapshot([]) as any) // facility-scoped: empty
+      .mockRejectedValueOnce(permDenied);             // legacy: permission-denied
+
+    const result = await StorageRepository.loadSlice(FACILITY_A, 'residents');
+
+    expect(result).toBeNull();
+  });
+
+  test('re-throws non-permission errors from the legacy path', async () => {
+    const networkError = new Error('Network request failed');
+
+    mockGetDocs
+      .mockResolvedValueOnce(makeSnapshot([]) as any) // facility-scoped: empty
+      .mockRejectedValueOnce(networkError);           // legacy: unexpected error
+
+    await expect(StorageRepository.loadSlice(FACILITY_A, 'residents')).rejects.toThrow(
+      'Network request failed',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

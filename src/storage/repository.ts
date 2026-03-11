@@ -55,7 +55,17 @@ const SLICE_SAVE_MAX_RETRIES = 2;
 /** Base delay (ms) for exponential back-off between retries. */
 const SLICE_SAVE_RETRY_BASE_MS = 500;
 
-const inflightSliceLoads = new Map<string, Promise<any | null>>();
+const inflightSliceLoads = new Map<string, Promise<Record<string, any> | null>>();
+
+/** Returns true when a Firestore error is a permission-denied error. */
+function isPermissionDenied(err: unknown): boolean {
+  return !!(
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    (err as { code?: string }).code === 'permission-denied'
+  );
+}
 
 export class StorageRepository {
   static getSliceKey(facilityId: string, slice: string): string {
@@ -169,7 +179,23 @@ export class StorageRepository {
     console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
-  static async loadSlice(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+  static loadSlice(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+    // Deduplicate concurrent in-flight loads for the same slice.
+    // getCurrentUser is called inside _loadSliceInternal so the dedup key must be
+    // computed asynchronously; we store the whole outer promise in the map so that
+    // any subsequent caller that arrives before the first resolves gets the same result.
+    const pendingKey = `pending::${facilityId}::${sliceName}`;
+    const inflight = inflightSliceLoads.get(pendingKey);
+    if (inflight) return inflight;
+
+    const promise = this._loadSliceInternal(facilityId, sliceName).finally(() => {
+      inflightSliceLoads.delete(pendingKey);
+    });
+    inflightSliceLoads.set(pendingKey, promise);
+    return promise;
+  }
+
+  private static async _loadSliceInternal(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
     const user = await getCurrentUser();
     if (!user) return null;
 
@@ -188,8 +214,19 @@ export class StorageRepository {
     }
 
     // 2. Fall back to legacy path: users/{uid}/{sliceName}
-    const legacyCol = collection(db, 'users', uid, sliceName);
-    const legacySnap = await getDocs(legacyCol);
+    //    A permission-denied error means the path doesn't exist or isn't accessible —
+    //    treat it as "not found" and continue rather than aborting the whole load.
+    let legacySnap;
+    try {
+      const legacyCol = collection(db, 'users', uid, sliceName);
+      legacySnap = await getDocs(legacyCol);
+    } catch (err) {
+      if (isPermissionDenied(err)) {
+        console.warn(`[loadSlice] Permission denied on legacy path users/${uid}/${sliceName}. Skipping legacy probe.`);
+        return null;
+      }
+      throw err;
+    }
 
     if (legacySnap.empty) {
       return null;
@@ -221,18 +258,9 @@ export class StorageRepository {
     return result;
   }
 
-  static async loadSliceCached(facilityId: string, sliceName: StorageSlice) {
-    const user = await getCurrentUser();
-    const uid = user?.uid ?? 'anonymous';
-    const key = `${uid}::${facilityId}::${sliceName}`;
-    if (inflightSliceLoads.has(key)) {
-      return inflightSliceLoads.get(key)!;
-    }
-    const p = this.loadSlice(facilityId, sliceName).finally(() => {
-      inflightSliceLoads.delete(key);
-    });
-    inflightSliceLoads.set(key, p);
-    return p;
+  /** @deprecated Use {@link StorageRepository.loadSlice} directly — deduplication is now built-in. */
+  static loadSliceCached(facilityId: string, sliceName: StorageSlice): Promise<Record<string, any> | null> {
+    return this.loadSlice(facilityId, sliceName);
   }
 
   static async probeUserRoots(uid: string, facilityId: string) {

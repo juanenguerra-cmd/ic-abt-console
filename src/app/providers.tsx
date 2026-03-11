@@ -87,6 +87,11 @@ const DatabaseContext = createContext<DatabaseContextType | null>(null);
 const FacilityContext = createContext<FacilityContextType | null>(null);
 const SyncStatusContext = createContext<SyncStatusContextType | null>(null);
 
+// Module-level guard: prevents double-bootstrap in React StrictMode (dev) and HMR.
+// React 18 StrictMode deliberately runs effects twice in dev to surface side-effect
+// bugs; this flag ensures the async DB load only fires once per page load.
+let _bootstrapStarted = false;
+
 export function AppProviders({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<UnifiedDB | null>(null);
   const [activeFacilityId, _setActiveFacilityId] = useState<string | null>(
@@ -112,6 +117,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Guard against React StrictMode double-invocation and HMR remounts.
+    if (_bootstrapStarted) return;
+    _bootstrapStarted = true;
+
     const bootstrapApp = async () => {
       const justRestored = sessionStorage.getItem(LS_JUST_RESTORED_FLAG) === "true";
       
