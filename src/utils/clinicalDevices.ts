@@ -1,4 +1,24 @@
 import type { Resident } from '../domain/models';
+import { filterActiveResidents } from './countCardDataHelpers';
+
+// ─── Device Utilization Report ────────────────────────────────────────────────
+
+export interface DeviceReportRow {
+  residentId: string;
+  name: string;
+  mrn: string;
+  room: string;
+  unit: string;
+  devices: string[];
+}
+
+export interface DeviceReport {
+  reportDate: string;
+  selectedUnit: string | null;
+  censusCount: number;
+  totals: Array<{ device: string; count: number }>;
+  rows: DeviceReportRow[];
+}
 
 export type DeviceEntry = {
   active: boolean;
@@ -72,3 +92,56 @@ export const formatDeviceDayLabel = (name: string, insertedDate?: string | null)
   const day = getDeviceDay(insertedDate);
   return day ? `${name} (Day ${day})` : name;
 };
+
+export function buildDeviceUtilizationReport(
+  residents: Resident[],
+  selectedUnit?: string | null,
+): DeviceReport {
+  const activeResidents = filterActiveResidents(residents).filter((r) =>
+    selectedUnit == null || r.currentUnit === selectedUnit,
+  );
+
+  const rows: DeviceReportRow[] = activeResidents
+    .map((r) => {
+      const devices = normalizeClinicalDevices(r);
+      const deviceList: string[] = [];
+
+      if (devices.oxygen.enabled) {
+        deviceList.push(devices.oxygen.mode ? `Oxygen (${devices.oxygen.mode})` : 'Oxygen');
+      }
+      if (devices.urinaryCatheter.active) deviceList.push(formatDeviceDayLabel('Foley Catheter', devices.urinaryCatheter.insertedDate));
+      if (devices.indwellingCatheter.active) deviceList.push(formatDeviceDayLabel('Indwelling Catheter', devices.indwellingCatheter.insertedDate));
+      if (devices.midline.active) deviceList.push(formatDeviceDayLabel('Midline', devices.midline.insertedDate));
+      if (devices.picc.active) deviceList.push(formatDeviceDayLabel('PICC', devices.picc.insertedDate));
+      if (devices.piv.active) deviceList.push(formatDeviceDayLabel('PIV', devices.piv.insertedDate));
+
+      return {
+        residentId: r.mrn,
+        name: r.displayName ?? '',
+        mrn: r.mrn ?? '',
+        room: r.currentRoom ?? '',
+        unit: r.currentUnit ?? '',
+        devices: deviceList,
+      };
+    })
+    .filter((r) => r.devices.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    for (const device of row.devices) {
+      // Strip trailing parenthetical suffixes for counting
+      // e.g. "Oxygen (Continuous)" → "Oxygen", "PICC (Day 3)" → "PICC"
+      const key = device.replace(/\s*\([^)]+\)$/, '');
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+  }
+
+  return {
+    reportDate: new Date().toISOString(),
+    selectedUnit: selectedUnit ?? null,
+    censusCount: activeResidents.length,
+    totals: Array.from(counts.entries()).map(([device, count]) => ({ device, count })),
+    rows,
+  };
+}
