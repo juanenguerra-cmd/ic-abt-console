@@ -1,21 +1,9 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId} {
-      // This rule handles legacy slices (e.g., /users/{uid}/residents/{id})
-      // and metadata (/users/{uid}/meta/db).
-      // It excludes the new 'facilities' subcollection to avoid ambiguity.
-      match /{collection}/{docId} {
-        allow read, write: if request.auth.uid == userId && collection != 'facilities';
-      }
-
-      // This rule handles all new facility-scoped data, which is nested.
-      // It covers paths like:
-      // - /users/{uid}/facilities/{fid}/meta/config
-      // - /users/{uid}/facilities/{fid}/residents/{id}
-      match /facilities/{facilityId}/{document=**} {
-        allow read, write: if request.auth.uid == userId;
-      }
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
   }
 }

@@ -5,7 +5,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
 } from "firebase/auth";
-import { getFirestore, Firestore, terminate, clearIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, Firestore, terminate, clearIndexedDbPersistence, initializeFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 
@@ -28,7 +28,9 @@ const firebaseConfig = {
 
 const app: FirebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db: Firestore = getFirestore(app);
+const db: Firestore = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+});
 const functions = getFunctions(app);
 const storage = getStorage(app);
 

@@ -393,7 +393,8 @@ export async function loadDBAsync(options: { skipRemoteReconciliation?: boolean 
       }
     } catch (e) {
       if (e instanceof SchemaMigrationError) throw e;
-      console.warn("[Startup] Could not reach remote server (offline?). Falling back to local DB.", e);
+      console.error("[Startup] Remote load failed:", e);
+      console.warn("[Startup] Falling back to local DB.");
     }
 
     if (remoteDb) {
