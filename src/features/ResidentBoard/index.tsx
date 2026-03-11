@@ -402,6 +402,12 @@ export const ResidentBoard: React.FC = () => {
       if (devices.picc.active) deviceList.push(formatDeviceDayLabel('PICC', devices.picc.insertedDate));
       if (devices.midline.active) deviceList.push(formatDeviceDayLabel('Midline', devices.midline.insertedDate));
       if (devices.piv.active) deviceList.push(formatDeviceDayLabel('PIV', devices.piv.insertedDate));
+      if (devices.centralLine.active) deviceList.push(formatDeviceDayLabel('Central Line', devices.centralLine.insertedDate));
+      if (devices.trach.active) deviceList.push(formatDeviceDayLabel('Tracheostomy', devices.trach.insertedDate));
+      if (devices.peg.active) deviceList.push(formatDeviceDayLabel('PEG / Feeding Tube', devices.peg.insertedDate));
+      if (devices.woundVac.active) deviceList.push(formatDeviceDayLabel('Wound Vac', devices.woundVac.insertedDate));
+      if (devices.dialysisAccess.active) deviceList.push(formatDeviceDayLabel('Dialysis Access', devices.dialysisAccess.insertedDate));
+      if (devices.ostomy.active) deviceList.push('Ostomy');
       const devicesText = deviceList.join('\n');
 
       return [

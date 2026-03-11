@@ -85,6 +85,30 @@ export interface Resident {
       active: boolean;
       insertedDate: string | null;
     };
+    centralLine: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    trach: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    peg: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    woundVac: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    dialysisAccess: {
+      active: boolean;
+      insertedDate: string | null;
+    };
+    ostomy: {
+      active: boolean;
+      insertedDate: string | null;
+    };
   };
 }
 

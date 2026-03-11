@@ -62,6 +62,12 @@ export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, classNam
     if (devices.midline.active) list.push({ name: 'Midline', day: getDeviceDay(devices.midline.insertedDate) });
     if (devices.picc.active) list.push({ name: 'PICC', day: getDeviceDay(devices.picc.insertedDate) });
     if (devices.piv.active) list.push({ name: 'PIV', day: getDeviceDay(devices.piv.insertedDate) });
+    if (devices.centralLine.active) list.push({ name: 'Central Line', day: getDeviceDay(devices.centralLine.insertedDate) });
+    if (devices.trach.active) list.push({ name: 'Trach', day: getDeviceDay(devices.trach.insertedDate) });
+    if (devices.peg.active) list.push({ name: 'PEG', day: getDeviceDay(devices.peg.insertedDate) });
+    if (devices.woundVac.active) list.push({ name: 'Wound Vac', day: getDeviceDay(devices.woundVac.insertedDate) });
+    if (devices.dialysisAccess.active) list.push({ name: 'Dialysis Access', day: getDeviceDay(devices.dialysisAccess.insertedDate) });
+    if (devices.ostomy.active) list.push({ name: 'Ostomy' });
     return list;
   }, [devices]);
 
