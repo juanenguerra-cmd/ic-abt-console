@@ -1,5 +1,5 @@
 
-import { collection, doc, getDocs, setDoc, writeBatch, serverTimestamp, DocumentReference, getDoc, query, limit } from "firebase/firestore";
+import { collection, doc, getDocs, setDoc, writeBatch, query, limit } from "firebase/firestore";
 import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
@@ -58,34 +58,6 @@ const SLICE_SAVE_RETRY_BASE_MS = 500;
 type SlicePayload = unknown;
 
 const inflightSliceLoads = new Map<string, Promise<any | null>>();
-
-function sliceDocRef(uid: string, facilityId: string, sliceName: string): DocumentReference {
-  return doc(db, 'users', uid, 'facilities', facilityId, 'slices', sliceName);
-}
-
-function legacyRefs(uid: string, facilityId: string, sliceName: string): DocumentReference[] {
-  return [
-    doc(db, 'users', uid, 'facilities', facilityId, 'slices', sliceName),
-    doc(db, 'users', uid, 'slices', sliceName),
-    doc(db, 'userdbs', uid, 'slices', sliceName),
-    doc(db, 'userdbs', uid, 'facilities', facilityId, 'slices', sliceName),
-    doc(db, 'users', uid, 'facilityData', facilityId, 'slices', sliceName),
-  ];
-}
-
-async function readDocData(ref: DocumentReference): Promise<any | null> {
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  return snap.data();
-}
-
-function extractSlicePayload(raw: any): SlicePayload | null {
-  if (!raw) return null;
-  if (raw.data !== undefined) return raw.data;
-  if (raw.payload !== undefined) return raw.payload;
-  if (raw.items !== undefined) return raw.items;
-  return raw;
-}
 
 export class StorageRepository {
   static getSliceKey(facilityId: string, slice: string): string {
@@ -199,59 +171,64 @@ export class StorageRepository {
     console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
-  static async loadSlice(uid: string, facilityId: string, sliceName: StorageSlice): Promise<SlicePayload | null> {
-    const canonicalRef = sliceDocRef(uid, facilityId, sliceName);
-    const candidates = legacyRefs(uid, facilityId, sliceName);
+  static async loadSlice(facilityId: string, sliceName: StorageSlice): Promise<SlicePayload | null> {
+    const user = await getCurrentUser();
+    if (!user) {
+      console.warn(`[loadSlice] Cannot load slice '${sliceName}': user is not authenticated.`);
+      return null;
+    }
 
-    console.log(`[loadSlice] uid=${uid} facility=${facilityId} slice=${sliceName}`);
+    const facilityCollection = collection(db, 'users', user.uid, 'facilities', facilityId, sliceName);
+    const snapshot = await getDocs(facilityCollection);
 
-    const canonicalRaw = await readDocData(canonicalRef);
-    if (canonicalRaw) {
-      console.log(`[loadSlice] FOUND canonical slice at users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
-      return extractSlicePayload(canonicalRaw);
+    if (!snapshot.empty) {
+      const result: Record<string, any> = {};
+      snapshot.docs.forEach(d => {
+        if (d.id) result[d.id] = d.data();
+      });
+      return result;
     }
 
     console.warn(`[Migration] Slice '${sliceName}' not found at facility-scoped path. Checking legacy paths.`);
 
-    for (const ref of candidates.slice(1)) {
-      const path = ref.path;
-      console.log(`[loadSlice] probing legacyPath=${path}`);
+    const legacyCollection = collection(db, 'users', user.uid, sliceName);
+    const legacySnapshot = await getDocs(legacyCollection);
 
-      const raw = await readDocData(ref);
-      if (!raw) continue;
-
-      const payload = extractSlicePayload(raw);
-      if (payload == null) continue;
-
-      console.log(`[Migration] FOUND legacy slice '${sliceName}' at ${path}`);
-      console.log(`[Migration] Promoting '${sliceName}' -> users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
-
-      await setDoc(
-        canonicalRef,
-        {
-          data: payload,
-          migratedFrom: path,
-          migratedAt: serverTimestamp(),
-          sliceName,
-          facilityId,
-          uid,
-        },
-        { merge: true }
-      );
-
-      return payload;
+    if (legacySnapshot.empty) {
+      console.warn(`[loadSlice] Slice '${sliceName}' not found in scoped or legacy path.`);
+      return null;
     }
 
-    console.warn(`[loadSlice] Slice '${sliceName}' not found in scoped or legacy path.`);
-    return null;
+    const result: Record<string, any> = {};
+    legacySnapshot.docs.forEach(d => {
+      if (d.id) result[d.id] = d.data();
+    });
+
+    console.log(`[Migration] FOUND legacy slice '${sliceName}'. Migrating to facility-scoped path.`);
+
+    try {
+      const batch = writeBatch(db);
+      legacySnapshot.docs.forEach(d => {
+        if (d.id) {
+          const newDocRef = doc(facilityCollection, d.id);
+          batch.set(newDocRef, d.data());
+        }
+      });
+      await batch.commit();
+      console.log(`[Migration] Slice '${sliceName}' migrated to facility-scoped path for facility '${facilityId}'.`);
+    } catch (err) {
+      console.error(`[Migration] Failed to migrate slice '${sliceName}'.`, err);
+    }
+
+    return result;
   }
 
-  static loadSliceCached(uid: string, facilityId: string, sliceName: StorageSlice) {
-    const key = `${uid}::${facilityId}::${sliceName}`;
+  static loadSliceCached(facilityId: string, sliceName: StorageSlice) {
+    const key = `${facilityId}::${sliceName}`;
     if (inflightSliceLoads.has(key)) {
       return inflightSliceLoads.get(key)!;
     }
-    const p = this.loadSlice(uid, facilityId, sliceName).finally(() => {
+    const p = this.loadSlice(facilityId, sliceName).finally(() => {
       inflightSliceLoads.delete(key);
     });
     inflightSliceLoads.set(key, p);
