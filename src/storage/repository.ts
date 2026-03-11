@@ -141,10 +141,6 @@ export class StorageRepository {
 
     // Facility-scoped Firestore path — facilityId is explicit in the hierarchy.
     const sliceCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
-    
-    // Fetch existing documents to find deletions
-    const existingDocs = await getDocs(sliceCollection);
-    const existingIds = new Set(existingDocs.docs.map(d => d.id));
 
     // data may be a Record<string, T> or an array — handle both shapes.
     const items: object[] = [];
@@ -156,32 +152,18 @@ export class StorageRepository {
       }
     }
     
-    const newIds = new Set<string>();
-    const operations: { type: 'set' | 'delete', docRef: any, data?: any }[] = [];
+    const operations: { docRef: any, data: any }[] = [];
 
     items.forEach((item: any, index: number) => {
         // Determine the document ID based on the entity type
         let docId = item.id;
-        if (slice === 'residents') docId = item.mrn;
-        else if (slice === 'quarantine') docId = item.tempId;
-        else if (slice === 'mutationLog') docId = `log_${index}_${item.timestamp}`;
+        if (slice === 'mutationLog') docId = `log_${index}_${item.timestamp}`;
 
         if (item && docId) {
-            newIds.add(docId);
             const docRef = doc(sliceCollection, docId);
-            operations.push({ type: 'set', docRef, data: item });
+            operations.push({ docRef, data: item });
         } else {
             console.warn(`[Sync] Item in slice '${slice}' is missing an ID and will not be saved.`, item);
-        }
-    });
-
-    // Delete documents that are no longer in the data
-    let deletedCount = 0;
-    existingIds.forEach(id => {
-        if (!newIds.has(id)) {
-            const docRef = doc(sliceCollection, id);
-            operations.push({ type: 'delete', docRef });
-            deletedCount++;
         }
     });
 
@@ -191,16 +173,12 @@ export class StorageRepository {
         const chunk = operations.slice(i, i + CHUNK_SIZE);
         const batch = writeBatch(db);
         chunk.forEach(op => {
-            if (op.type === 'set') {
-                batch.set(op.docRef, op.data);
-            } else if (op.type === 'delete') {
-                batch.delete(op.docRef);
-            }
+            batch.set(op.docRef, op.data);
         });
         await batch.commit();
     }
     
-    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items, ${deletedCount} deleted).`);
+    console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
   /**
@@ -236,9 +214,7 @@ export class StorageRepository {
       const data: { [key: string]: any } = {};
       snapshot.docs.forEach(doc => {
         const docData = doc.data();
-        let docId = docData.id;
-        if (slice === 'residents') docId = docData.mrn;
-        else if (slice === 'quarantine') docId = docData.tempId;
+        const docId = docData.id;
         if (docData && docId) {
           data[docId] = docData;
         }
@@ -284,9 +260,7 @@ export class StorageRepository {
     const data: { [key: string]: any } = {};
     legacySnapshot.docs.forEach(doc => {
       const docData = doc.data();
-      let docId = docData.id;
-      if (slice === 'residents') docId = docData.mrn;
-      else if (slice === 'quarantine') docId = docData.tempId;
+      const docId = docData.id;
       if (docData && docId) {
         data[docId] = docData;
       }
@@ -376,9 +350,7 @@ export class StorageRepository {
         const data: { [key: string]: any } = {};
         legacySnapshot.docs.forEach(doc => {
           const docData = doc.data();
-          let docId = docData.id;
-          if (slice === 'residents') docId = docData.mrn;
-          else if (slice === 'quarantine') docId = docData.tempId;
+          const docId = docData.id;
           if (docData && docId) {
             data[docId] = docData;
           }
