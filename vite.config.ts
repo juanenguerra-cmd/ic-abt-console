@@ -15,14 +15,16 @@ function getBuildHash(): string {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '');
+  // env is loaded but only VITE_-prefixed keys are exposed to the frontend bundle.
+  // GEMINI_API_KEY must NOT be injected here — it is a backend secret and must
+  // only be available server-side (Cloud Functions / Cloudflare Worker).
+  loadEnv(mode, process.cwd(), '');
   const buildId = `${new Date().toISOString().slice(0, 19).replace('T', '_')}_${Math.random().toString(36).slice(2, 8)}`;
 
   return {
     base: '/',
     envPrefix: 'VITE_',
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       '__BUILD_ID__': JSON.stringify(buildId),
       '__GIT_HASH__': JSON.stringify(getBuildHash()),
     },

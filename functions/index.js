@@ -16,6 +16,13 @@ admin.initializeApp();
 const db = admin.firestore();
 const auth = admin.auth();
 
+// LEGACY — getDb/setDb read/write to the 'userdbs/{uid}' collection, which is
+// the old packed-document persistence path. The frontend no longer calls these
+// functions; persistence is now handled by StorageRepository directly against
+// the facility-scoped Firestore slice path: users/{uid}/facilities/{id}/{slice}.
+// These exports are retained here because existing deployments may still have
+// stored data at userdbs/{uid} that can be migrated. Do not call these from new
+// frontend code.
 exports.getDb = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(

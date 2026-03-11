@@ -68,15 +68,18 @@ Copy the example environment file and fill in your values:
 cp .env.example .env.local
 ```
 
-Then edit `.env.local`:
+Then edit `.env.local` with your Firebase project credentials (found in the Firebase console under **Project Settings → General → Your apps**):
 
 ```env
-# Required — your Google Gemini API key
-GEMINI_API_KEY="your_gemini_api_key_here"
-
-# Required — the URL where the app is hosted (use http://localhost:3000 for local dev)
-APP_URL="http://localhost:3000"
+VITE_FIREBASE_API_KEY="your_firebase_api_key"
+VITE_FIREBASE_AUTH_DOMAIN="your_project.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your_project_id"
+VITE_FIREBASE_STORAGE_BUCKET="your_project.appspot.com"
+VITE_FIREBASE_MESSAGING_SENDER_ID="your_sender_id"
+VITE_FIREBASE_APP_ID="your_app_id"
 ```
+
+> **Note on AI features:** The `GEMINI_API_KEY` is a **backend secret** and must never be placed in `.env.local` or any frontend env file. It must only be set in the server-side environment (Cloud Functions environment variables or Cloudflare Pages dashboard → Settings → Environment variables). AI features will gracefully degrade if the backend proxy is unavailable.
 
 ### 4. Start the development server
 

@@ -1,3 +1,7 @@
+// LEGACY — local JSON file server from the db.json persistence era.
+// The app now uses IndexedDB (local-first) + Firebase Firestore (sync).
+// This file is retained only for historical reference and is NOT used by
+// the current build, dev, or deploy paths. Do not start this server.
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
