@@ -1,8 +1,12 @@
-import { GoogleGenAI, Type } from "@google/genai";
+/**
+ * geminiService.ts — structured AI extraction helpers
+ *
+ * All Gemini calls are routed through the /api/generate server-side proxy so
+ * that the GEMINI_API_KEY secret is never exposed in the browser bundle.
+ * The proxy is implemented in the backend (Cloud Functions / Cloudflare Worker).
+ * See gemini.ts for the low-level proxy fetch helper.
+ */
 import { sanitizeField } from "../utils/sanitizePrompt";
-
-const apiKey = process.env.GEMINI_API_KEY;
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export interface IpEventExtraction {
   infectionCategory?: string;
@@ -15,49 +19,39 @@ export interface IpEventExtraction {
 }
 
 export async function extractIpEventFromText(text: string): Promise<IpEventExtraction | null> {
-  if (!ai) {
-    console.warn("Gemini API key not found");
-    return null;
-  }
-
   try {
-    const safeText = sanitizeField(text, 2000); // Allow up to 2000 chars for clinical notes
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Extract infection prevention event details from the following clinical note.
-      
-      Note: "${safeText}"
-      
-      Return a JSON object with these fields (all optional):
-      - infectionCategory: string (e.g., "Respiratory", "Urinary", "Skin/Soft Tissue", "GI", "Bloodstream", "Other")
-      - infectionSite: string (specific site if mentioned)
-      - onsetDate: string (ISO 8601 date YYYY-MM-DD, infer from context like "last Monday" relative to today)
-      - organism: string (e.g., "E. coli", "MRSA")
-      - notes: string (summary of the clinical situation)
-      - status: "active" | "resolved" | "historical" (default to "active" if ongoing)
-      - isolationType: array of strings (e.g., ["Contact", "Droplet", "Airborne"])
-      `,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            infectionCategory: { type: Type.STRING },
-            infectionSite: { type: Type.STRING },
-            onsetDate: { type: Type.STRING },
-            organism: { type: Type.STRING },
-            notes: { type: Type.STRING },
-            status: { type: Type.STRING, enum: ["active", "resolved", "historical"] },
-            isolationType: { type: Type.ARRAY, items: { type: Type.STRING } }
-          }
-        }
-      }
+    const safeText = sanitizeField(text, 2000);
+    const prompt = `Extract infection prevention event details from the following clinical note and return ONLY a valid JSON object (no markdown, no prose).
+
+Note: "${safeText}"
+
+Return a JSON object with these optional fields:
+- infectionCategory: string (e.g., "Respiratory", "Urinary", "Skin/Soft Tissue", "GI", "Bloodstream", "Other")
+- infectionSite: string (specific site if mentioned)
+- onsetDate: string (ISO 8601 date YYYY-MM-DD; infer from context such as "last Monday" relative to today)
+- organism: string (e.g., "E. coli", "MRSA")
+- notes: string (summary of the clinical situation)
+- status: "active" | "resolved" | "historical"
+- isolationType: array of strings (e.g., ["Contact", "Droplet", "Airborne"])`;
+
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, model: "gemini-2.0-flash" }),
     });
 
-    const jsonText = response.text;
+    if (!response.ok) {
+      console.warn("Gemini extraction unavailable (proxy returned", response.status, ")");
+      return null;
+    }
+
+    const data = await response.json() as { text?: string };
+    const jsonText = data.text;
     if (!jsonText) return null;
-    
-    return JSON.parse(jsonText) as IpEventExtraction;
+
+    // Strip optional markdown code fences before parsing
+    const clean = jsonText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    return JSON.parse(clean) as IpEventExtraction;
   } catch (error) {
     console.error("Gemini extraction failed:", error);
     return null;
