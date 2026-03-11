@@ -20,6 +20,7 @@ export default defineConfig(({mode}) => {
   // can be distinguished in console logs and diagnostics.
   const buildId = `${new Date().toISOString().slice(0, 19).replace('T', '_')}_${Math.random().toString(36).slice(2, 8)}`;
   return {
+    envPrefix: 'VITE_',
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       // Injected at build time — consumed by startup diagnostics in providers.tsx.
