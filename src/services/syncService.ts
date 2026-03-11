@@ -63,6 +63,8 @@ export type DbGetter = () => UnifiedDB | null;
 // Internal state
 // ---------------------------------------------------------------------------
 
+let syncBootstrapped = false;
+
 const _status: SyncStatus = {
   isSyncing: false,
   lastSyncedAt: null,
@@ -201,6 +203,12 @@ export function startSyncTimer(
   getDb: DbGetter,
   intervalMs = DEFAULT_SYNC_INTERVAL_MS,
 ): void {
+  if (syncBootstrapped) {
+    console.log("[bootstrapSync] already started, skipping");
+    return;
+  }
+  syncBootstrapped = true;
+
   _clearTimer();
   _currentIntervalMs = intervalMs;
   _scheduleNext(getDb, intervalMs);

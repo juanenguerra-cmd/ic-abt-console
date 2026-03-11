@@ -1,4 +1,5 @@
-import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+
+import { collection, doc, getDocs, setDoc, writeBatch, serverTimestamp, DocumentReference, getDoc, query, limit } from "firebase/firestore";
 import { FacilityStore, UnifiedDB } from "../domain/models";
 import { idbGet, idbSet } from "./idb";
 import { DB_KEY_MAIN } from "../constants/storageKeys";
@@ -54,6 +55,38 @@ const SLICE_SAVE_MAX_RETRIES = 2;
 /** Base delay (ms) for exponential back-off between retries. */
 const SLICE_SAVE_RETRY_BASE_MS = 500;
 
+type SlicePayload = unknown;
+
+const inflightSliceLoads = new Map<string, Promise<any | null>>();
+
+function sliceDocRef(uid: string, facilityId: string, sliceName: string): DocumentReference {
+  return doc(db, 'users', uid, 'facilities', facilityId, 'slices', sliceName);
+}
+
+function legacyRefs(uid: string, facilityId: string, sliceName: string): DocumentReference[] {
+  return [
+    doc(db, 'users', uid, 'facilities', facilityId, 'slices', sliceName),
+    doc(db, 'users', uid, 'slices', sliceName),
+    doc(db, 'userdbs', uid, 'slices', sliceName),
+    doc(db, 'userdbs', uid, 'facilities', facilityId, 'slices', sliceName),
+    doc(db, 'users', uid, 'facilityData', facilityId, 'slices', sliceName),
+  ];
+}
+
+async function readDocData(ref: DocumentReference): Promise<any | null> {
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  return snap.data();
+}
+
+function extractSlicePayload(raw: any): SlicePayload | null {
+  if (!raw) return null;
+  if (raw.data !== undefined) return raw.data;
+  if (raw.payload !== undefined) return raw.payload;
+  if (raw.items !== undefined) return raw.items;
+  return raw;
+}
+
 export class StorageRepository {
   static getSliceKey(facilityId: string, slice: string): string {
     return `${DB_KEY_MAIN}_slice_${facilityId}_${slice}`;
@@ -67,7 +100,6 @@ export class StorageRepository {
     const user = await getCurrentUser();
     if (!user) return;
     
-    // Extract metadata excluding facilityData
     const metadata = {
       schemaName: dbData.schemaName,
       schemaVersion: dbData.schemaVersion,
@@ -82,7 +114,6 @@ export class StorageRepository {
     const metaRef = doc(db, 'users', user.uid, 'meta', 'db');
     await setDoc(metaRef, metadata);
 
-    // Save facility-level metadata
     const activeFacilityId = dbData.data.facilities.activeFacilityId;
     const store = dbData.data.facilityData[activeFacilityId];
     if (store) {
@@ -124,25 +155,14 @@ export class StorageRepository {
     return facMeta;
   }
 
-  /**
-   * Write a single slice to Firestore.
-   *
-   * The remote path is facility-scoped:
-   *   users/{uid}/facilities/{facilityId}/{slice}/{docId}
-   *
-   * Both `saveSlice` and `loadSlice` must use the same path so reads and
-   * writes remain aligned.
-   */
   static async saveSlice(facilityId: string, slice: StorageSlice, data: any): Promise<void> {
     const user = await getCurrentUser();
     if (!user) {
       throw new Error(`[Sync] Cannot save slice '${slice}': user is not authenticated.`);
     }
 
-    // Facility-scoped Firestore path — facilityId is explicit in the hierarchy.
     const sliceCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
 
-    // data may be a Record<string, T> or an array — handle both shapes.
     const items: object[] = [];
     if (data) {
       if (Array.isArray(data)) {
@@ -155,7 +175,6 @@ export class StorageRepository {
     const operations: { docRef: any, data: any }[] = [];
 
     items.forEach((item: any, index: number) => {
-        // Determine the document ID based on the entity type
         let docId = item.id;
         if (slice === 'mutationLog') docId = `log_${index}_${item.timestamp}`;
 
@@ -167,7 +186,6 @@ export class StorageRepository {
         }
     });
 
-    // Firestore limits batches to 500 operations. Chunk them.
     const CHUNK_SIZE = 500;
     for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
         const chunk = operations.slice(i, i + CHUNK_SIZE);
@@ -181,125 +199,79 @@ export class StorageRepository {
     console.log(`[Sync] Slice '${slice}' saved to Firestore (${items.length} items).`);
   }
 
-  /**
-   * Load a single slice from Firestore.
-   *
-   * Primary path (facility-scoped):
-   *   users/{uid}/facilities/{facilityId}/{slice}/{docId}
-   *
-   * Legacy fallback path (user-only, pre-facility-scoping fix):
-   *   users/{uid}/{slice}/{docId}
-   *
-   * If the new path is empty but legacy data exists, the data is
-   * automatically migrated to the facility-scoped path and returned.
-   * Old data is preserved at the legacy path (non-destructive migration).
-   */
-  static async loadSlice(facilityId: string, slice: StorageSlice): Promise<any | null> {
-    const user = await getCurrentUser();
-    if (!user) {
-      console.warn(`Attempted to load slice '${slice}' without an authenticated user. Skipping.`);
-      return null;
+  static async loadSlice(uid: string, facilityId: string, sliceName: StorageSlice): Promise<SlicePayload | null> {
+    const canonicalRef = sliceDocRef(uid, facilityId, sliceName);
+    const candidates = legacyRefs(uid, facilityId, sliceName);
+
+    console.log(`[loadSlice] uid=${uid} facility=${facilityId} slice=${sliceName}`);
+
+    const canonicalRaw = await readDocData(canonicalRef);
+    if (canonicalRaw) {
+      console.log(`[loadSlice] FOUND canonical slice at users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
+      return extractSlicePayload(canonicalRaw);
     }
 
-    // Primary: facility-scoped path — must match saveSlice exactly.
-    const sliceCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
-    const snapshot = await getDocs(sliceCollection);
+    console.warn(`[Migration] Slice '${sliceName}' not found at facility-scoped path. Checking legacy paths.`);
 
-    if (!snapshot.empty) {
-      if (slice === 'mutationLog') {
-        const data: any[] = [];
-        snapshot.docs.forEach(doc => data.push(doc.data()));
-        return data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      }
-      const data: { [key: string]: any } = {};
-      snapshot.docs.forEach(doc => {
-        const docData = doc.data();
-        const docId = docData.id;
-        if (docData && docId) {
-          data[docId] = docData;
-        }
-      });
-      return data;
-    }
+    for (const ref of candidates.slice(1)) {
+      const path = ref.path;
+      console.log(`[loadSlice] probing legacyPath=${path}`);
 
-    // Fallback: legacy user-only path (no facilityId segment in the path).
-    // This catches records written before the facility-scoping fix was applied.
-    console.warn(
-      `[Migration] Slice '${slice}' not found at facility-scoped path. Checking legacy path.`
-    );
-    const legacyCollection = collection(db, 'users', user.uid, slice);
-    const legacySnapshot = await getDocs(legacyCollection);
+      const raw = await readDocData(ref);
+      if (!raw) continue;
 
-    if (legacySnapshot.empty) {
-      return null;
-    }
+      const payload = extractSlicePayload(raw);
+      if (payload == null) continue;
 
-    // Parse legacy documents.
-    if (slice === 'mutationLog') {
-      const data: any[] = [];
-      legacySnapshot.docs.forEach(doc => data.push(doc.data()));
-      const sortedData = data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      
-      console.log(
-        `[Migration] Migrating slice '${slice}' from legacy path to ` +
-        `facility-scoped path for facility '${facilityId}'.`
+      console.log(`[Migration] FOUND legacy slice '${sliceName}' at ${path}`);
+      console.log(`[Migration] Promoting '${sliceName}' -> users/${uid}/facilities/${facilityId}/slices/${sliceName}`);
+
+      await setDoc(
+        canonicalRef,
+        {
+          data: payload,
+          migratedFrom: path,
+          migratedAt: serverTimestamp(),
+          sliceName,
+          facilityId,
+          uid,
+        },
+        { merge: true }
       );
-      try {
-        await this.saveSlice(facilityId, slice, sortedData);
-        console.log(`[Migration] Slice '${slice}' migrated successfully.`);
-      } catch (err) {
-        console.error(
-          `[Migration] Failed to migrate slice '${slice}' to facility-scoped path. ` +
-          `Legacy data returned without completing migration.`,
-          err,
-        );
-      }
-      return sortedData;
+
+      return payload;
     }
 
-    const data: { [key: string]: any } = {};
-    legacySnapshot.docs.forEach(doc => {
-      const docData = doc.data();
-      const docId = docData.id;
-      if (docData && docId) {
-        data[docId] = docData;
-      }
-    });
-
-    // Auto-migrate to the new facility-scoped path so subsequent reads use
-    // the correct location. The legacy data is NOT deleted (safe migration).
-    console.log(
-      `[Migration] Migrating slice '${slice}' from legacy path to ` +
-      `facility-scoped path for facility '${facilityId}'.`
-    );
-    try {
-      await this.saveSlice(facilityId, slice, data);
-      console.log(`[Migration] Slice '${slice}' migrated successfully.`);
-    } catch (err) {
-      console.error(
-        `[Migration] Failed to migrate slice '${slice}' to facility-scoped path. ` +
-        `Legacy data returned without completing migration.`,
-        err,
-      );
-    }
-
-    return data;
+    console.warn(`[loadSlice] Slice '${sliceName}' not found in scoped or legacy path.`);
+    return null;
   }
 
-  /**
-   * Explicitly migrate all slices for a facility from the legacy user-only
-   * Firestore path to the facility-scoped path.
-   *
-   * Legacy path: users/{uid}/{slice}/{docId}
-   * New path:    users/{uid}/facilities/{facilityId}/{slice}/{docId}
-   *
-   * This is a safe, non-destructive operation — existing data at the legacy
-   * path is preserved. Slices that already have data at the new path are
-   * skipped to avoid overwriting newer writes.
-   *
-   * Call this once per facility after deploying the facility-scoping fix to
-   * ensure any pre-existing remote data is moved to the correct path.
-   */
+  static loadSliceCached(uid: string, facilityId: string, sliceName: StorageSlice) {
+    const key = `${uid}::${facilityId}::${sliceName}`;
+    if (inflightSliceLoads.has(key)) {
+      return inflightSliceLoads.get(key)!;
+    }
+    const p = this.loadSlice(uid, facilityId, sliceName).finally(() => {
+      inflightSliceLoads.delete(key);
+    });
+    inflightSliceLoads.set(key, p);
+    return p;
+  }
+
+  static async probeUserRoots(uid: string, facilityId: string) {
+    const roots = [
+      collection(db, 'users', uid, 'facilities', facilityId, 'slices'),
+      collection(db, 'users', uid, 'slices'),
+      collection(db, 'userdbs', uid, 'slices'),
+      collection(db, 'userdbs', uid, 'facilities', facilityId, 'slices'),
+    ];
+
+    for (const root of roots) {
+      const snap = await getDocs(query(root, limit(1)));
+      console.log(`[probeUserRoots] ${root.path} -> count=${snap.size}`);
+    }
+  }
+
   static async migrateSlicesToFacilityScope(
     facilityId: string,
   ): Promise<{ migrated: StorageSlice[]; skipped: StorageSlice[]; failed: StorageSlice[] }> {
@@ -315,7 +287,6 @@ export class StorageRepository {
 
     for (const slice of STORAGE_SLICES) {
       try {
-        // Fetch both the new path and the legacy path concurrently.
         const newCollection = collection(db, 'users', user.uid, 'facilities', facilityId, slice);
         const legacyCollection = collection(db, 'users', user.uid, slice);
         const [newSnapshot, legacySnapshot] = await Promise.all([
@@ -323,7 +294,6 @@ export class StorageRepository {
           getDocs(legacyCollection),
         ]);
 
-        // Skip slices that already have data at the new facility-scoped path.
         if (!newSnapshot.empty) {
           skipped.push(slice);
           continue;
@@ -334,7 +304,6 @@ export class StorageRepository {
           continue;
         }
 
-        // Parse legacy data.
         if (slice === 'mutationLog') {
           const data: any[] = [];
           legacySnapshot.docs.forEach(doc => data.push(doc.data()));
@@ -356,7 +325,6 @@ export class StorageRepository {
           }
         });
 
-        // Write to the new facility-scoped path.
         await this.saveSlice(facilityId, slice, data);
         migrated.push(slice);
         console.log(
@@ -381,7 +349,6 @@ export class StorageRepository {
   }
 
   static async restoreSliceFromPrev(facilityId: string, slice: StorageSlice): Promise<boolean> {
-    // This is a legacy IndexedDB function and is no longer used for Firestore-backed slices.
     const prevKey = this.getPrevSliceKey(facilityId, slice);
     const key = this.getSliceKey(facilityId, slice);
     
@@ -393,12 +360,6 @@ export class StorageRepository {
     return false;
   }
 
-  /**
-   * Attempt to write a single slice to Firestore, retrying up to
-   * {@link SLICE_SAVE_MAX_RETRIES} times on failure.
-   *
-   * Returns a {@link SliceSaveResult} — never throws.
-   */
   private static async saveSliceWithRetry(
     facilityId: string,
     slice: StorageSlice,
@@ -412,7 +373,6 @@ export class StorageRepository {
       } catch (err) {
         lastError = err;
         if (attempt < SLICE_SAVE_MAX_RETRIES) {
-          // Exponential back-off: 500 ms, 1 000 ms, 2 000 ms, …
           const delayMs = SLICE_SAVE_RETRY_BASE_MS * Math.pow(2, attempt);
           console.warn(
             `[Sync] Slice '${slice}' save failed (attempt ${attempt + 1}/${SLICE_SAVE_MAX_RETRIES + 1}). ` +
@@ -427,15 +387,6 @@ export class StorageRepository {
     return { slice, success: false, error: lastError };
   }
 
-  /**
-   * Save multiple slices to Firestore sequentially, with per-slice retry.
-   *
-   * Key guarantees:
-   * - Never throws: partial failures are captured in the returned result.
-   * - Sequential execution prevents uncontrolled concurrent writes.
-   * - Returns a {@link SaveSlicesResult} so callers can distinguish full,
-   *   partial, and total remote failures and act accordingly.
-   */
   static async saveSlices(
     facilityId: string,
     store: FacilityStore,
@@ -454,8 +405,6 @@ export class StorageRepository {
 
     const user = await getCurrentUser();
     if (!user) {
-      // Authentication failure is a hard stop — surface it as a total failure
-      // so callers do not treat it as a silent no-op.
       const authErr = new Error("Cannot save slices: user is not authenticated.");
       const results: SliceSaveResult[] = changedSlices.map((slice) => ({
         slice,
@@ -475,8 +424,6 @@ export class StorageRepository {
 
     const results: SliceSaveResult[] = [];
 
-    // Sequential execution — avoids uncontrolled concurrent writes and makes
-    // per-slice failures easy to isolate and log.
     for (const slice of changedSlices) {
       const result = await this.saveSliceWithRetry(facilityId, slice, store[slice]);
       results.push(result);
@@ -501,7 +448,6 @@ export class StorageRepository {
   }
 
   static async restoreAllSlicesFromPrev(facilityId: string): Promise<void> {
-    // This is a legacy IndexedDB function and will not restore Firestore data.
     const promises = STORAGE_SLICES.map((slice) => 
       this.restoreSliceFromPrev(facilityId, slice)
     );
@@ -509,23 +455,9 @@ export class StorageRepository {
   }
 
   static async clearAllSlices(facilityId: string): Promise<void> {
-    // This method no longer clears application data from IndexedDB as it's now stored in Firestore.
     return Promise.resolve();
   }
 
-  /**
-   * Write a lightweight sync-signal document to Firestore so that other
-   * devices can detect the change via an `onSnapshot` listener and trigger
-   * remote reconciliation without polling.
-   *
-   * Path: users/{uid}/meta/sync
-   *
-   * The `sessionId` field lets the listener on the writing device skip its own
-   * signal and avoid a pointless reconciliation round-trip.
-   *
-   * This is a best-effort write — failures are swallowed so they never block
-   * the main save path.
-   */
   static async writeSyncSignal(
     facilityId: string,
     changedSlices: StorageSlice[],
@@ -545,4 +477,10 @@ export class StorageRepository {
       console.warn('[Sync] Failed to write sync signal:', err);
     }
   }
+}
+
+export function resolveActiveFacilityId(meta: any, remoteHints?: string[]): string {
+  if (meta?.activeFacilityId) return meta.activeFacilityId;
+  if (remoteHints && remoteHints.length > 0) return remoteHints[0];
+  return 'fac-default';
 }
