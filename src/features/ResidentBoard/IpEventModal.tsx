@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle, Sparkles, Plus } from "lucide-react";
+import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle, Sparkles, Plus, Users, ChevronDown, ChevronUp } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { IPEvent, IPEventIndication, IndicationCategory, ABTCourse, Outbreak, ShiftLogEntry } from "../../domain/models";
+import { IPEvent, IPEventIndication, IndicationCategory, ABTCourse, Outbreak, ShiftLogEntry, Resident } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { checkCauti, checkCdiffLabId, NhsnResult } from "../../utils/nhsnCriteria";
 import { NhsnCriteriaPanel } from "../../components/NhsnCriteriaPanel";
@@ -9,6 +9,8 @@ import { useHashtagShiftLogSync } from "../../hooks/useHashtagShiftLogSync";
 import { useNavigate } from "react-router-dom";
 import { extractIpEventFromText } from "../../services/geminiService";
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
+import { normalizeClinicalDevices } from '../../utils/clinicalDevices';
+import type { ClinicalDevices } from '../../utils/clinicalDevices';
 
 interface Props {
   residentId: string;
@@ -51,6 +53,22 @@ const SOURCE_OPTIONS = ["Urinary", "Respiratory", "Skin/Soft Tissue", "GI", "Blo
 const DEVICE_OPTIONS = ["Urinary Catheter", "Central Line", "Feeding Tube", "Other"];
 
 const EBP_ORGANISM_SUGGESTIONS = ["MRSA", "VRE", "ESBL", "CRE", "C. diff", "Acinetobacter", "Pseudomonas"];
+
+/** Flat list of device types for EBP indications — mirrors ClinicalDevices keys. */
+const EBP_DEVICE_TYPES = [
+  'Urinary Catheter',
+  'Indwelling Catheter',
+  'Midline',
+  'PICC Line',
+  'Peripheral IV (PIV)',
+  'Central Line',
+  'Tracheostomy',
+  'PEG / Feeding Tube',
+  'Wound Vac',
+  'Dialysis Access',
+  'Ostomy (Colostomy / Ileostomy)',
+  'Other',
+] as const;
 
 const ISOLATION_CATEGORY_MAP: Record<string, string[]> = {
   "Contact": ["MRSA", "VRE", "C. diff", "Scabies", "Lice", "Norovirus", "ESBL", "CRE", "Acinetobacter"],
@@ -150,6 +168,26 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       }
     });
     return devices;
+  };
+
+  /**
+   * Builds EBP indications from a resident's active clinical devices.
+   * Maps each active device to an IPEventIndication of category 'Catheter' (or 'Ostomy').
+   */
+  const buildIndicationsFromDevices = (devices: ClinicalDevices): IPEventIndication[] => {
+    const inds: IPEventIndication[] = [];
+    if (devices.urinaryCatheter.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Urinary Catheter' });
+    if (devices.indwellingCatheter.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Indwelling Catheter' });
+    if (devices.midline.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Midline' });
+    if (devices.picc.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'PICC Line' });
+    if (devices.piv.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Peripheral IV (PIV)' });
+    if (devices.centralLine.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Central Line' });
+    if (devices.trach.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Tracheostomy' });
+    if (devices.peg.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'PEG / Feeding Tube' });
+    if (devices.woundVac.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Wound Vac' });
+    if (devices.dialysisAccess.active) inds.push({ id: uuidv4(), category: 'Catheter', catheterType: 'Dialysis Access' });
+    if (devices.ostomy.active) inds.push({ id: uuidv4(), category: 'Ostomy' });
+    return inds;
   };
 
   // Clinical Fields
@@ -382,6 +420,29 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const [showMagicFill, setShowMagicFill] = useState(false);
   const [magicFillText, setMagicFillText] = useState("");
   const [isMagicFilling, setIsMagicFilling] = useState(false);
+  const [showEbpCandidates, setShowEbpCandidates] = useState(false);
+
+  /** Active residents (excluding current) who have clinical devices but no active EBP IP event. */
+  const ebpCandidates = useMemo(() => {
+    if (protocol !== 'ebp') return [];
+    const hasActiveEbp = new Set(
+      (Object.values(store.infections) as IPEvent[])
+        .filter(ip => ip.ebp && ip.status === 'active')
+        .map(ip => ip.residentRef.id)
+    );
+    return (Object.values(store.residents) as Resident[])
+      .filter(r => {
+        if (r.mrn === residentId) return false;
+        if (r.status !== 'Active' || r.isHistorical || r.backOfficeOnly) return false;
+        const d = normalizeClinicalDevices(r);
+        const hasDevice = d.urinaryCatheter.active || d.indwellingCatheter.active ||
+          d.midline.active || d.picc.active || d.piv.active || d.centralLine.active ||
+          d.trach.active || d.peg.active || d.woundVac.active || d.dialysisAccess.active ||
+          d.ostomy.active;
+        return hasDevice && !hasActiveEbp.has(r.mrn);
+      })
+      .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''));
+  }, [protocol, store.infections, store.residents, residentId]);
 
   const handleMagicFill = async () => {
     if (!magicFillText.trim()) return;
@@ -669,14 +730,33 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             <section className="bg-amber-50/50 p-4 rounded-lg border border-amber-100">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-neutral-900">Indications / Risk Factors</h3>
-                <button
-                  type="button"
-                  onClick={addIndication}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-xs font-medium"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  + Add Additional Indication
-                </button>
+                <div className="flex items-center gap-2">
+                  {!existingIp && (() => {
+                    const residentDevices = normalizeClinicalDevices(resident as Resident | null);
+                    const hasAnyDevice = residentDevices.urinaryCatheter.active || residentDevices.indwellingCatheter.active ||
+                      residentDevices.midline.active || residentDevices.picc.active || residentDevices.piv.active ||
+                      residentDevices.centralLine.active || residentDevices.trach.active || residentDevices.peg.active ||
+                      residentDevices.woundVac.active || residentDevices.dialysisAccess.active || residentDevices.ostomy.active;
+                    return hasAnyDevice ? (
+                      <button
+                        type="button"
+                        onClick={() => setIndications(buildIndicationsFromDevices(residentDevices))}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-md hover:bg-indigo-100 text-xs font-medium border border-indigo-200"
+                        title="Pre-fill indications from this resident's active clinical devices"
+                      >
+                        Load Active Devices
+                      </button>
+                    ) : null;
+                  })()}
+                  <button
+                    type="button"
+                    onClick={addIndication}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-xs font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    + Add Additional Indication
+                  </button>
+                </div>
               </div>
 
               {indications.length === 0 && (
@@ -724,66 +804,28 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                         </select>
                       </div>
 
-                      {/* Catheter Category + Type */}
+                      {/* Device Type (flat list matching ClinicalDevices) */}
                       {ind.category === 'Catheter' && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Category</label>
-                            <select
-                              value={ind.catheterCategory ?? ''}
-                              onChange={e => updateIndication(ind.id, { catheterCategory: e.target.value || undefined, catheterType: undefined, catheterOtherText: undefined })}
-                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                            >
-                              <option value="">Select category...</option>
-                              <option value="Urinary">Urinary</option>
-                              <option value="Feeding Tube">Feeding Tube</option>
-                              <option value="Vascular Access">Vascular Access</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type</label>
-                            <select
-                              value={ind.catheterType ?? ''}
-                              onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
-                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                            >
-                              <option value="">Select type...</option>
-                              {(!ind.catheterCategory || ind.catheterCategory === 'Urinary') && (
-                                <>
-                                  <option value="Indwelling (Foley)">Indwelling (Foley)</option>
-                                  <option value="Suprapubic">Suprapubic</option>
-                                  <option value="Condom/External">Condom/External</option>
-                                </>
-                              )}
-                              {ind.catheterCategory === 'Feeding Tube' && (
-                                <>
-                                  <option value="NGT">NGT (Nasogastric Tube)</option>
-                                  <option value="PEG/G-Tube">PEG / G-Tube</option>
-                                  <option value="J-Tube">J-Tube (Jejunostomy)</option>
-                                </>
-                              )}
-                              {ind.catheterCategory === 'Vascular Access' && (
-                                <>
-                                  <option value="PICC Line">PICC Line</option>
-                                  <option value="Central Line">Central Line</option>
-                                  <option value="Midline">Midline</option>
-                                  <option value="PIV">PIV (Peripheral IV)</option>
-                                </>
-                              )}
-                              <option value="Other">Other</option>
-                            </select>
-                            {ind.catheterType === 'Other' && (
-                              <input
-                                type="text"
-                                value={ind.catheterOtherText ?? ''}
-                                onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
-                                placeholder="Specify catheter type..."
-                                className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                              />
-                            )}
-                          </div>
-                        </>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">Device Type</label>
+                          <select
+                            value={ind.catheterType ?? ''}
+                            onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterCategory: undefined, catheterOtherText: undefined })}
+                            className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                          >
+                            <option value="">Select device type...</option>
+                            {EBP_DEVICE_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
+                          </select>
+                          {ind.catheterType === 'Other' && (
+                            <input
+                              type="text"
+                              value={ind.catheterOtherText ?? ''}
+                              onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
+                              placeholder="Specify device type..."
+                              className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          )}
+                        </div>
                       )}
 
                       {/* Wound fields */}
@@ -841,31 +883,21 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                             )}
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type (if applicable)</label>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Device (if applicable)</label>
                             <select
                               value={ind.catheterType ?? ''}
                               onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
                               className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                             >
                               <option value="">None / Not applicable</option>
-                              <option value="Indwelling (Foley)">Indwelling (Foley)</option>
-                              <option value="Suprapubic">Suprapubic</option>
-                              <option value="Condom/External">Condom/External</option>
-                              <option value="PICC Line">PICC Line</option>
-                              <option value="Central Line">Central Line</option>
-                              <option value="Midline">Midline</option>
-                              <option value="PIV">PIV (Peripheral IV)</option>
-                              <option value="NGT">NGT (Nasogastric Tube)</option>
-                              <option value="PEG/G-Tube">PEG / G-Tube</option>
-                              <option value="J-Tube">J-Tube (Jejunostomy)</option>
-                              <option value="Other">Other</option>
+                              {EBP_DEVICE_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
                             </select>
                             {ind.catheterType === 'Other' && (
                               <input
                                 type="text"
                                 value={ind.catheterOtherText ?? ''}
                                 onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
-                                placeholder="Specify catheter type..."
+                                placeholder="Specify device type..."
                                 className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                               />
                             )}
@@ -926,6 +958,48 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   </div>
                 ))}
               </div>
+
+              {/* EBP Candidates — other residents with active devices but no EBP event */}
+              {ebpCandidates.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-amber-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowEbpCandidates(prev => !prev)}
+                    className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 font-medium"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    {showEbpCandidates ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {ebpCandidates.length} other resident{ebpCandidates.length !== 1 ? 's' : ''} with active devices (no EBP logged)
+                  </button>
+                  {showEbpCandidates && (
+                    <ul className="mt-2 space-y-1.5 pl-1">
+                      {ebpCandidates.map(r => {
+                        const d = normalizeClinicalDevices(r);
+                        const deviceLabels = [
+                          d.urinaryCatheter.active && 'Urinary Catheter',
+                          d.indwellingCatheter.active && 'Indwelling Catheter',
+                          d.midline.active && 'Midline',
+                          d.picc.active && 'PICC Line',
+                          d.piv.active && 'Peripheral IV (PIV)',
+                          d.centralLine.active && 'Central Line',
+                          d.trach.active && 'Tracheostomy',
+                          d.peg.active && 'PEG / Feeding Tube',
+                          d.woundVac.active && 'Wound Vac',
+                          d.dialysisAccess.active && 'Dialysis Access',
+                          d.ostomy.active && 'Ostomy',
+                        ].filter(Boolean) as string[];
+                        return (
+                          <li key={r.mrn} className="text-xs text-neutral-700 bg-white border border-neutral-100 rounded px-3 py-1.5">
+                            <span className="font-medium">{r.displayName}</span>
+                            {r.currentRoom ? <span className="text-neutral-400 ml-1">· Rm {r.currentRoom}</span> : null}
+                            <span className="block text-neutral-500 mt-0.5">{deviceLabels.join(', ')}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
