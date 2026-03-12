@@ -126,8 +126,12 @@ export const VaxEventModal: React.FC<Props> = ({ residentId, existingVax, onClos
         scheduledDate
       };
 
-      const finalNotes = notes.trim() 
-        ? notes.trim() + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
+      // Strip any leftover EXTENDED DATA block from the notes state before
+      // re-appending (guards against doubling when hydration fell back to
+      // setNotes(existingVax.notes) and the block was not stripped).
+      const cleanNotes = notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, '').trim();
+      const finalNotes = cleanNotes
+        ? cleanNotes + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
         : `--- EXTENDED DATA ---\n${JSON.stringify(extData)}`;
 
       facility.vaxEvents[vaxId] = {
