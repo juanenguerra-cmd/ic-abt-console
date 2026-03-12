@@ -1,11 +1,140 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { AdmissionScreeningRecord } from '../../domain/models';
-import { X, AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AdmissionScreeningRecord, Resident } from '../../domain/models';
+import { X, AlertTriangle, CheckCircle, Search, Printer } from 'lucide-react';
+import { useFacilityData } from '../../app/providers';
+import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Maximum days from admission before a screening is considered late (72 hours). */
 const MAX_SCREENING_DAYS = 3;
+
+// ─── Resident search helpers ──────────────────────────────────────────────────
+
+interface ResidentOption {
+  mrn: string;
+  displayName: string;
+  room: string | null;
+  unit: string | null;
+  admissionDate: string | null;
+}
+
+function scoreResidentMatch(r: ResidentOption, query: string): number {
+  const q = query.toLowerCase();
+  const name = r.displayName.toLowerCase();
+  const mrn = r.mrn.toLowerCase();
+  const room = (r.room ?? '').toLowerCase();
+  if (name.startsWith(q) || mrn.startsWith(q) || room.startsWith(q)) return 2;
+  if (name.includes(q) || mrn.includes(q) || room.includes(q)) return 1;
+  return 0;
+}
+
+function toResidentOption(r: Resident): ResidentOption {
+  return {
+    mrn: r.mrn ?? '',
+    displayName: r.displayName ?? r.mrn ?? '',
+    room: r.currentRoom ?? null,
+    unit: r.currentUnit ?? null,
+    admissionDate: r.admissionDate ?? null,
+  };
+}
+
+const ResidentSearchInput: React.FC<{
+  residents: ResidentOption[];
+  onSelect: (r: ResidentOption) => void;
+}> = ({ residents, onSelect }) => {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const suggestions = React.useMemo(() => {
+    const q = query.trim();
+    if (!q) return [];
+    return residents
+      .map(r => ({ r, score: scoreResidentMatch(r, q) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || a.r.displayName.localeCompare(b.r.displayName))
+      .slice(0, 8)
+      .map(({ r }) => r);
+  }, [query, residents]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setOpen(suggestions.length > 0 && query.trim().length > 0);
+  }, [suggestions, query]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = useCallback((r: ResidentOption) => {
+    onSelect(r);
+    setQuery('');
+    setOpen(false);
+  }, [onSelect]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestions[activeIndex]) handleSelect(suggestions[activeIndex]);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
+          placeholder={residents.length > 0 ? 'Search by name, MRN, or room…' : 'No active residents — enter manually below'}
+          aria-label={residents.length > 0 ? 'Search active census residents by name, MRN, or room' : 'No active residents available — enter resident details manually below'}
+          className="w-full pl-9 pr-3 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          autoComplete="off"
+        />
+      </div>
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-50 mt-1 w-full bg-white border border-neutral-200 rounded-md shadow-lg max-h-56 overflow-y-auto">
+          {suggestions.map((s, idx) => (
+            <li
+              key={s.mrn}
+              className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${idx === activeIndex ? 'bg-indigo-50' : 'hover:bg-neutral-50'}`}
+              onMouseDown={e => { e.preventDefault(); handleSelect(s); }}
+              onMouseEnter={() => setActiveIndex(idx)}
+            >
+              <div className="flex-1 min-w-0">
+                <span className="font-semibold text-sm text-neutral-900">{s.displayName}</span>
+                {s.unit && <span className="ml-2 text-xs text-neutral-500">{s.unit}{s.room ? ` / ${s.room}` : ''}</span>}
+              </div>
+              <span className="shrink-0 text-xs text-neutral-400 font-mono">{s.mrn}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
 
 function calcDaysSinceAdmit(admitDate: string | null | undefined, screeningDate: string | null | undefined): number | null {
   if (!admitDate) return null;
@@ -171,6 +300,19 @@ interface Props {
 }
 
 const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) => {
+  const { store } = useFacilityData();
+
+  const activeResidents: ResidentOption[] = React.useMemo(() => {
+    try {
+      return Object.values(store.residents || {})
+        .filter((r): r is Resident => !!r && isActiveCensusResident(r))
+        .map(toResidentOption);
+    } catch (err) {
+      console.warn('[AdmissionScreeningForm] Failed to load active residents for typeahead:', err);
+      return [];
+    }
+  }, [store.residents]);
+
   const [draft, setDraft] = useState<DraftRecord>(() => {
     if (record) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = record;
@@ -198,6 +340,19 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
     setSaved(false);
   }, []);
 
+  const handleResidentSelect = useCallback((r: ResidentOption) => {
+    setDraft(prev => ({
+      ...prev,
+      residentId: r.mrn || null,
+      name: r.displayName || prev.name,
+      mrn: r.mrn || null,
+      room: r.room ?? prev.room,
+      unit: r.unit ?? prev.unit,
+      admitDate: r.admissionDate ?? prev.admitDate,
+    }));
+    setSaved(false);
+  }, []);
+
   const validate = (): boolean => {
     const errs: string[] = [];
     if (!draft.name?.trim()) errs.push('Resident name is required.');
@@ -215,8 +370,8 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
   const isLate = (draft.daysSinceAdmit ?? 0) > MAX_SCREENING_DAYS && draft.admitDate;
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto print:static print:inset-auto print:bg-transparent print:p-0 print:block">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] overflow-hidden flex flex-col print:shadow-none print:max-h-none print:rounded-none print:w-full">
 
         {/* Header */}
         <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between bg-indigo-50 shrink-0">
@@ -259,6 +414,26 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
           {/* Section 1: Resident Header */}
           <div className="border border-neutral-200 rounded-lg mx-4 mt-4 overflow-hidden">
             <SectionHeader title="Resident Information" />
+            <FormRow label="Search Census">
+              <div className="print:hidden">
+                <ResidentSearchInput
+                  residents={activeResidents}
+                  onSelect={handleResidentSelect}
+                />
+              </div>
+              {draft.residentId && (
+                <div className="mt-1 flex items-center gap-2 print:hidden">
+                  <span className="text-xs text-indigo-600 font-medium">Linked: {draft.name ?? draft.residentId}</span>
+                  <button
+                    type="button"
+                    onClick={() => { set('residentId', null); }}
+                    className="text-xs text-neutral-400 hover:text-red-500 underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </FormRow>
             <FormRow label="Resident Name" required>
               <TextInput value={draft.name ?? ''} onChange={v => set('name', v || null)} placeholder="Full name" />
             </FormRow>
@@ -436,6 +611,13 @@ const AdmissionScreeningForm: React.FC<Props> = ({ record, onSave, onClose }) =>
             className="px-4 py-2 text-sm border border-neutral-300 rounded-md hover:bg-neutral-50"
           >
             Cancel
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2 text-sm border border-neutral-300 text-neutral-600 rounded-md hover:bg-neutral-50 inline-flex items-center gap-1.5"
+          >
+            <Printer className="w-4 h-4" />
+            Print
           </button>
           <button
             onClick={() => handleSave('draft')}
