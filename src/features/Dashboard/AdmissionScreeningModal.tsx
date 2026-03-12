@@ -1,7 +1,8 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useFacilityData } from '../../app/providers';
-import { Resident, ResidentNote } from '../../domain/models';
+import { Resident } from '../../domain/models';
 
 interface Props {
   onClose: () => void;
@@ -9,23 +10,29 @@ interface Props {
 
 export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
+  const navigate = useNavigate();
 
   const residents = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
-  const notes = Object.values(store.notes) as ResidentNote[];
 
   const threeDaysAgo = new Date();
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
   const recentAdmissions = residents.filter(r => r.admissionDate && new Date(r.admissionDate) > threeDaysAgo);
 
+  // Check actual admissionScreenings records for each recent admission
+  const screeningRecords = Object.values(store.admissionScreenings ?? {});
+
+  // Check actual admissionScreenings records for each recent admission.
+  // residentId stores the MRN value (set during auto-fill); mrn is a fallback for
+  // records created manually without selecting a census resident.
   const residentsNeedingScreening = recentAdmissions.filter(r => {
-    const hasScreeningNote = notes.some(n => 
-      n.residentRef.kind === 'mrn' && 
-      n.residentRef.id === r.mrn && 
-      n.title?.includes('Admission Screening')
-    );
-    return !hasScreeningNote;
+    return !screeningRecords.some(s => s && (s.residentId === r.mrn || s.mrn === r.mrn));
   });
+
+  const handleGoToScreening = () => {
+    onClose();
+    navigate('/admission-screening');
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -58,6 +65,15 @@ export const AdmissionScreeningModal: React.FC<Props> = ({ onClose }) => {
               </div>
             )}
           </ul>
+        </div>
+        <div className="px-6 py-4 border-t border-neutral-200 flex justify-end">
+          <button
+            onClick={handleGoToScreening}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 active:scale-95"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Open Admission Screening
+          </button>
         </div>
       </div>
     </div>
