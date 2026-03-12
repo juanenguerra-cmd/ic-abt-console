@@ -1,6 +1,6 @@
 import { UnifiedDB, ResidentRef, FacilityStore } from "../domain/models";
 import { idbGet, idbSet, idbRemove, idbDeleteDatabase } from "./idb";
-import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP } from "../constants/storageKeys";
+import { DB_KEY_MAIN, DB_KEY_PREV, DB_KEY_TMP, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 import { StorageRepository, StorageSlice, STORAGE_SLICES } from "./repository";
 import { remoteFetchDb, remoteSaveDb } from "../services/api";
 import {
@@ -579,6 +579,8 @@ export async function retryOutboxAsync(currentDb?: UnifiedDB): Promise<void> {
     try {
       await remoteSaveDb(db);
       await clearPackedSyncPending();
+      // G7: record timestamp so the header badge reflects this cloud backup
+      try { localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString()); } catch { /* non-browser env */ }
       window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
     } catch (e) {
       //noop
@@ -609,6 +611,8 @@ export async function retryOutboxAsync(currentDb?: UnifiedDB): Promise<void> {
 
     const remaining = state.pendingSlices.filter((s) => !succeeded.includes(s));
     if (remaining.length === 0 && !state.hasPendingPackedSync) {
+      // G7: record timestamp so the header badge reflects this cloud backup
+      try { localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString()); } catch { /* non-browser env */ }
       window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
     }
   }
@@ -693,6 +697,8 @@ export async function saveDBAsync(db: UnifiedDB, options: { skipRemote?: boolean
       await remoteSaveDb(db)
         .then(async () => {
           await clearPackedSyncPending().catch(() => {});
+          // G7: record timestamp so the header badge reflects this cloud backup
+          try { localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString()); } catch { /* non-browser env */ }
           window.dispatchEvent(new CustomEvent("backup-completed", { detail: { type: 'remote' } }));
         })
         .catch(async (err) => {
