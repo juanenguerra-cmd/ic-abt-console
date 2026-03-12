@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useFacilityData } from '../../app/providers';
 import { Activity, Shield, Syringe, FileText, StickyNote, Trash2, Edit2, GitBranch } from 'lucide-react';
 import { formatDateLikeForDisplay } from '../../lib/dateUtils';
+import { getPrecautionLabel, getInfectionSourceLabel } from '../../utils/ipEventFormatters';
 
 interface Props {
   residentId: string;
@@ -72,8 +73,8 @@ export const ResidentTimeline: React.FC<Props> = ({
           id: ip.id,
           date: ip.onsetDate || ip.createdAt,
           type: 'Infection',
-          title: `Infection: ${ip.infectionCategory || 'Unspecified'}`,
-          description: `${ip.organism || 'Unknown Organism'} • ${ip.status}`,
+          title: `Infection: ${getPrecautionLabel(ip)}`,
+          description: `${getInfectionSourceLabel(ip)} • ${ip.status}`,
           icon: Shield,
           colorClass: 'text-amber-600',
           bgClass: 'bg-amber-100',

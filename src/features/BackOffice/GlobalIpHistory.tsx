@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useFacilityData, useDatabase } from '../../app/providers';
 import { IPEvent, Resident } from '../../domain/models';
 import { Edit, Trash2, Search } from 'lucide-react';
+import { getPrecautionLabel, getInfectionSourceLabel } from '../../utils/ipEventFormatters';
 
 interface Props {
   onEditIpEvent: (event: IPEvent) => void;
@@ -127,7 +128,7 @@ export const GlobalIpHistory: React.FC<Props> = ({ onEditIpEvent }) => {
               <th className="px-4 py-3 font-medium">Resident</th>
               <th className="px-4 py-3 font-medium">Onset Date</th>
               <th className="px-4 py-3 font-medium">Precaution Type</th>
-              <th className="px-4 py-3 font-medium">Organism</th>
+              <th className="px-4 py-3 font-medium">Infected Source</th>
               <th className="px-4 py-3 font-medium">Unit/Room</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Resolution Date</th>
@@ -151,8 +152,8 @@ export const GlobalIpHistory: React.FC<Props> = ({ onEditIpEvent }) => {
                       <span className="text-xs text-neutral-500 font-normal">{event.residentRef.id}</span>
                     </td>
                     <td className="px-4 py-3">{new Date(event.onsetDate || event.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">{event.isolationType || '-'}</td>
-                    <td className="px-4 py-3">{event.organism || '-'}</td>
+                    <td className="px-4 py-3">{getPrecautionLabel(event)}</td>
+                    <td className="px-4 py-3">{getInfectionSourceLabel(event)}</td>
                     <td className="px-4 py-3">
                       {event.locationSnapshot?.unit || '-'} {event.locationSnapshot?.room ? `/ ${event.locationSnapshot.room}` : ''}
                     </td>
