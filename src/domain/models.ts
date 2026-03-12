@@ -156,6 +156,34 @@ export interface ABTCourse {
   updatedAt: ISO;
 }
 
+/** High-level category for an IP event indication / risk factor. */
+export type IndicationCategory = 'Catheter' | 'Wound' | 'Respiratory' | 'Other';
+
+/**
+ * A single structured indication (device, wound, or other risk factor) associated
+ * with an IP event. Multiple indications can be tracked per event using the
+ * `indications` array on `IPEvent`.
+ */
+export interface IPEventIndication {
+  id: string;
+  category: IndicationCategory;
+
+  // --- Conditional follow-up fields ---
+
+  /** Populated when category === 'Catheter' */
+  catheterType?: 'Urinary' | 'PICC' | 'Midline' | 'Central Line' | 'Other';
+
+  /** Populated when category === 'Wound' — anatomical location (e.g. "Left Heel") */
+  woundSite?: string;
+  /** Populated when category === 'Wound' — wound classification (e.g. "Pressure Ulcer") */
+  woundType?: string;
+
+  /** Optional date the indication was first identified (YYYY-MM-DD). */
+  dateIdentified?: string;
+  /** Free-text notes specific to this indication. */
+  notes?: string;
+}
+
 export interface IPEvent {
   id: string;
   residentRef: ResidentRef;
@@ -177,6 +205,14 @@ export interface IPEvent {
   resolvedAt?: ISO;
   /** Device types present at onset (e.g. "Urinary Catheter"). Stored top-level for NHSN checker. */
   deviceTypes?: string[];
+  /**
+   * Structured indications / risk factors for this IP event.
+   * Supersedes the legacy flat `deviceTypes` array for EBP events.
+   * Multiple indications can be added (e.g. a Urinary Catheter and a Wound
+   * on the same event). The legacy `deviceTypes` field is derived from this
+   * array on save for backward-compatible NHSN checks.
+   */
+  indications?: IPEventIndication[];
   /** NHSN LTC CAUTI surveillance verdict persisted on save. */
   nhsnCautiMet?: boolean | null;
   /** NHSN LTC C. diff LabID surveillance verdict persisted on save. */

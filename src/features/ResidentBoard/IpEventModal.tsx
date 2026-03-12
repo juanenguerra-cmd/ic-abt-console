@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle, Sparkles } from "lucide-react";
+import { X, Save, Shield, TestTube, FileText, Activity, AlertCircle, Sparkles, Plus } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { IPEvent, ABTCourse, Outbreak, ShiftLogEntry } from "../../domain/models";
+import { IPEvent, IPEventIndication, IndicationCategory, ABTCourse, Outbreak, ShiftLogEntry } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { checkCauti, checkCdiffLabId, NhsnResult } from "../../utils/nhsnCriteria";
 import { NhsnCriteriaPanel } from "../../components/NhsnCriteriaPanel";
@@ -89,15 +89,41 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   // Extended State (Serialized to Notes)
   const [protocol, setProtocol] = useState<"isolation" | "ebp">(existingIp?.ebp ? "ebp" : "isolation");
   const [isolationTypes, setIsolationTypes] = useState<string[]>([]);
-  const [deviceTypes, setDeviceTypes] = useState<string[]>([]);
-  const [ebpDetailOther, setEbpDetailOther] = useState("");
-  const [woundLocation, setWoundLocation] = useState("");
-  const [mdroType, setMdroType] = useState("");
+  /** Structured indications / risk factors for EBP events (replaces old flat deviceTypes). */
+  const [indications, setIndications] = useState<IPEventIndication[]>([]);
   const [sourceOther, setSourceOther] = useState("");
   const [labOutcomeNote, setLabOutcomeNote] = useState("");
   const [onsetDate, setOnsetDate] = useState(todayLocalDateInputValue());
   const [eventDetectedDate, setEventDetectedDate] = useState(todayLocalDateInputValue());
   const [precautionStartDate, setPrecautionStartDate] = useState(todayLocalDateInputValue());
+
+  // --- Indication helpers ---
+  const addIndication = () => {
+    setIndications(prev => [...prev, { id: uuidv4(), category: 'Catheter' as IndicationCategory }]);
+  };
+
+  const removeIndication = (id: string) => {
+    setIndications(prev => prev.filter(ind => ind.id !== id));
+  };
+
+  const updateIndication = (id: string, patch: Partial<IPEventIndication>) => {
+    setIndications(prev => prev.map(ind => ind.id === id ? { ...ind, ...patch } : ind));
+  };
+
+  /**
+   * Derives a flat `deviceTypes` string array from the structured indications array.
+   * Catheter indications are mapped to legacy NHSN-compatible device type strings.
+   */
+  const deriveDeviceTypes = (inds: IPEventIndication[]): string[] =>
+    inds
+      .filter(ind => ind.category === 'Catheter')
+      .map(ind => {
+        if (ind.catheterType === 'Urinary') return 'Urinary Catheter';
+        if (ind.catheterType === 'Central Line') return 'Central Line';
+        if (ind.catheterType === 'PICC') return 'PICC';
+        if (ind.catheterType === 'Midline') return 'Midline';
+        return 'Other Catheter';
+      });
 
   // Clinical Fields
   const [infectionCategory, setInfectionCategory] = useState(
@@ -163,10 +189,42 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             }
             if (ext) {
               if (ext.protocol === "ebp" || ext.protocol === "isolation") setProtocol(ext.protocol);
-              if (ext.deviceTypes) setDeviceTypes(ext.deviceTypes);
-              if (ext.ebpDetailOther) setEbpDetailOther(ext.ebpDetailOther);
-              if (ext.woundLocation) setWoundLocation(ext.woundLocation);
-              if (ext.mdroType) setMdroType(ext.mdroType);
+
+              // New format: structured indications array
+              if (ext.indications && ext.indications.length > 0) {
+                setIndications(ext.indications);
+              } else if (existingIp.ebp) {
+                // Legacy migration: reconstruct indications from old flat fields
+                const legacyIsolations = (existingIp.isolationType ?? '').split(',').map((s: string) => s.trim());
+                const migrated: IPEventIndication[] = [];
+                if (legacyIsolations.includes('Indwelling Catheter')) {
+                  const oldDevTypes: string[] = ext.deviceTypes ?? [];
+                  if (oldDevTypes.length > 0) {
+                    oldDevTypes.forEach((dt: string) => {
+                      let catheterType: IPEventIndication['catheterType'];
+                      if (/urinary/i.test(dt)) catheterType = 'Urinary';
+                      else if (/central/i.test(dt)) catheterType = 'Central Line';
+                      else if (/picc/i.test(dt)) catheterType = 'PICC';
+                      else if (/midline/i.test(dt)) catheterType = 'Midline';
+                      else catheterType = 'Other';
+                      migrated.push({ id: uuidv4(), category: 'Catheter', catheterType });
+                    });
+                  } else {
+                    migrated.push({ id: uuidv4(), category: 'Catheter' });
+                  }
+                }
+                if (legacyIsolations.includes('Wound')) {
+                  migrated.push({ id: uuidv4(), category: 'Wound', woundSite: ext.woundLocation ?? '' });
+                }
+                if (legacyIsolations.includes('MDRO')) {
+                  migrated.push({ id: uuidv4(), category: 'Other', notes: ext.mdroType ?? '' });
+                }
+                if (legacyIsolations.includes('Other')) {
+                  migrated.push({ id: uuidv4(), category: 'Other', notes: ext.ebpDetailOther ?? '' });
+                }
+                if (migrated.length > 0) setIndications(migrated);
+              }
+
               if (ext.sourceOther) setSourceOther(ext.sourceOther);
               if (ext.labOutcomeNote) setLabOutcomeNote(ext.labOutcomeNote);
               if (ext.onsetDate) setOnsetDate(ext.onsetDate);
@@ -192,11 +250,11 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     if (newProtocol === "isolation") {
       setIsolationTypes(["Contact"]);
       setInfectionCategory("");
-      setDeviceTypes([]);
+      setIndications([]);
     } else if (newProtocol === "ebp") {
-      setIsolationTypes(["Indwelling Catheter"]);
+      setIsolationTypes([]);
       setInfectionCategory("");
-      setDeviceTypes([]);
+      setIndications([]);
     }
   };
 
@@ -221,21 +279,17 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     }
   };
 
-  const toggleDeviceType = (type: string) => {
-    setDeviceTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
-  };
-
   const toggleSourceTag = (source: string) => {
     setSourceTags(prev => prev.includes(source) ? prev.filter(t => t !== source) : [...prev, source]);
   };
 
   useEffect(() => {
-    if (protocol !== "ebp" || isolationTypes.length === 0) return;
-    const primary = isolationTypes[0];
-    if (primary === "Indwelling Catheter") setInfectionCategory("Device-associated");
-    else if (primary === "Wound") setInfectionCategory("Wound infection");
-    else if (primary === "MDRO") setInfectionCategory("MDRO colonization/infection");
-  }, [protocol, isolationTypes]);
+    if (protocol !== "ebp" || indications.length === 0) return;
+    const categories = indications.map(i => i.category);
+    if (categories.includes('Catheter')) setInfectionCategory("Device-associated");
+    else if (categories.includes('Wound')) setInfectionCategory("Wound infection");
+    else setInfectionCategory("");
+  }, [protocol, indications]);
 
   const addOrganismTag = (tag: string) => {
     if (tag.trim() && !infectionTags.includes(tag.trim())) {
@@ -281,7 +335,8 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
       organism: infectionTags.join(', ') || undefined,
       specimenCollectedDate: specimenCollectedDate || undefined,
       labResultDate: labResultDate || undefined,
-      deviceTypes,
+      deviceTypes: deriveDeviceTypes(indications),
+      indications: indications.length > 0 ? indications : undefined,
       notes,
       isolationType: isolationTypes.join(', ') || undefined,
       createdAt: existingIp?.createdAt ?? new Date().toISOString(),
@@ -293,7 +348,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     }
     return checkCdiffLabId(syntheticIp, allIpEvents);
   }, [infectionCategory, infectionCategoryOther, infectionTags, onsetDate, specimenCollectedDate,
-      labResultDate, deviceTypes, notes, isolationTypes, status, store, residentId, existingIp]);
+      labResultDate, indications, notes, isolationTypes, status, store, residentId, existingIp]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [showMagicFill, setShowMagicFill] = useState(false);
@@ -364,10 +419,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
 
         const extData = {
           protocol,
-          deviceTypes,
-          ebpDetailOther,
-          woundLocation,
-          mdroType,
+          indications,
           sourceOther,
           labOutcomeNote,
           onsetDate,
@@ -387,6 +439,17 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           return null;
         };
 
+        // Derive legacy fields from structured indications for NHSN backward-compat
+        const derivedDeviceTypes = deriveDeviceTypes(indications);
+        const derivedIsolationTypes = protocol === "ebp"
+          ? Array.from(new Set(indications.map(ind => {
+              if (ind.category === 'Catheter') return 'Indwelling Catheter';
+              if (ind.category === 'Wound') return 'Wound';
+              if (ind.category === 'Respiratory') return 'Respiratory';
+              return 'Other';
+            })))
+          : isolationTypes;
+
         facility.infections[ipId] = {
           id: ipId,
           residentRef,
@@ -395,8 +458,9 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
           infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
           sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
-          isolationType: isolationTypes.join(", ") || undefined,
-          deviceTypes: deviceTypes.length > 0 ? deviceTypes : undefined,
+          isolationType: derivedIsolationTypes.join(", ") || undefined,
+          deviceTypes: derivedDeviceTypes.length > 0 ? derivedDeviceTypes : undefined,
+          indications: indications.length > 0 ? indications : undefined,
           ebp: protocol === "ebp",
           organism: infectionTags.join(", ") || undefined,
           specimenCollectedDate: specimenCollectedDate || undefined,
@@ -542,14 +606,12 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             </div>
           </section>
 
-          {/* Dynamic Isolation Types */}
-          {protocol && (
+          {/* Dynamic Isolation Types / EBP Indications */}
+          {protocol === "isolation" && (
             <section className="bg-amber-50/50 p-4 rounded-lg border border-amber-100">
-              <h3 className="text-sm font-bold text-neutral-900 mb-3">
-                {protocol === "ebp" ? "EBP Indication" : "Isolation Type"}
-              </h3>
+              <h3 className="text-sm font-bold text-neutral-900 mb-3">Isolation Type</h3>
               <div className="flex flex-wrap gap-3">
-                {(protocol === "ebp" ? ["Indwelling Catheter", "Wound", "MDRO", "Other"] : ["Contact", "Droplet", "Airborne", "Contact/Droplet"]).map(type => (
+                {["Contact", "Droplet", "Airborne", "Contact/Droplet"].map(type => (
                   <label key={type} className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer bg-white px-3 py-1.5 rounded border border-neutral-200 shadow-sm hover:border-amber-300">
                     <input 
                       type="radio"
@@ -562,53 +624,126 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   </label>
                 ))}
               </div>
+            </section>
+          )}
 
-              {/* Device Type Cascade */}
-              {protocol === "ebp" && isolationTypes.includes("Indwelling Catheter") && (
-                <div className="mt-4 pt-4 border-t border-amber-200/50">
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Device Types</label>
-                  <div className="flex flex-wrap gap-3">
-                    {DEVICE_OPTIONS.map(device => (
-                      <label key={device} className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={deviceTypes.includes(device)}
-                          onChange={() => toggleDeviceType(device)}
-                          className="rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
+          {protocol === "ebp" && (
+            <section className="bg-amber-50/50 p-4 rounded-lg border border-amber-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-neutral-900">Indications / Risk Factors</h3>
+                <button
+                  type="button"
+                  onClick={addIndication}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-xs font-medium"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Indication
+                </button>
+              </div>
+
+              {indications.length === 0 && (
+                <p className="text-sm text-neutral-400 italic">No indications added yet. Click "Add Indication" to begin.</p>
+              )}
+
+              <div className="space-y-3">
+                {indications.map((ind) => (
+                  <div key={ind.id} className="bg-white border border-neutral-200 rounded-lg p-4 relative">
+                    <button
+                      type="button"
+                      onClick={() => removeIndication(ind.id)}
+                      className="absolute top-2 right-2 text-neutral-400 hover:text-red-500"
+                      aria-label="Remove indication"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-6">
+                      {/* Category */}
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">Category</label>
+                        <select
+                          value={ind.category}
+                          onChange={e => updateIndication(ind.id, { category: e.target.value as IndicationCategory, catheterType: undefined, woundSite: undefined, woundType: undefined })}
+                          className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                        >
+                          <option value="Catheter">Catheter</option>
+                          <option value="Wound">Wound</option>
+                          <option value="Respiratory">Respiratory</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      {/* Catheter Type */}
+                      {ind.category === 'Catheter' && (
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type</label>
+                          <select
+                            value={ind.catheterType ?? ''}
+                            onChange={e => updateIndication(ind.id, { catheterType: (e.target.value || undefined) as IPEventIndication['catheterType'] })}
+                            className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                          >
+                            <option value="">Select type...</option>
+                            <option value="Urinary">Urinary</option>
+                            <option value="PICC">PICC</option>
+                            <option value="Midline">Midline</option>
+                            <option value="Central Line">Central Line</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Wound fields */}
+                      {ind.category === 'Wound' && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Wound Site</label>
+                            <input
+                              type="text"
+                              value={ind.woundSite ?? ''}
+                              onChange={e => updateIndication(ind.id, { woundSite: e.target.value })}
+                              placeholder="e.g., Left Heel, Sacrum"
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Wound Type</label>
+                            <input
+                              type="text"
+                              value={ind.woundType ?? ''}
+                              onChange={e => updateIndication(ind.id, { woundType: e.target.value })}
+                              placeholder="e.g., Surgical, Pressure Ulcer"
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      {/* Date Identified */}
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">Date Identified</label>
+                        <input
+                          type="date"
+                          value={ind.dateIdentified ?? ''}
+                          onChange={e => updateIndication(ind.id, { dateIdentified: e.target.value })}
+                          className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                         />
-                        {device}
-                      </label>
-                    ))}
+                      </div>
+
+                      {/* Notes */}
+                      <div className={ind.category === 'Wound' ? 'md:col-span-2' : ''}>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">Notes</label>
+                        <input
+                          type="text"
+                          value={ind.notes ?? ''}
+                          onChange={e => updateIndication(ind.id, { notes: e.target.value })}
+                          placeholder="Additional notes..."
+                          className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  {deviceTypes.includes("Other") && (
-                    <input
-                      type="text"
-                      value={ebpDetailOther}
-                      onChange={e => setEbpDetailOther(e.target.value)}
-                      placeholder="Specify other device..."
-                      className="mt-2 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                    />
-                  )}
-                </div>
-              )}
-              {protocol === "ebp" && isolationTypes.includes("Wound") && (
-                <div className="mt-4 pt-4 border-t border-amber-200/50">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">Wound Location</label>
-                  <input type="text" value={woundLocation} onChange={e => setWoundLocation(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
-                </div>
-              )}
-              {protocol === "ebp" && isolationTypes.includes("MDRO") && (
-                <div className="mt-4 pt-4 border-t border-amber-200/50">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">MDRO Organism/Type</label>
-                  <input type="text" value={mdroType} onChange={e => setMdroType(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
-                </div>
-              )}
-              {protocol === "ebp" && isolationTypes.includes("Other") && (
-                <div className="mt-4 pt-4 border-t border-amber-200/50">
-                  <label className="block text-sm font-medium text-neutral-700 mb-1">EBP Details</label>
-                  <input type="text" value={ebpDetailOther} onChange={e => setEbpDetailOther(e.target.value)} className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500" />
-                </div>
-              )}
+                ))}
+              </div>
             </section>
           )}
 
