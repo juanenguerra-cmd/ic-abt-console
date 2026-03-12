@@ -74,6 +74,8 @@ const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) 
   const statusBadge = (status: string | undefined) => {
     if (status === 'completed')
       return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Completed</span>;
+    if (status === 'pending')
+      return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Pending</span>;
     return <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Draft</span>;
   };
 
@@ -113,6 +115,7 @@ const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) 
           className="border border-neutral-300 rounded-md px-2 py-1.5 text-sm focus:ring-indigo-500 focus:border-indigo-500"
         >
           <option value="all">All Statuses</option>
+          <option value="pending">Pending</option>
           <option value="draft">Draft</option>
           <option value="completed">Completed</option>
         </select>

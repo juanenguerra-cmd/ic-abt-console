@@ -32,6 +32,7 @@ export const STORAGE_SLICES = [
   "lineListEvents",
   "shiftLog",
   "mutationLog",
+  "admissionScreenings",
 ] as const;
 
 export type StorageSlice = typeof STORAGE_SLICES[number];

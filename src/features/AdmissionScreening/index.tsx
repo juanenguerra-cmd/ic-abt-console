@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
-import { AdmissionScreeningRecord } from '../../domain/models';
+import { AdmissionScreeningRecord, Resident } from '../../domain/models';
 import AdmissionScreeningList from './AdmissionScreeningList';
 import AdmissionScreeningForm from './AdmissionScreeningForm';
 import { ClipboardCheck } from 'lucide-react';
+import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 
 /** Generate a simple unique ID */
 function generateId(): string {
@@ -48,14 +49,116 @@ export function normalizeAdmissionScreening(raw: Partial<AdmissionScreeningRecor
   };
 }
 
+/** Returns true if the resident was admitted within the last `maxDays` days (default 3 = 72 h). */
+function admittedWithinDays(admissionDate: string | null | undefined, maxDays = 3): boolean {
+  if (!admissionDate) return false;
+  const admit = new Date(admissionDate);
+  if (isNaN(admit.getTime())) return false;
+  const diffDays = (Date.now() - admit.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= maxDays;
+}
+
+/**
+ * Build a virtual "pending" screening record for a resident admitted within 72 hours
+ * who does not yet have a screening.  These records are **never persisted to the DB**.
+ */
+function makePendingRecord(resident: Resident): AdmissionScreeningRecord {
+  const now = new Date().toISOString();
+  return {
+    id: `pending_${resident.mrn}`,
+    residentId: resident.mrn ?? null,
+    mrn: resident.mrn ?? null,
+    name: resident.displayName ?? null,
+    room: resident.currentRoom ?? null,
+    unit: resident.currentUnit ?? null,
+    admitDate: resident.admissionDate ?? null,
+    screeningDate: null,
+    daysSinceAdmit: null,
+    screeningStatus: 'pending',
+    completedBy: null,
+    completedByTitle: null,
+    notes: null,
+    createdAt: now,
+    updatedAt: now,
+    admissionSource: null,
+    recentHospitalization: null,
+    transferFromFacility: null,
+    currentSymptoms: [],
+    currentDiagnosis: null,
+    isolationStatus: null,
+    precautionType: null,
+    mdroHistory: null,
+    mdroOrganism: null,
+    recentAntibiotics: null,
+    antibioticDetails: null,
+    devicesPresent: [],
+    vaccinationReviewed: null,
+    vaccinationNotes: null,
+    followUpActions: null,
+    recommendations: null,
+  };
+}
+
+/**
+ * Maps device names from the screening form's `devicesPresent` array to the
+ * corresponding key in `Resident.clinicalDevices`.
+ */
+const DEVICE_FIELD_MAP: Record<string, keyof NonNullable<Resident['clinicalDevices']>> = {
+  'Urinary catheter': 'urinaryCatheter',
+  'PICC': 'picc',
+  'Central venous catheter': 'centralLine',
+  'Peripheral IV': 'piv',
+  'Feeding tube': 'peg',
+  'Tracheostomy': 'trach',
+  'Wound VAC': 'woundVac',
+};
+
+/**
+ * Activates the clinical devices identified during screening on the resident's
+ * core profile.  Only activates devices present — does not deactivate others.
+ * Sets `insertedDate` to `admitDateISO` if the device wasn't already active.
+ */
+function applyDevicesToResident(resident: Resident, devicesPresent: string[], admitDateISO: string): void {
+  if (!devicesPresent.length) return;
+  if (!resident.clinicalDevices) {
+    resident.clinicalDevices = {
+      oxygen: { enabled: false, mode: null },
+      urinaryCatheter: { active: false, insertedDate: null },
+      indwellingCatheter: { active: false, insertedDate: null },
+      midline: { active: false, insertedDate: null },
+      picc: { active: false, insertedDate: null },
+      piv: { active: false, insertedDate: null },
+      centralLine: { active: false, insertedDate: null },
+      trach: { active: false, insertedDate: null },
+      peg: { active: false, insertedDate: null },
+      woundVac: { active: false, insertedDate: null },
+      dialysisAccess: { active: false, insertedDate: null },
+      ostomy: { active: false, insertedDate: null },
+    };
+  }
+  for (const device of devicesPresent) {
+    const fieldKey = DEVICE_FIELD_MAP[device];
+    // DEVICE_FIELD_MAP only maps devices with { active, insertedDate } shape; skip unknown entries.
+    if (!fieldKey) continue;
+    const entry = resident.clinicalDevices[fieldKey] as { active: boolean; insertedDate: string | null } | undefined;
+    if (entry && 'active' in entry) {
+      if (!entry.active) {
+        entry.active = true;
+        // Record when the device was placed (admission date is the best available proxy).
+        entry.insertedDate = admitDateISO;
+      }
+    }
+  }
+}
+
 const AdmissionScreeningPage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
 
   const [editingRecord, setEditingRecord] = useState<AdmissionScreeningRecord | null | undefined>(undefined);
-  // undefined = list view, null = new form, record = edit form
+  // undefined = list view, null = new (empty) form, record = edit / pending pre-fill
 
-  /** All normalized screening records for current facility */
+  /** All normalized, persisted screening records for the current facility. */
   const screenings = useMemo((): AdmissionScreeningRecord[] => {
     try {
       const raw = store.admissionScreenings;
@@ -72,44 +175,88 @@ const AdmissionScreeningPage: React.FC = () => {
     }
   }, [store.admissionScreenings]);
 
+  /**
+   * Virtual "pending" entries — active residents admitted within 72 hours that
+   * do not yet have any screening record (matched by MRN).
+   */
+  const pendingEntries = useMemo((): AdmissionScreeningRecord[] => {
+    try {
+      const screened = new Set(
+        screenings.map(s => s.mrn).filter((m): m is string => !!m),
+      );
+      return (Object.values(store.residents || {}) as Resident[])
+        .filter((r): r is Resident => {
+          if (!r || !isActiveCensusResident(r)) return false;
+          if (!r.admissionDate) return false;
+          if (r.mrn && screened.has(r.mrn)) return false;
+          return admittedWithinDays(r.admissionDate, 3);
+        })
+        .sort((a, b) => {
+          const ta = a.admissionDate ? new Date(a.admissionDate).getTime() : 0;
+          const tb = b.admissionDate ? new Date(b.admissionDate).getTime() : 0;
+          return tb - ta;
+        })
+        .map(makePendingRecord);
+    } catch {
+      return [];
+    }
+  }, [store.residents, screenings]);
+
+  /** Combined list: pending entries first (most-recently admitted), then stored records. */
+  const allItems = useMemo(
+    (): AdmissionScreeningRecord[] => [...pendingEntries, ...screenings],
+    [pendingEntries, screenings],
+  );
+
   const handleNew = () => setEditingRecord(null);
+
+  /** Open a record for editing.  Virtual pending records open pre-filled as a new record. */
   const handleOpen = (r: AdmissionScreeningRecord) => setEditingRecord(r);
+
   const handleClose = () => setEditingRecord(undefined);
 
   const handleSave = (draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
 
-    if (editingRecord === null) {
-      // create new
-      const newRecord: AdmissionScreeningRecord = {
-        ...draft,
-        id: generateId(),
-        createdAt: now,
-        updatedAt: now,
-      };
-      updateDB(db => {
-        const facilityData = db.data.facilityData[activeFacilityId];
-        if (!facilityData.admissionScreenings) {
-          facilityData.admissionScreenings = {};
+    /** When starting from a virtual pending entry, always create a new persisted record. */
+    const isFromPending = editingRecord?.screeningStatus === 'pending';
+    const isNew = editingRecord === null || isFromPending;
+
+    const savedRecord: AdmissionScreeningRecord = {
+      ...draft,
+      id: isNew ? generateId() : editingRecord!.id,
+      createdAt: isNew ? now : editingRecord!.createdAt,
+      updatedAt: now,
+    };
+
+    updateDB(db => {
+      const facilityData = db.data.facilityData[activeFacilityId];
+      if (!facilityData.admissionScreenings) {
+        facilityData.admissionScreenings = {};
+      }
+      facilityData.admissionScreenings[savedRecord.id] = savedRecord;
+
+      // ── Data encoding on completion ─────────────────────────────────────────
+      // When a screening is marked complete, encode the clinical findings back
+      // into the resident's core profile for cross-module consistency.
+      if (draft.screeningStatus === 'completed' && draft.mrn) {
+        const resident = facilityData.residents[draft.mrn];
+        if (resident) {
+          // 1. Update primaryDiagnosis if a current diagnosis was captured.
+          //    The screening diagnosis takes precedence over any previously set value,
+          //    reflecting the clinician's assessment at the time of admission.
+          if (draft.currentDiagnosis?.trim()) {
+            resident.primaryDiagnosis = draft.currentDiagnosis.trim();
+          }
+          // 2. Activate clinicalDevices identified during the screening.
+          //    insertedDate is set to the admission date as the best available proxy.
+          if (Array.isArray(draft.devicesPresent) && draft.devicesPresent.length) {
+            applyDevicesToResident(resident, draft.devicesPresent, draft.admitDate ?? now);
+          }
+          resident.updatedAt = now;
         }
-        facilityData.admissionScreenings[newRecord.id] = newRecord;
-      });
-    } else if (editingRecord) {
-      // update existing
-      const updatedRecord: AdmissionScreeningRecord = {
-        ...draft,
-        id: editingRecord.id,
-        createdAt: editingRecord.createdAt,
-        updatedAt: now,
-      };
-      updateDB(db => {
-        const facilityData = db.data.facilityData[activeFacilityId];
-        if (!facilityData.admissionScreenings) {
-          facilityData.admissionScreenings = {};
-        }
-        facilityData.admissionScreenings[editingRecord.id] = updatedRecord;
-      });
-    }
+      }
+    });
 
     setEditingRecord(undefined);
   };
@@ -130,7 +277,7 @@ const AdmissionScreeningPage: React.FC = () => {
       {/* List view */}
       {editingRecord === undefined && (
         <AdmissionScreeningList
-          screenings={screenings}
+          screenings={allItems}
           onNew={handleNew}
           onOpen={handleOpen}
         />
