@@ -439,9 +439,13 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           eventDetectedDate,
           precautionStartDate
         };
-        
-        const finalNotes = notes.trim() 
-          ? notes.trim() + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
+
+        // Strip any leftover EXTENDED DATA block from the notes state before
+        // re-appending (guards against doubling when hydration fell back to
+        // setNotes(existingIp.notes) and the block was not stripped).
+        const cleanNotes = notes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, '').trim();
+        const finalNotes = cleanNotes
+          ? cleanNotes + `\n\n--- EXTENDED DATA ---\n${JSON.stringify(extData)}`
           : `--- EXTENDED DATA ---\n${JSON.stringify(extData)}`;
 
         const effectiveCat = infectionCategory === "Other" ? infectionCategoryOther : infectionCategory;
@@ -490,6 +494,10 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
             : undefined,
           createdAt: existingIp?.createdAt || now,
           updatedAt: now,
+          // Preserve resolvedAt when already set; stamp it on first resolution.
+          resolvedAt: status === 'resolved'
+            ? (existingIp?.resolvedAt || now)
+            : undefined,
         };
       }, { action: existingIp ? 'update' : 'create', entityType: 'IPEvent', entityId: existingIp?.id || newIpId });
 

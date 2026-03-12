@@ -11,6 +11,9 @@ import { test, expect, describe } from 'vitest';
  * and on the following load JSON.parse throws, resetting all extended fields (MDRO, wound location, etc.).
  *
  * Fix: make the leading "\n\n" optional in the cleanup regex, so it matches both formats.
+ * The cleanup is now applied inside handleSave (in IpEventModal and VaxEventModal) before
+ * building finalNotes, so even if hydration fell through to a fallback setNotes(existingIp.notes)
+ * the block will never be doubled.
  */
 
 // Mirrors the save format used in IpEventModal / VaxEventModal
@@ -19,6 +22,11 @@ function buildFinalNotes(userNotes: string, extData: Record<string, unknown>): s
   return userNotes.trim()
     ? userNotes.trim() + `\n\n--- EXTENDED DATA ---\n${ext}`
     : `--- EXTENDED DATA ---\n${ext}`;
+}
+
+// Mirrors the in-save cleanup applied in IpEventModal / VaxEventModal handleSave
+function cleanNotesForSave(rawNotes: string): string {
+  return rawNotes.replace(/(\n\n)?--- EXTENDED DATA ---\n.*/s, '').trim();
 }
 
 // Fixed cleanup regex (makes the leading \n\n optional)
@@ -96,5 +104,63 @@ describe('event log notes: EXTENDED DATA round-trip', () => {
       // Clean up notes state for next round
       notesState = saved.replace(FIXED_CLEANUP_RE, '').trim();
     }
+  });
+});
+
+describe('event log notes: in-save cleanup prevents doubling', () => {
+  test('cleanNotesForSave strips block when hydration fell through to fallback (no \\n\\n)', () => {
+    // Simulate fallback: setNotes(existingIp.notes) where notes = "--- EXTENDED DATA ---\n{...}"
+    const dirtyNotes = buildFinalNotes('', { mdroType: 'MRSA' });
+    expect(dirtyNotes.startsWith('--- EXTENDED DATA ---')).toBe(true);
+
+    // The in-save cleanup must strip it
+    const clean = cleanNotesForSave(dirtyNotes);
+    expect(clean).toBe('');
+
+    // Then build finalNotes from the cleaned state → only one block
+    const finalNotes = buildFinalNotes(clean, { mdroType: 'MRSA' });
+    const blockCount = (finalNotes.match(/--- EXTENDED DATA ---/g) || []).length;
+    expect(blockCount).toBe(1);
+  });
+
+  test('cleanNotesForSave strips block when hydration fell through to fallback (with \\n\\n)', () => {
+    // Simulate fallback: setNotes(existingIp.notes) where notes contains user text + block
+    const dirtyNotes = buildFinalNotes('Some clinical notes.', { mdroType: 'VRE' });
+
+    const clean = cleanNotesForSave(dirtyNotes);
+    expect(clean).toBe('Some clinical notes.');
+
+    // buildFinalNotes from the cleaned state → one block, user notes preserved
+    const finalNotes = buildFinalNotes(clean, { mdroType: 'VRE' });
+    const blockCount = (finalNotes.match(/--- EXTENDED DATA ---/g) || []).length;
+    expect(blockCount).toBe(1);
+    expect(finalNotes.startsWith('Some clinical notes.')).toBe(true);
+  });
+
+  test('cleanNotesForSave is a no-op when notes are already clean', () => {
+    const clean = cleanNotesForSave('Just a plain note.');
+    expect(clean).toBe('Just a plain note.');
+  });
+
+  test('in-save cleanup prevents doubling even after broken-regex hydration fallback', () => {
+    // Simulate the full old bug scenario but with the new in-save cleanup fix:
+    // 1. First save (no user notes) → "--- EXTENDED DATA ---\n{...}"
+    const firstSaved = buildFinalNotes('', { mdroType: 'MRSA' });
+
+    // 2. Hydration uses BROKEN regex → doesn't strip → notes state = full dirty string
+    const pollutedNotesState = firstSaved.replace(BROKEN_CLEANUP_RE, '');
+    expect(pollutedNotesState).toBe(firstSaved); // no strip happened
+
+    // 3. Save: in-save cleanup now strips the block before appending
+    const cleanedBeforeSave = cleanNotesForSave(pollutedNotesState);
+    const secondSaved = buildFinalNotes(cleanedBeforeSave, { mdroType: 'MRSA' });
+
+    // Only one block — the fix works
+    const blockCount = (secondSaved.match(/--- EXTENDED DATA ---/g) || []).length;
+    expect(blockCount).toBe(1);
+
+    // Extended data is parseable
+    const match = secondSaved.match(/--- EXTENDED DATA ---\n(.*)/s);
+    expect(() => JSON.parse(match![1])).not.toThrow();
   });
 });
