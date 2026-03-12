@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useFacilityData, useDatabase } from "../../app/providers";
-import { Resident } from "../../domain/models";
+import { Resident, SymptomClass } from "../../domain/models";
 import { Search, Filter, AlertCircle, Shield, Activity, Syringe, Thermometer, Users, X, Upload, Plus, FileText, Settings, Map, Inbox, ArrowLeft, ExternalLink, Eye, EyeOff, ChevronDown, Archive, History } from "lucide-react";
 import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -12,6 +12,7 @@ import { ResidentProfileModal } from "./ResidentProfileModal";
 import { SettingsModal } from "./SettingsModal";
 import { ShiftReport } from "./ShiftReport";
 import { QuarantineLinkModal } from "./QuarantineLinkModal";
+import { ManualAddLineListModal } from "../LineListReport/ManualAddLineListModal";
 import { useUndoToast } from "../../components/UndoToast";
 import { EmptyState } from "../../components/EmptyState";
 import { computeResidentSignals, ResidentSignals } from "../../utils/residentSignals";
@@ -128,6 +129,13 @@ export const ResidentBoard: React.FC = () => {
 
   const [showContactTraceModal, setShowContactTraceModal] = useState(false);
   const [contactTraceCaseId, setContactTraceCaseId] = useState<string | null>(null);
+
+  const [lineListPrefill, setLineListPrefill] = useState<{
+    residentId: string;
+    symptomClass: SymptomClass;
+    onsetDate: string;
+    sourceEventId: string;
+  } | null>(null);
 
   // Sync filter state to URL search params
   const updateFilters = (updates: Record<string, string | null>) => {
@@ -560,6 +568,7 @@ export const ResidentBoard: React.FC = () => {
               showUndo({ message: "Vaccination record deleted", onUndo: () => updateDB(draft => { draft.data.facilityData[activeFacilityId].vaxEvents[id] = snapshot; }) });
             }}
             onStartContactTrace={() => {}}
+            onAddToLineList={(opts) => setLineListPrefill({ residentId: selectedResidentId, ...opts })}
           />
         )}
       </div>
@@ -1045,7 +1054,7 @@ export const ResidentBoard: React.FC = () => {
 
                         {expandedSnapshots[resident.mrn] && (
                           <div className="mb-3" onClick={e => e.stopPropagation()}>
-                            <ResidentClinicalSnapshot residentId={resident.mrn} compact />
+                            <ResidentClinicalSnapshot residentId={resident.mrn} compact onAddToLineList={(opts) => setLineListPrefill({ residentId: resident.mrn, ...opts })} />
                           </div>
                         )}
 
@@ -1195,6 +1204,7 @@ export const ResidentBoard: React.FC = () => {
             setContactTraceCaseId(newCaseId);
             setShowContactTraceModal(true);
           }}
+          onAddToLineList={(opts) => setLineListPrefill({ residentId: selectedResidentId, ...opts })}
         />
       )}
 
@@ -1281,6 +1291,18 @@ export const ResidentBoard: React.FC = () => {
             setShowVaxModal(false);
             setEditingVaxId(null);
           }} 
+        />
+      )}
+
+      {/* Line List Manual Add (from snapshot suggestions) */}
+      {lineListPrefill && (
+        <ManualAddLineListModal
+          symptomClass={lineListPrefill.symptomClass}
+          prefillResidentId={lineListPrefill.residentId}
+          prefillOnsetDate={lineListPrefill.onsetDate}
+          prefillSourceEventId={lineListPrefill.sourceEventId}
+          onClose={() => setLineListPrefill(null)}
+          onSaved={() => setLineListPrefill(null)}
         />
       )}
     </div>

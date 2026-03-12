@@ -8,21 +8,31 @@ import {
   Clock, 
   Link as LinkIcon,
   AlertTriangle,
-  ChevronRight
+  ChevronRight,
+  ClipboardList,
+  PlusCircle
 } from 'lucide-react';
 import { useFacilityData } from '../app/providers';
 import { useResidentAlerts } from '../hooks/useResidentAlerts';
 import { getAbtDays } from '../utils/countCardDataHelpers';
 import { normalizeClinicalDevices, getDeviceDay } from '../utils/clinicalDevices';
-import { IPEvent, ABTCourse, VaxEvent, OutbreakCase } from '../domain/models';
+import { IPEvent, ABTCourse, VaxEvent, OutbreakCase, SymptomClass } from '../domain/models';
+
+interface LineListSuggestion {
+  symptomClass: SymptomClass;
+  label: string;
+  onsetDate: string;
+  sourceEventId: string;
+}
 
 interface Props {
   residentId: string;
   className?: string;
   compact?: boolean;
+  onAddToLineList?: (opts: { symptomClass: SymptomClass; onsetDate: string; sourceEventId: string }) => void;
 }
 
-export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, className = "", compact = false }) => {
+export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, className = "", compact = false, onAddToLineList }) => {
   const { store } = useFacilityData();
   const resident = store.residents[residentId];
   const alerts = useResidentAlerts(residentId);
@@ -91,6 +101,55 @@ export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, classNam
       (v.status === 'due' || v.status === 'overdue')
     );
   }, [store.vaxEvents, resident.mrn]);
+
+  // 6. Line List Suggestions
+  const lineListSuggestions = useMemo<LineListSuggestion[]>(() => {
+    if (!onAddToLineList) return [];
+    const suggestions: LineListSuggestion[] = [];
+
+    const RESP_KEYWORDS = /\b(pneumo|influenza|flu|covid|rsv|respiratory|upper.?resp|lower.?resp|ili)\b/i;
+    const GI_KEYWORDS = /\b(cdiff|c\.?\s*diff|clostridium|norovirus|gastro|diarr|gi\b|vomit)\b/i;
+
+    const isAlreadyListed = (sc: SymptomClass) =>
+      Object.values(store.lineListEvents || {}).some(
+        ev => ev.residentId === resident.mrn && ev.symptomClass === sc
+      );
+
+    // Check active IP events
+    for (const ip of activeInfections) {
+      const text = [ip.infectionCategory, ip.infectionSite, ip.organism].filter(Boolean).join(' ');
+      let symptomClass: SymptomClass | null = null;
+      if (RESP_KEYWORDS.test(text)) symptomClass = 'resp';
+      else if (GI_KEYWORDS.test(text)) symptomClass = 'gi';
+
+      if (!symptomClass || isAlreadyListed(symptomClass)) continue;
+
+      const onsetDate = ip.onsetDate ?? ip.createdAt;
+      const label = `IP Event: ${ip.infectionCategory || 'Infection'} (${symptomClass === 'resp' ? 'Respiratory' : 'GI'})`;
+      suggestions.push({ symptomClass, label, onsetDate, sourceEventId: ip.id });
+    }
+
+    // Check active ABT courses
+    for (const abt of activeAbts) {
+      const text = [abt.medication, abt.indication, abt.infectionSource, abt.syndromeCategory].filter(Boolean).join(' ');
+      let symptomClass: SymptomClass | null = null;
+      if (RESP_KEYWORDS.test(text)) symptomClass = 'resp';
+      else if (GI_KEYWORDS.test(text)) symptomClass = 'gi';
+
+      if (!symptomClass) continue;
+
+      // Skip if there's already an IP event suggestion for the same class
+      if (suggestions.some(s => s.symptomClass === symptomClass)) continue;
+
+      if (isAlreadyListed(symptomClass)) continue;
+
+      const onsetDate = abt.startDate ?? abt.createdAt;
+      const label = `ABT: ${abt.medication} (${symptomClass === 'resp' ? 'Respiratory' : 'GI'})`;
+      suggestions.push({ symptomClass, label, onsetDate, sourceEventId: abt.id });
+    }
+
+    return suggestions;
+  }, [activeInfections, activeAbts, store.lineListEvents, resident.mrn, onAddToLineList]);
 
   return (
     <div className={`bg-white border border-neutral-200 rounded-xl overflow-hidden shadow-sm ${className}`}>
@@ -220,6 +279,32 @@ export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, classNam
                     <span>{alert.message}</span>
                   </div>
                   <ChevronRight className="w-3 h-3 opacity-50" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Line List Suggestions */}
+        {lineListSuggestions.length > 0 && onAddToLineList && (
+          <div className="pt-2 border-t border-blue-100">
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList className="w-4 h-4 text-blue-500" />
+              <span className="text-[10px] font-bold uppercase tracking-tight text-blue-600">Line List Suggestions</span>
+            </div>
+            <div className="space-y-1.5">
+              {lineListSuggestions.map((s, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-blue-50 border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <PlusCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span className="text-[11px] font-medium text-blue-800 truncate">{s.label}</span>
+                  </div>
+                  <button
+                    onClick={() => onAddToLineList({ symptomClass: s.symptomClass, onsetDate: s.onsetDate, sourceEventId: s.sourceEventId })}
+                    className="ml-2 shrink-0 px-2 py-1 text-[10px] font-bold text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+                  >
+                    Add Now
+                  </button>
                 </div>
               ))}
             </div>
