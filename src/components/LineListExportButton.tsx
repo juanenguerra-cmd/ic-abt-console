@@ -5,6 +5,15 @@ import { IPEvent, ABTCourse, Resident } from '../domain/models';
 import { exportToCsv } from '../utils/csvExport';
 import { todayLocalDateInputValue } from '../lib/dateUtils';
 
+const RESPIRATORY_PATTERN = /pneumonia|influenza|covid|rsv|respiratory|\buri\b|\burti\b|\blrti\b|bronchitis|pertussis|tuberculosis|\btb\b/;
+const GI_PATTERN = /norovirus|c\.?\s*diff|cdiff|cdx|gastroenteritis|\bgi\b|gastrointestinal|diarrhea|vomiting|rotavirus|salmonella|e\.?\s*coli/;
+
+const isRespiratoryOrGI = (text?: string): boolean => {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return RESPIRATORY_PATTERN.test(lower) || GI_PATTERN.test(lower);
+};
+
 export const LineListExportButton: React.FC<{ label?: string; compact?: boolean }> = ({ 
   label = "Generate Line List (CSV)", 
   compact 
@@ -15,8 +24,12 @@ export const LineListExportButton: React.FC<{ label?: string; compact?: boolean 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active');
+    const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip =>
+      ip.status === 'active' && isRespiratoryOrGI(ip.infectionCategory)
+    );
     const relevantAbts = (Object.values(store.abts) as ABTCourse[]).filter(abt => {
+      const hasRespOrGI = isRespiratoryOrGI(abt.syndromeCategory) || isRespiratoryOrGI(abt.indication);
+      if (!hasRespOrGI) return false;
       if (abt.status === 'active') return true;
       if (abt.status === 'completed' && abt.endDate && new Date(abt.endDate) >= sevenDaysAgo) return true;
       return false;

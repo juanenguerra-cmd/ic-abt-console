@@ -110,6 +110,7 @@ export const OutbreakManager: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-4">
+                <LineListExportButton label="Generate Line List" />
                 <div className="flex space-x-1 bg-neutral-200 p-1 rounded-lg">
                   <button
                     onClick={() => setActiveTab("linelist")}
@@ -157,9 +158,10 @@ export const OutbreakManager: React.FC = () => {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-neutral-400">
-            <Activity className="w-16 h-16 mb-4 opacity-20" />
+          <div className="flex-1 flex flex-col items-center justify-center text-neutral-400 gap-4">
+            <Activity className="w-16 h-16 mb-2 opacity-20" />
             <p>Select an outbreak to manage details</p>
+            <LineListExportButton label="Generate Global Line List" />
           </div>
         )}
       </div>

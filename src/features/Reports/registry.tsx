@@ -290,15 +290,30 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
   },
   'combined-line-list': {
     id: 'combined-line-list',
-    title: 'Combined Line List',
-    description: 'De-duplicated by resident (Active IP + Recent ABT)',
+    title: 'Respiratory / GI Line List',
+    description: 'De-duplicated by resident — Respiratory & GI infections with active or recent ABT',
     category: 'clinical',
     datasetResolver: (store) => {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-      const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip => ip.status === 'active');
+      const RESPIRATORY_PATTERN = /pneumonia|influenza|covid|rsv|respiratory|\buri\b|\burti\b|\blrti\b|bronchitis|pertussis|tuberculosis|\btb\b/;
+      const GI_PATTERN = /norovirus|c\.?\s*diff|cdiff|cdx|gastroenteritis|\bgi\b|gastrointestinal|diarrhea|vomiting|rotavirus|salmonella|e\.?\s*coli/;
+      const isRespiratoryOrGI = (text?: string): boolean => {
+        if (!text) return false;
+        const lower = text.toLowerCase();
+        return RESPIRATORY_PATTERN.test(lower) || GI_PATTERN.test(lower);
+      };
+
+      const joinInfectionField = (infections: IPEvent[], fn: (i: IPEvent) => string | undefined) =>
+        infections.map(fn).filter(Boolean).join(', ') || '-';
+
+      const activeInfections = (Object.values(store.infections) as IPEvent[]).filter(ip =>
+        ip.status === 'active' && isRespiratoryOrGI(ip.infectionCategory)
+      );
       const relevantAbts = (Object.values(store.abts) as ABTCourse[]).filter(abt => {
+        const hasRespOrGI = isRespiratoryOrGI(abt.syndromeCategory) || isRespiratoryOrGI(abt.indication);
+        if (!hasRespOrGI) return false;
         if (abt.status === 'active') return true;
         if (abt.status === 'completed' && abt.endDate && new Date(abt.endDate) >= sevenDaysAgo) return true;
         return false;
@@ -336,12 +351,18 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
         resident: residentLabel(res),
         mrn: (res as any).mrn || (res as any).tempId || '-',
         unitRoom: `${(res as any).currentUnit || (res as any).unitSnapshot || '-'} / ${(res as any).currentRoom || (res as any).roomSnapshot || '-'}`,
-        infections: infections.map(i => i.infectionCategory).join(', '),
+        infections: joinInfectionField(infections, i => i.infectionCategory),
+        isolationTypes: joinInfectionField(infections, i => i.isolationType),
+        organisms: joinInfectionField(infections, i => i.organism),
+        onsetDates: joinInfectionField(infections, i => i.onsetDate),
         abts: abts.map(a => {
           const days = getAbtDays(a.startDate, a.endDate);
           return days ? `${a.medication} (Day ${days.current}${days.total ? '/' + days.total : ''})` : a.medication;
         }).join(', '),
-        organisms: infections.map(i => i.organism).filter(Boolean).join(', ') || '-',
+        abtStartDates: abts.map(a => a.startDate || '').filter(Boolean).join(', ') || '-',
+        cultureCollected: abts.length > 0
+          ? (abts.some(a => a.cultureCollected) ? 'Yes' : 'No')
+          : '-',
       }));
     },
     columns: [
@@ -349,8 +370,12 @@ export const REPORT_REGISTRY: Record<string, ReportDefinition> = {
       { id: 'mrn', header: 'MRN', accessor: (d) => d.mrn },
       { id: 'unitRoom', header: 'Unit/Room', accessor: (d) => d.unitRoom },
       { id: 'infections', header: 'Infection(s)', accessor: (d) => d.infections },
-      { id: 'abts', header: 'ABT(s)', headerClassName: 'w-48', accessor: (d) => d.abts },
+      { id: 'isolationTypes', header: 'Isolation', accessor: (d) => d.isolationTypes },
       { id: 'organisms', header: 'Organism(s)', accessor: (d) => d.organisms },
+      { id: 'onsetDates', header: 'Onset Date(s)', accessor: (d) => d.onsetDates },
+      { id: 'abts', header: 'ABT(s)', headerClassName: 'w-48', accessor: (d) => d.abts },
+      { id: 'abtStartDates', header: 'ABT Start', accessor: (d) => d.abtStartDates },
+      { id: 'cultureCollected', header: 'Culture', accessor: (d) => d.cultureCollected },
     ],
     csvSupport: true,
     printSupport: true,
