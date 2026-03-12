@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Save, Activity, TestTube, FileText, Link, Shield, AlertTriangle, Trash2 } from "lucide-react";
+import { X, Save, Activity, TestTube, FileText, Link, Shield, AlertTriangle, Trash2, ClipboardCheck } from "lucide-react";
 import { useDatabase, useFacilityData } from "../../app/providers";
-import { ABTCourse, IPEvent } from "../../domain/models";
+import { ABTCourse, AbtIntervention, IPEvent } from "../../domain/models";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import { detectMedicationClass, MEDICATION_CLASS_OPTIONS } from "../../utils/medicationClassMap";
@@ -175,6 +175,10 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
   const [xrayResults, setXrayResults] = useState("");
   const [linkedIpEventId, setLinkedIpEventId] = useState("");
 
+  // Stewardship fields
+  const [timeoutReviewDate, setTimeoutReviewDate] = useState(existingAbt?.timeoutReviewDate || "");
+  const [isBroadSpectrum, setIsBroadSpectrum] = useState(existingAbt?.isBroadSpectrum || false);
+
   // Guard-rail override acknowledgements
   const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
   const [duplicateOverrideReason, setDuplicateOverrideReason] = useState("");
@@ -328,6 +332,9 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
           diagnostics,
           locationSnapshot,
           notes: notes.trim() || undefined,
+          timeoutReviewDate: timeoutReviewDate || undefined,
+          isBroadSpectrum: isBroadSpectrum || undefined,
+          interventions: existingAbt?.interventions,
           createdAt: existingAbt?.createdAt || now,
           updatedAt: now,
         };
@@ -663,6 +670,57 @@ export const AbtCourseModal: React.FC<Props> = ({ residentId, existingAbt, onClo
             </div>
           </section>
           
+          {/* Antibiotic Stewardship */}
+          <section>
+            <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">
+              <ClipboardCheck className="w-4 h-4 text-neutral-500" />
+              Antibiotic Stewardship
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 mb-1">72-Hour Timeout Review Date</label>
+                <input
+                  type="date"
+                  value={timeoutReviewDate}
+                  onChange={(e) => setTimeoutReviewDate(e.target.value)}
+                  className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-emerald-500 focus:border-emerald-500"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Record the date a prescriber or stewardship lead reviewed the course at 72 hours.
+                </p>
+              </div>
+              <div className="flex flex-col justify-center gap-2 pt-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isBroadSpectrum}
+                    onChange={(e) => setIsBroadSpectrum(e.target.checked)}
+                    className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  Broad-Spectrum Agent
+                </label>
+                <p className="text-xs text-neutral-500 ml-6">
+                  Flag if this is a broad-spectrum antibiotic (e.g., fluoroquinolone, carbapenem, vancomycin).
+                  Triggers PAF queue review.
+                </p>
+              </div>
+            </div>
+            {existingAbt?.interventions && existingAbt.interventions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-neutral-600 mb-2">Logged Interventions ({existingAbt.interventions.length})</p>
+                <div className="space-y-2">
+                  {existingAbt.interventions.map((iv: AbtIntervention, i: number) => (
+                    <div key={i} className="text-xs bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                      <span className="font-semibold text-indigo-800">{iv.type}</span>
+                      <span className="text-neutral-500 ml-1">· {iv.loggedBy} · {new Date(iv.date).toLocaleDateString()}</span>
+                      <p className="text-neutral-700 mt-0.5">{iv.note}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* Linkages & Notes */}
           <section>
             <h3 className="text-sm font-bold text-neutral-900 mb-3 flex items-center gap-2 border-b pb-1">

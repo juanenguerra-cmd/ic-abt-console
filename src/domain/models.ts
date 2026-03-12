@@ -125,6 +125,39 @@ export interface QuarantineResident {
   resolvedToMrn?: string;
 }
 
+/** Antibiotic sensitivity result for a specific agent in a culture. */
+export interface SensitivityResult {
+  antibiotic: string;
+  /** S = Susceptible, I = Intermediate, R = Resistant */
+  result: 'S' | 'I' | 'R';
+  mic?: string;
+}
+
+/** A standalone culture result used in the Antibiogram Builder. */
+export interface CultureResult {
+  id: string;
+  facilityId: string;
+  collectionDate: string;
+  /** Body site (e.g. "Urine", "Blood", "Wound"). */
+  source: string;
+  organism: string;
+  sensitivities: SensitivityResult[];
+  /** Optional link back to an ABT course. */
+  linkedAbtId?: string;
+  residentRef?: ResidentRef;
+  notes?: string;
+  createdAt: ISO;
+  updatedAt: ISO;
+}
+
+/** A logged stewardship intervention on an ABT course. */
+export interface AbtIntervention {
+  date: ISO;
+  type: 'De-escalation' | 'Discontinuation' | 'Guideline Compliance' | 'Timeout Review' | 'IV-to-PO' | 'Dose Optimization' | 'Other';
+  note: string;
+  loggedBy: string;
+}
+
 export interface ABTCourse {
   id: string;
   residentRef: ResidentRef;
@@ -152,6 +185,12 @@ export interface ABTCourse {
   locationSnapshot?: { unit?: string; room?: string; attendingMD?: string; capturedAt?: ISO };
   prescriber?: string;
   notes?: string;
+  /** ISO date of the 72-hour antibiotic timeout review. */
+  timeoutReviewDate?: string;
+  /** Indicates if this is a broad-spectrum antibiotic course. */
+  isBroadSpectrum?: boolean;
+  /** Stewardship interventions logged against this course. */
+  interventions?: AbtIntervention[];
   createdAt: ISO;
   updatedAt: ISO;
 }
