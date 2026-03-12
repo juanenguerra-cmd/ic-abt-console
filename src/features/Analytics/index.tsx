@@ -1,15 +1,20 @@
-import React, { useMemo } from 'react';
-import { useFacilityData } from '../../app/providers';
+import React, { useState, useMemo } from 'react';
+import { useFacilityData, useDatabase } from '../../app/providers';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 import {
   TrendingUp, AlertTriangle, Activity, Pill, Users,
-  ShieldAlert, CheckCircle, Stethoscope, ClipboardList
+  ShieldAlert, CheckCircle, Stethoscope, ClipboardList, BookOpen, BarChart2, FlaskConical
 } from 'lucide-react';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
+import AbtMetrics from './AbtMetrics';
+import AntibiogramBuilder from './AntibiogramBuilder';
+import TreatmentGuidelines from './TreatmentGuidelines';
+import { CultureResult } from '../../domain/models';
+import { v4 as uuidv4 } from 'uuid';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MDRO_CATEGORIES = [
@@ -26,8 +31,21 @@ const parseLocalDate = (raw: string): Date =>
   /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw);
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
+type DashboardTab = 'overview' | 'asp' | 'antibiogram' | 'guidelines';
+
 const AnalyticsDashboard: React.FC = () => {
-  const { store } = useFacilityData();
+  const { store, activeFacilityId } = useFacilityData();
+  const { updateDB } = useDatabase();
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+
+  // In-memory culture results (persisted via updateDB in a real implementation;
+  // for now stored locally and passed to AntibiogramBuilder)
+  const [localCultures, setLocalCultures] = useState<CultureResult[]>([]);
+
+  const handleAddCulture = (result: CultureResult) => {
+    setLocalCultures((prev) => [...prev, result]);
+  };
 
   // ── 1. Monthly Historical Data (Last 6 Months) ─────────────────────────────
   const monthlyData = useMemo(() => {
@@ -206,10 +224,80 @@ const AnalyticsDashboard: React.FC = () => {
             Analytics & Projections
           </h1>
           <p className="text-neutral-500 mt-1">
-            Historical trends, predictive analytics, and quality stewardship matrices.
+            Historical trends, predictive analytics, quality stewardship matrices, and clinical guidelines.
           </p>
         </div>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 border-b border-neutral-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'overview'
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              : 'text-neutral-600 hover:bg-neutral-100 border border-transparent'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('asp')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'asp'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'text-neutral-600 hover:bg-neutral-100 border border-transparent'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          ASP Metrics
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('antibiogram')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'antibiogram'
+              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+              : 'text-neutral-600 hover:bg-neutral-100 border border-transparent'
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          Antibiogram
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('guidelines')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activeTab === 'guidelines'
+              ? 'bg-purple-50 text-purple-700 border border-purple-200'
+              : 'text-neutral-600 hover:bg-neutral-100 border border-transparent'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          Treatment Guidelines
+        </button>
+      </div>
+
+      {/* ASP Metrics Tab */}
+      {activeTab === 'asp' && <AbtMetrics />}
+
+      {/* Antibiogram Tab */}
+      {activeTab === 'antibiogram' && (
+        <AntibiogramBuilder
+          facilityId={activeFacilityId}
+          cultures={localCultures}
+          onAddCulture={handleAddCulture}
+        />
+      )}
+
+      {/* Treatment Guidelines Tab */}
+      {activeTab === 'guidelines' && <TreatmentGuidelines />}
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (<>
 
       {/* Quality & Stewardship Matrix */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -572,6 +660,8 @@ const AnalyticsDashboard: React.FC = () => {
           </li>
         </ul>
       </div>
+
+      </>)}
 
     </div>
   );
