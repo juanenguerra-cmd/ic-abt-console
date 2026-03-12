@@ -1,7 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { useFacilityData, useDatabase } from '../../app/providers';
-import { IPEvent, Resident } from '../../domain/models';
+import { IPEvent, IPEventIndication, Resident } from '../../domain/models';
 import { normalizeClinicalDevices } from '../../utils/clinicalDevices';
 import { ExportPdfButton } from '../../components/ExportPdfButton';
 import { DrilldownHeader } from '../../components/DrilldownHeader';
@@ -9,6 +9,77 @@ import { DrilldownHeader } from '../../components/DrilldownHeader';
 interface Props {
   onClose: () => void;
 }
+
+/**
+ * Formats the "Precaution/Isolation" column value.
+ * - Isolation: "Isolation / [Type]"
+ * - EBP: "EBP / [Indication Details]" (e.g. "EBP / Indwelling Catheter, Wound")
+ */
+const getPrecautionColumnText = (ip: IPEvent): string => {
+  if (ip.ebp) {
+    const details = formatIndicationDetails(ip);
+    return `EBP / ${details}`;
+  }
+  return `Isolation / ${ip.isolationType || 'N/A'}`;
+};
+
+/**
+ * Returns a short summary of EBP indications (used in the Precaution column).
+ * e.g. "Indwelling, Wound"
+ */
+const formatIndicationDetails = (ip: IPEvent): string => {
+  if (!ip.indications || ip.indications.length === 0) {
+    return ip.isolationType || 'N/A';
+  }
+  return ip.indications.map(ind => formatIndicationShort(ind)).join(', ');
+};
+
+const formatIndicationShort = (ind: IPEventIndication): string => {
+  if (ind.category === 'Catheter') {
+    const ct = ind.catheterType === 'Other' ? (ind.catheterOtherText || 'Other') : ind.catheterType;
+    return ct || 'Catheter';
+  }
+  if (ind.category === 'MDRO') {
+    const mdroText = ind.mdroType === 'Other' ? (ind.mdroOtherText || 'Other MDRO') : ind.mdroType;
+    return mdroText || 'MDRO';
+  }
+  if (ind.category === 'Wound') return 'Wound';
+  return ind.category;
+};
+
+/**
+ * Formats the "Infection Source" column value.
+ * - Isolation: Infection Category or Organism
+ * - EBP: Full breakdown of all indications
+ *   e.g. "Wound: Sacrum Stage IV; MDRO: MRSA (Indwelling)"
+ */
+const getInfectionSourceText = (ip: IPEvent): string => {
+  if (ip.ebp) {
+    if (!ip.indications || ip.indications.length === 0) {
+      return ip.sourceOfInfection || ip.organism || 'N/A';
+    }
+    return ip.indications.map(ind => formatIndicationFull(ind)).join('; ') || 'N/A';
+  }
+  // Isolation: show infection category or organism
+  return ip.infectionCategory || ip.organism || ip.sourceOfInfection || 'N/A';
+};
+
+const formatIndicationFull = (ind: IPEventIndication): string => {
+  if (ind.category === 'Wound') {
+    const parts = [ind.woundSite, ind.woundType].filter(Boolean).join(' ');
+    return `Wound: ${parts || 'N/A'}`;
+  }
+  if (ind.category === 'MDRO') {
+    const mdroText = ind.mdroType === 'Other' ? (ind.mdroOtherText || 'Other MDRO') : (ind.mdroType || 'N/A');
+    const catheter = ind.catheterType === 'Other' ? (ind.catheterOtherText || 'Other') : ind.catheterType;
+    return catheter ? `MDRO: ${mdroText} (${catheter})` : `MDRO: ${mdroText}`;
+  }
+  if (ind.category === 'Catheter') {
+    const ct = ind.catheterType === 'Other' ? (ind.catheterOtherText || 'Other') : ind.catheterType;
+    return `Catheter: ${ct || 'N/A'}`;
+  }
+  return ind.category;
+};
 
 export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
   const { store } = useFacilityData();
@@ -102,8 +173,8 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                         return [
                           resident?.currentRoom || 'N/A',
                           residentWithMrn,
-                          ip.ebp ? 'EBP' : `ISOLATION / ${ip.isolationType || 'N/A'}`,
-                          ip.sourceOfInfection || ip.organism || 'N/A',
+                          getPrecautionColumnText(ip),
+                          getInfectionSourceText(ip),
                           duration,
                         ];
                       }),
@@ -132,8 +203,8 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                 <tr>
                   <th scope="col" className="px-4 py-3">Resident Name</th>
                   <th scope="col" className="px-4 py-3">Room/Unit</th>
-                  <th scope="col" className="px-4 py-3">Precaution Type</th>
-                  <th scope="col" className="px-4 py-3">Isolation/EBP Indication</th>
+                  <th scope="col" className="px-4 py-3">Precaution/Isolation</th>
+                  <th scope="col" className="px-4 py-3">Infection Source</th>
                   <th scope="col" className="px-4 py-3">Start Date</th>
                   <th scope="col" className="px-4 py-3">Organism</th>
                   <th scope="col" className="px-4 py-3">Status</th>
@@ -146,8 +217,8 @@ export const ActivePrecautionsModal: React.FC<Props> = ({ onClose }) => {
                     <tr key={ip.id} className="bg-white border-b hover:bg-neutral-50">
                       <td className="px-4 py-4 font-medium text-neutral-900">{resident?.displayName || 'Unknown'}</td>
                       <td className="px-4 py-4">{resident?.currentRoom || 'N/A'} / {resident?.currentUnit || 'N/A'}</td>
-                      <td className="px-4 py-4">{ip.ebp ? 'EBP' : 'Isolation'}</td>
-                      <td className="px-4 py-4">{ip.isolationType || ip.sourceOfInfection || 'N/A'}</td>
+                      <td className="px-4 py-4">{getPrecautionColumnText(ip)}</td>
+                      <td className="px-4 py-4">{getInfectionSourceText(ip)}</td>
                       <td className="px-4 py-4">{new Date(ip.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-4">{ip.organism || 'N/A'}</td>
                       <td className="px-4 py-4">{ip.status}</td>
