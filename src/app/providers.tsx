@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from "react";
-import { UnifiedDB, FacilityStore } from "../domain/models";
+import { UnifiedDB, FacilityStore, Facility } from "../domain/models";
 import { loadDBAsync, saveDBAsync, SchemaMigrationError, reconcileWithRemoteAsync } from "../storage/engine";
 import { STORAGE_SLICES } from "../storage/repository";
 import { AlertTriangle, RefreshCw, X } from "lucide-react";
@@ -17,56 +17,8 @@ import {
 } from "../services/syncService";
 import { LS_JUST_RESTORED_FLAG, LS_ACTIVE_FACILITY_ID } from "../constants/storageKeys";
 
-// How long to keep the restore guard active after setDB completes.
-const RESTORE_GUARD_TTL_MS = 5_000;
-// How long an app-toast notification stays visible before auto-dismissing.
 const TOAST_AUTO_DISMISS_MS = 4_000;
-
-// Module-level promise to ensure the async DB load only fires once per session.
-// This prevents race conditions and redundant loads with React 18 StrictMode (dev)
-// and Hot Module Replacement (HMR).
 let _bootstrapPromise: Promise<UnifiedDB> | null = null;
-
-type SyncDebugInfo = {
-  label: string;
-  syncMode?: string;
-  facilityId?: string | null;
-  userId?: string | null;
-  listenerKey?: string;
-  residentCount?: number;
-  abtCount?: number;
-  infectionCount?: number;
-  vaxCount?: number;
-  extra?: Record<string, unknown>;
-};
-
-function syncLog(info: SyncDebugInfo): void {
-  if (typeof window !== 'undefined' && (window as any).__SYNC_DEBUG__) {
-    console.log('[SyncDebug]', info);
-  }
-}
-
-// Stronger debug helper
-function debugDb(label: string, db: any) {
-  try {
-    const facId = db?.data?.facilities?.activeFacilityId;
-    const store = db?.data?.facilityData?.[facId] || {};
-    const info = {
-      schemaName: db?.schemaName,
-      schemaVersion: db?.schemaVersion,
-      activeFacilityId: facId,
-      residentCount: Object.keys(store?.residents?.byId || {}).length,
-    };
-    console.log(`[${label}]`, info);
-    syncLog({
-      label,
-      facilityId: facId,
-      residentCount: info.residentCount,
-    });
-  } catch (e) {
-    console.error(`[${label}] debugDb failed`, e);
-  }
-}
 
 const bootstrapApp = async (): Promise<UnifiedDB> => {
   const justRestored = sessionStorage.getItem(LS_JUST_RESTORED_FLAG) === "true";
@@ -76,30 +28,49 @@ const bootstrapApp = async (): Promise<UnifiedDB> => {
   }
   try {
     const loadedDb = await loadDBAsync({ skipRemoteReconciliation: justRestored });
-    const facId = loadedDb.data.facilities.activeFacilityId;
-    syncLog({ label: 'bootstrap', facilityId: facId, extra: { justRestored } });
-    const store = loadedDb.data.facilityData[facId] || {} as any;
-    const swReg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
-    const swVersion = swReg?.active?.scriptURL ?? 'none';
-    console.group('%c[IC Console] Startup Diagnostics', 'color: #059669; font-weight: bold;');
-    console.log('BUILD_ID        :', (window as any).__BUILD_ID__);
-    console.log('SW script URL   :', swVersion);
-    console.log('Active facilityId:', facId);
-    console.log('Resident count  :', Object.keys(store?.residents?.byId || {}).length);
-    console.log('ABT count       :', Object.keys(store?.abts?.byId || {}).length);
-    console.log('Infection count :', Object.keys(store?.infections?.byId || {}).length);
-    console.log('Vax count       :', Object.keys(store?.vaxEvents?.byId || {}).length);
-    console.log('Just restored?  :', justRestored);
-    console.log('Schema version  :', loadedDb.schemaVersion);
-    console.groupEnd();
-    debugDb("initial-load", loadedDb);
+    if (!loadedDb.data.facilities.activeFacilityId) {
+      console.warn("[Bootstrap] No active facility found, creating a default one.");
+      const newFacility: Facility = {
+        id: `fac-${new Date().getTime()}`,
+        name: "My Facility",
+        units: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      loadedDb.data.facilities.byId[newFacility.id] = newFacility;
+      loadedDb.data.facilities.activeFacilityId = newFacility.id;
+      loadedDb.data.facilityData[newFacility.id] = {
+        residents: {},
+        quarantine: {},
+        abts: {},
+        infections: {},
+        vaxEvents: {},
+        notes: {},
+        staff: {},
+        staffVaxEvents: {},
+        fitTestEvents: {},
+        auditSessions: {},
+        outbreaks: {},
+        outbreakCases: {},
+        outbreakExposures: {},
+        outbreakDailyStatuses: {},
+        exportProfiles: {},
+        surveyPackets: {},
+        infectionControlAuditSessions: {},
+        infectionControlAuditItems: {},
+        notifications: {},
+        contactTraceCases: {},
+        contactTraceExposures: {},
+        lineListEvents: {},
+      };
+    }
+
     return loadedDb;
   } catch (err) {
     console.error("Failed to load DB:", err);
     throw err;
   }
 }
-
 
 interface DatabaseContextType {
   db: UnifiedDB;
@@ -168,7 +139,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(auth, (user) => {
       const uid = user?.uid ?? null;
       setUserId(uid);
-      syncLog({ label: 'auth-state-changed', userId: uid });
       if (user && dbRef.current && !isRestoringRef.current) {
         reconcileWithRemoteAsync(dbRef.current, 'auth').then(async () => {
           await refreshSyncStatusFromStorage();
@@ -182,9 +152,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId || !activeFacilityId) return;
 
-    syncLog({ label: 'onSnapshot-attach', userId, facilityId: activeFacilityId });
-    console.log(`[Sync] Attaching sync-signal listener (user=${userId}, facility=${activeFacilityId})`);
-
     let unsub: (() => void) | null = null;
     try {
       unsub = onSnapshot(fsDoc(firestoreDb, 'users', userId, 'meta', 'sync'), (snap) => {
@@ -194,7 +161,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
         const currentDb = dbRef.current;
         if (!currentDb || isRestoringRef.current) return;
         if ((signal.lastUpdatedAt || '') > (currentDb.updatedAt || '')) {
-          syncLog({ label: 'onSnapshot-triggered-reconcile', userId, facilityId: activeFacilityId });
           reconcileWithRemoteAsync(currentDb).then(async (result) => {
             if (result.action === 'pull') {
               await refreshSyncStatusFromStorage();
@@ -209,8 +175,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
     return () => {
       if (unsub) {
-        console.log(`[Sync] Detaching sync-signal listener (user=${userId}, facility=${activeFacilityId})`);
-        syncLog({ label: 'onSnapshot-detach', userId, facilityId: activeFacilityId });
         unsub();
       }
     };
@@ -220,7 +184,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const startTimer = async () => {
       const user = await waitForAuthReady();
       if (user) {
-        console.log('Auth ready, starting periodic sync for uid:', user.uid);
         startSyncTimer(() => (isRestoringRef.current ? null : dbRef.current));
       } else {
         console.warn('Skipping periodic sync: auth is not available.');
@@ -256,7 +219,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const handleOnline = () => {
       const currentDb = dbRef.current;
       if (!currentDb || isRestoringRef.current) return;
-      syncLog({ label: 'online-triggered-reconcile' });
       reconcileWithRemoteAsync(currentDb, 'online').then(async () => {
         await refreshSyncStatusFromStorage();
         setSyncStatus(getSyncStatus());
@@ -265,7 +227,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const handleFocus = () => {
       const currentDb = dbRef.current;
       if (!currentDb || isRestoringRef.current) return;
-      syncLog({ label: 'focus-triggered-reconcile' });
       reconcileWithRemoteAsync(currentDb, 'focus').then(async () => {
         await refreshSyncStatusFromStorage();
         setSyncStatus(getSyncStatus());
@@ -303,8 +264,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (isRestoringRef.current) return;
       const remoteDb = (e as CustomEvent<UnifiedDB>).detail;
       if (!remoteDb) return;
-      console.log('[Sync] db-reconciled-from-remote: updating live React state.');
-      syncLog({ label: 'db-reconciled-from-remote' });
       dbRef.current = remoteDb; 
       setDb(remoteDb);
       const facId = remoteDb.data?.facilities?.activeFacilityId;
@@ -348,7 +307,6 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   const setDB = useCallback(async (newDb: UnifiedDB) => {
     isRestoringRef.current = true;
-    syncLog({ label: 'setDB-restore-guard-on' });
     try {
       newDb.updatedAt = new Date().toISOString();
       const newFacId = newDb.data.facilities.activeFacilityId;
@@ -374,8 +332,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     } finally {
       setTimeout(() => {
         isRestoringRef.current = false;
-        syncLog({ label: 'setDB-restore-guard-off' });
-      }, RESTORE_GUARD_TTL_MS);
+      }, 5000);
     }
   }, []);
 
