@@ -8,7 +8,7 @@ import {
   markSlicesPending,
   clearPackedSyncPending,
 } from "../storage/syncOutbox";
-import { LS_JUST_RESTORED_FLAG } from "../constants/storageKeys";
+import { LS_JUST_RESTORED_FLAG, LS_LAST_BACKUP_TS } from "../constants/storageKeys";
 
 const MAX_MUTATION_LOG_ENTRIES = 500;
 
@@ -75,6 +75,8 @@ function scheduleRemoteSync(db: UnifiedDB): void {
       console.log('[Sync] Executing debounced remote sync...');
       await remoteSaveDb(dbToSync);
       console.log(`[Sync] Debounced remote sync successful (updatedAt: ${dbToSync.updatedAt}).`);
+      // G7: record timestamp so the header badge reflects this cloud backup
+      try { localStorage.setItem(LS_LAST_BACKUP_TS, Date.now().toString()); } catch { /* non-browser env */ }
       window.dispatchEvent(new CustomEvent('backup-completed', { detail: { type: 'remote' } }));
       await clearPackedSyncPending().catch(() => {});
     } catch (err) {
