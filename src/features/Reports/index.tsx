@@ -70,6 +70,10 @@ const ReportsConsole: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-neutral-900">Reports &amp; Analytics</h1>
+        <LineListExportButton label="Generate Line List" />
+      </div>
       <div className="border-b border-neutral-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button 
