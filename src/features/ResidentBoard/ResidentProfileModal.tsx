@@ -249,13 +249,16 @@ export const ResidentProfileModal: React.FC<Props> = ({
           </h2>
           <div className="flex items-center gap-2">
             {!isEditing ? (
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit
-              </button>
+              <>
+                <ResidentCoursePDFGenerator residentId={residentId} />
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </button>
+              </>
             ) : (
               <button 
                 onClick={handleSave}
@@ -532,7 +535,6 @@ export const ResidentProfileModal: React.FC<Props> = ({
               <div className="flex justify-between items-center mb-4 border-b pb-1">
                 <h3 className="text-sm font-bold text-neutral-900">Clinical Timelines</h3>
                 <div className="flex gap-2">
-                  <ResidentCoursePDFGenerator residentId={residentId} />
                   {onStartContactTrace && (
                     <button 
                       onClick={() => {
