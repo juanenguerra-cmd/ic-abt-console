@@ -44,6 +44,7 @@ import {
   FileBarChart,
   PenSquare,
   ClipboardCheck,
+  ClipboardList,
   Bell,
   Database,
   Map,
@@ -379,12 +380,12 @@ const AppShell = () => {
             </SidebarSection>
 
             <SidebarSection title="Management">
-              {(can('write:outbreaks') || can('write:audits')) && (
+              {(can('write:outbreaks') || can('write:audits') || can('write:admissionscreening')) && (
                 <SidebarAccordion icon={FileBarChart} title="Reports & Audits">
                   {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
                   {can('write:outbreaks') && <SidebarLink to="/reports/devices" icon={Cpu} label="Device Reports" />}
                   {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-                  {can('write:outbreaks') && <SidebarLink to="/admission-screening" icon={ClipboardCheck} label="Admission Screening" />}
+                  {can('write:admissionscreening') && <SidebarLink to="/admission-screening" icon={ClipboardList} label="Admission Screening" />}
                   {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
                   {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
                 </SidebarAccordion>

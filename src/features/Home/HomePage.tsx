@@ -5,7 +5,7 @@ import { Resident, ShiftLogEntry } from "../../domain/models";
 import {
   Send, MessageSquare, User, Hash, ArrowLeft,
   LayoutDashboard, Users, Map, Clock, FileText, Bell, AlertCircle, Activity,
-  ClipboardCheck, FileBarChart, Inbox, BookOpen, Database, Settings,
+  ClipboardCheck, ClipboardList, FileBarChart, Inbox, BookOpen, Database, Settings,
   Star, Plus, X,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
@@ -13,23 +13,24 @@ import { PINNED_NAVS, RECENT_TAGS } from "../../constants/storageKeys";
 
 // ── Nav items (same icons as Sidebar) ──────────────────────────────────────
 const ALL_NAV_ITEMS = [
-  { id: "dashboard",       label: "Dashboard",       path: "/dashboard",       icon: LayoutDashboard },
-  { id: "resident-board",  label: "Resident Board",  path: "/resident-board",  icon: Users },
-  { id: "floor-map",       label: "Floor Map",       path: "/floor-map",       icon: Map },
-  { id: "staff",           label: "Staff",           path: "/staff",           icon: Users },
-  { id: "shift-log",       label: "Shift Log",       path: "/chat",            icon: Clock },
-  { id: "note-generator",  label: "Note Generator",  path: "/note-generator",  icon: FileText },
-  { id: "notifications",   label: "Notifications",   path: "/notifications",   icon: Bell },
-  { id: "outbreaks",       label: "Outbreaks",       path: "/outbreaks",       icon: AlertCircle },
-  { id: "reports",         label: "Reports",         path: "/reports",         icon: Activity },
-  { id: "antibiogram",     label: "Antibiogram",     path: "/reports/antibiogram", icon: Activity },
-  { id: "line-list-report",label: "Line List Report",path: "/linelist-report", icon: FileText },
-  { id: "audit-center",    label: "Audit Center",    path: "/audit-center",    icon: ClipboardCheck },
-  { id: "report-builder",  label: "Report Builder",  path: "/report-builder",  icon: FileBarChart },
-  { id: "quarantine-inbox",label: "Quarantine Inbox",path: "/quarantine",      icon: Inbox },
-  { id: "user-guide",      label: "User Guide",      path: "/user-guide",      icon: BookOpen },
-  { id: "back-office",     label: "Back Office",     path: "/back-office",     icon: Database },
-  { id: "settings",        label: "Settings",        path: "/settings",        icon: Settings },
+  { id: "dashboard",           label: "Dashboard",           path: "/dashboard",           icon: LayoutDashboard },
+  { id: "resident-board",      label: "Resident Board",      path: "/resident-board",      icon: Users },
+  { id: "floor-map",           label: "Floor Map",           path: "/floor-map",           icon: Map },
+  { id: "staff",               label: "Staff",               path: "/staff",               icon: Users },
+  { id: "shift-log",           label: "Shift Log",           path: "/chat",                icon: Clock },
+  { id: "note-generator",      label: "Note Generator",      path: "/note-generator",      icon: FileText },
+  { id: "notifications",       label: "Notifications",       path: "/notifications",       icon: Bell },
+  { id: "outbreaks",           label: "Outbreaks",           path: "/outbreaks",           icon: AlertCircle },
+  { id: "reports",             label: "Reports",             path: "/reports",             icon: Activity },
+  { id: "antibiogram",         label: "Antibiogram",         path: "/reports/antibiogram", icon: Activity },
+  { id: "line-list-report",    label: "Line List Report",    path: "/linelist-report",     icon: FileText },
+  { id: "admission-screening", label: "Admission Screening", path: "/admission-screening", icon: ClipboardList },
+  { id: "audit-center",        label: "Audit Center",        path: "/audit-center",        icon: ClipboardCheck },
+  { id: "report-builder",      label: "Report Builder",      path: "/report-builder",      icon: FileBarChart },
+  { id: "quarantine-inbox",    label: "Quarantine Inbox",    path: "/quarantine",          icon: Inbox },
+  { id: "user-guide",          label: "User Guide",          path: "/user-guide",          icon: BookOpen },
+  { id: "back-office",         label: "Back Office",         path: "/back-office",         icon: Database },
+  { id: "settings",            label: "Settings",            path: "/settings",            icon: Settings },
 ];
 
 const DEFAULT_PINNED = ["dashboard", "outbreaks", "notifications"];
