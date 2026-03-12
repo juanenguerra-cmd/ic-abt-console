@@ -13,12 +13,12 @@ interface Props {
 /**
  * Formats the "Precaution/Isolation" column value.
  * - Isolation: "Isolation / [Type]"
- * - EBP: "EBP / [Indication Details]" (e.g. "EBP / Indwelling Catheter, Wound")
+ * - EBP: "EBP/ [Indication Details]" (e.g. "EBP/ Wound")
  */
 const getPrecautionColumnText = (ip: IPEvent): string => {
   if (ip.ebp) {
     const details = formatIndicationDetails(ip);
-    return `EBP / ${details}`;
+    return `EBP/ ${details}`;
   }
   return `Isolation / ${ip.isolationType || 'N/A'}`;
 };
@@ -51,7 +51,7 @@ const formatIndicationShort = (ind: IPEventIndication): string => {
  * Formats the "Infection Source" column value.
  * - Isolation: Infection Category or Organism
  * - EBP: Full breakdown of all indications
- *   e.g. "Wound: Sacrum Stage IV; MDRO: MRSA (Indwelling)"
+ *   e.g. "Left Thigh / Squamous Cell Carcinoma; MRSA (Indwelling)"
  */
 const getInfectionSourceText = (ip: IPEvent): string => {
   if (ip.ebp) {
@@ -66,8 +66,8 @@ const getInfectionSourceText = (ip: IPEvent): string => {
 
 const formatIndicationFull = (ind: IPEventIndication): string => {
   if (ind.category === 'Wound') {
-    const parts = [ind.woundSite, ind.woundType].filter(Boolean).join(' ');
-    return `Wound: ${parts || 'N/A'}`;
+    const parts = [ind.woundSite, ind.woundType].filter(Boolean).join(' / ');
+    return parts || 'N/A';
   }
   if (ind.category === 'MDRO') {
     const mdroText = ind.mdroType === 'Other' ? (ind.mdroOtherText || 'Other MDRO') : (ind.mdroType || 'N/A');
