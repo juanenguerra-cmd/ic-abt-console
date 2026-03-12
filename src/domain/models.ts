@@ -630,7 +630,13 @@ export interface AdmissionScreeningRecord {
   admitDate?: string | null;
   screeningDate?: string | null;
   daysSinceAdmit?: number | null;
-  screeningStatus?: 'draft' | 'completed';
+  /**
+   * Workflow status of the screening record.
+   * - `'pending'`   – virtual UI state for auto-generated entries; **never persisted to the database**.
+   * - `'draft'`     – in-progress / saved but not finalised.
+   * - `'completed'` – finalized; clinical data has been encoded back to the resident profile.
+   */
+  screeningStatus?: 'pending' | 'draft' | 'completed';
   completedBy?: string | null;
   completedByTitle?: string | null;
   notes?: string | null;

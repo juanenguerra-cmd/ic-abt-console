@@ -67,6 +67,7 @@ function emptyFacilityStore(facilityId = "fac-default"): FacilityStore {
     contactTraceCases: {},
     contactTraceExposures: {},
     lineListEvents: {},
+    admissionScreenings: {},
   };
 }
 
