@@ -113,17 +113,29 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   /**
    * Derives a flat `deviceTypes` string array from the structured indications array.
    * Catheter indications are mapped to legacy NHSN-compatible device type strings.
+   * MDRO indications that include a catheter type are also included.
    */
-  const deriveDeviceTypes = (inds: IPEventIndication[]): string[] =>
-    inds
-      .filter(ind => ind.category === 'Catheter')
-      .map(ind => {
-        if (ind.catheterType === 'Urinary') return 'Urinary Catheter';
-        if (ind.catheterType === 'Central Line') return 'Central Line';
-        if (ind.catheterType === 'PICC') return 'PICC';
-        if (ind.catheterType === 'Midline') return 'Midline';
-        return 'Other Catheter';
-      });
+  const deriveDeviceTypes = (inds: IPEventIndication[]): string[] => {
+    const devices: string[] = [];
+    inds.forEach(ind => {
+      const mapCatheterType = (ct: string | undefined, otherText: string | undefined): string => {
+        if (!ct) return 'Other Catheter';
+        if (ct === 'Other') return otherText?.trim() || 'Other Catheter';
+        if (/indwelling|urinary/i.test(ct)) return 'Urinary Catheter';
+        if (/picc/i.test(ct)) return 'PICC';
+        if (/central/i.test(ct)) return 'Central Line';
+        if (/midline/i.test(ct)) return 'Midline';
+        return ct;
+      };
+      if (ind.category === 'Catheter') {
+        devices.push(mapCatheterType(ind.catheterType, ind.catheterOtherText));
+      }
+      if (ind.category === 'MDRO' && ind.catheterType) {
+        devices.push(mapCatheterType(ind.catheterType, ind.catheterOtherText));
+      }
+    });
+    return devices;
+  };
 
   // Clinical Fields
   const [infectionCategory, setInfectionCategory] = useState(
@@ -201,10 +213,10 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   const oldDevTypes: string[] = ext.deviceTypes ?? [];
                   if (oldDevTypes.length > 0) {
                     oldDevTypes.forEach((dt: string) => {
-                      let catheterType: IPEventIndication['catheterType'];
-                      if (/urinary/i.test(dt)) catheterType = 'Urinary';
+                      let catheterType: string | undefined;
+                      if (/urinary/i.test(dt)) catheterType = 'Indwelling';
                       else if (/central/i.test(dt)) catheterType = 'Central Line';
-                      else if (/picc/i.test(dt)) catheterType = 'PICC';
+                      else if (/picc/i.test(dt)) catheterType = 'PICC Line';
                       else if (/midline/i.test(dt)) catheterType = 'Midline';
                       else catheterType = 'Other';
                       migrated.push({ id: uuidv4(), category: 'Catheter', catheterType });
@@ -287,6 +299,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
     if (protocol !== "ebp" || indications.length === 0) return;
     const categories = indications.map(i => i.category);
     if (categories.includes('Catheter')) setInfectionCategory("Device-associated");
+    else if (categories.includes('MDRO')) setInfectionCategory("MDRO");
     else if (categories.includes('Wound')) setInfectionCategory("Wound infection");
     else setInfectionCategory("");
   }, [protocol, indications]);
@@ -458,6 +471,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
           infectionCategory: (infectionCategory === "Other" ? infectionCategoryOther.trim() || "Other" : infectionCategory.trim()) || undefined,
           infectionSite: (infectionSite === "Other" ? infectionSiteOther.trim() || "Other" : infectionSite.trim()) || undefined,
           sourceOfInfection: [...sourceTags.filter(s => s !== "Other"), ...(sourceTags.includes("Other") ? [`Other: ${sourceOther.trim() || "Unspecified"}`] : [])].join(", ") || undefined,
+          protocolType: protocol === "ebp" ? "EBP" : "Isolation",
           isolationType: derivedIsolationTypes.join(", ") || undefined,
           deviceTypes: derivedDeviceTypes.length > 0 ? derivedDeviceTypes : undefined,
           indications: indications.length > 0 ? indications : undefined,
@@ -637,12 +651,12 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                   className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-xs font-medium"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Add Indication
+                  + Add Additional Indication
                 </button>
               </div>
 
               {indications.length === 0 && (
-                <p className="text-sm text-neutral-400 italic">No indications added yet. Click "Add Indication" to begin.</p>
+                <p className="text-sm text-neutral-400 italic">No indications added yet. Click "+ Add Additional Indication" to begin.</p>
               )}
 
               <div className="space-y-3">
@@ -663,11 +677,20 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                         <label className="block text-xs font-medium text-neutral-600 mb-1">Category</label>
                         <select
                           value={ind.category}
-                          onChange={e => updateIndication(ind.id, { category: e.target.value as IndicationCategory, catheterType: undefined, woundSite: undefined, woundType: undefined })}
+                          onChange={e => updateIndication(ind.id, {
+                            category: e.target.value as IndicationCategory,
+                            catheterType: undefined,
+                            catheterOtherText: undefined,
+                            woundSite: undefined,
+                            woundType: undefined,
+                            mdroType: undefined,
+                            mdroOtherText: undefined,
+                          })}
                           className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                         >
                           <option value="Catheter">Catheter</option>
                           <option value="Wound">Wound</option>
+                          <option value="MDRO">MDRO</option>
                           <option value="Respiratory">Respiratory</option>
                           <option value="Other">Other</option>
                         </select>
@@ -679,16 +702,26 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                           <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type</label>
                           <select
                             value={ind.catheterType ?? ''}
-                            onChange={e => updateIndication(ind.id, { catheterType: (e.target.value || undefined) as IPEventIndication['catheterType'] })}
+                            onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
                             className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                           >
                             <option value="">Select type...</option>
-                            <option value="Urinary">Urinary</option>
-                            <option value="PICC">PICC</option>
-                            <option value="Midline">Midline</option>
+                            <option value="Indwelling">Indwelling</option>
+                            <option value="Suprapubic">Suprapubic</option>
+                            <option value="PICC Line">PICC Line</option>
                             <option value="Central Line">Central Line</option>
+                            <option value="Midline">Midline</option>
                             <option value="Other">Other</option>
                           </select>
+                          {ind.catheterType === 'Other' && (
+                            <input
+                              type="text"
+                              value={ind.catheterOtherText ?? ''}
+                              onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
+                              placeholder="Specify catheter type..."
+                              className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          )}
                         </div>
                       )}
 
@@ -701,7 +734,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                               type="text"
                               value={ind.woundSite ?? ''}
                               onChange={e => updateIndication(ind.id, { woundSite: e.target.value })}
-                              placeholder="e.g., Left Heel, Sacrum"
+                              placeholder="e.g., Sacrum, Left Heel"
                               className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                             />
                           </div>
@@ -711,9 +744,64 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                               type="text"
                               value={ind.woundType ?? ''}
                               onChange={e => updateIndication(ind.id, { woundType: e.target.value })}
-                              placeholder="e.g., Surgical, Pressure Ulcer"
+                              placeholder="e.g., Pressure Ulcer Stage IV, Surgical"
                               className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                             />
+                          </div>
+                        </>
+                      )}
+
+                      {/* MDRO fields */}
+                      {ind.category === 'MDRO' && (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">MDRO Type</label>
+                            <select
+                              value={ind.mdroType ?? ''}
+                              onChange={e => updateIndication(ind.id, { mdroType: (e.target.value || undefined) as IPEventIndication['mdroType'], mdroOtherText: undefined })}
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <option value="">Select organism...</option>
+                              <option value="MRSA">MRSA</option>
+                              <option value="VRE">VRE</option>
+                              <option value="ESBL">ESBL</option>
+                              <option value="CRE">CRE</option>
+                              <option value="CRAB/CRPA">CRAB/CRPA</option>
+                              <option value="Other">Other</option>
+                            </select>
+                            {ind.mdroType === 'Other' && (
+                              <input
+                                type="text"
+                                value={ind.mdroOtherText ?? ''}
+                                onChange={e => updateIndication(ind.id, { mdroOtherText: e.target.value })}
+                                placeholder="Specify organism..."
+                                className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type (if applicable)</label>
+                            <select
+                              value={ind.catheterType ?? ''}
+                              onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <option value="">None / Not applicable</option>
+                              <option value="Indwelling">Indwelling</option>
+                              <option value="Suprapubic">Suprapubic</option>
+                              <option value="PICC Line">PICC Line</option>
+                              <option value="Central Line">Central Line</option>
+                              <option value="Other">Other</option>
+                            </select>
+                            {ind.catheterType === 'Other' && (
+                              <input
+                                type="text"
+                                value={ind.catheterOtherText ?? ''}
+                                onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
+                                placeholder="Specify catheter type..."
+                                className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                              />
+                            )}
                           </div>
                         </>
                       )}

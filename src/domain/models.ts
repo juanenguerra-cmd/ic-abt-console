@@ -157,7 +157,7 @@ export interface ABTCourse {
 }
 
 /** High-level category for an IP event indication / risk factor. */
-export type IndicationCategory = 'Catheter' | 'Wound' | 'Respiratory' | 'Other';
+export type IndicationCategory = 'Catheter' | 'Wound' | 'Respiratory' | 'MDRO' | 'Other';
 
 /**
  * A single structured indication (device, wound, or other risk factor) associated
@@ -168,15 +168,26 @@ export interface IPEventIndication {
   id: string;
   category: IndicationCategory;
 
-  // --- Conditional follow-up fields ---
-
-  /** Populated when category === 'Catheter' */
-  catheterType?: 'Urinary' | 'PICC' | 'Midline' | 'Central Line' | 'Other';
+  // --- Wound fields ---
 
   /** Populated when category === 'Wound' — anatomical location (e.g. "Left Heel") */
   woundSite?: string;
-  /** Populated when category === 'Wound' — wound classification (e.g. "Pressure Ulcer") */
+  /** Populated when category === 'Wound' — wound classification (e.g. "Pressure Ulcer Stage IV") */
   woundType?: string;
+
+  // --- MDRO fields ---
+
+  /** Populated when category === 'MDRO' — the specific organism type. */
+  mdroType?: 'MRSA' | 'VRE' | 'ESBL' | 'CRE' | 'CRAB/CRPA' | 'Other';
+  /** Free-text MDRO description used when mdroType === 'Other'. */
+  mdroOtherText?: string;
+
+  // --- Catheter fields (used by 'Catheter' category and optionally by 'MDRO') ---
+
+  /** Catheter type — e.g. "Indwelling", "Suprapubic", "PICC Line", "Central Line", "Other". */
+  catheterType?: string;
+  /** Free-text catheter description used when catheterType === 'Other'. */
+  catheterOtherText?: string;
 
   /** Optional date the indication was first identified (YYYY-MM-DD). */
   dateIdentified?: string;
@@ -192,6 +203,8 @@ export interface IPEvent {
   infectionCategory?: string;
   infectionSite?: string;
   sourceOfInfection?: string;
+  /** Distinguishes the primary protocol type for display and reporting. */
+  protocolType?: "EBP" | "Isolation";
   isolationType?: string;
   ebp?: boolean;
   organism?: string;
