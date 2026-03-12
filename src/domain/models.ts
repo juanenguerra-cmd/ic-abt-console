@@ -196,7 +196,7 @@ export interface ABTCourse {
 }
 
 /** High-level category for an IP event indication / risk factor. */
-export type IndicationCategory = 'Catheter' | 'Wound' | 'Respiratory' | 'MDRO' | 'Other';
+export type IndicationCategory = 'Catheter' | 'Wound' | 'Respiratory' | 'MDRO' | 'Ostomy' | 'Other';
 
 /**
  * A single structured indication (device, wound, or other risk factor) associated
@@ -223,10 +223,22 @@ export interface IPEventIndication {
 
   // --- Catheter fields (used by 'Catheter' category and optionally by 'MDRO') ---
 
-  /** Catheter type — e.g. "Indwelling", "Suprapubic", "PICC Line", "Central Line", "Other". */
+  /**
+   * High-level catheter category — e.g. "Urinary", "Feeding Tube", "Vascular Access", "Other".
+   * Used to group and filter catheter type options.
+   */
+  catheterCategory?: string;
+  /** Catheter type — e.g. "Indwelling (Foley)", "Suprapubic", "PICC Line", "Central Line", "Other". */
   catheterType?: string;
   /** Free-text catheter description used when catheterType === 'Other'. */
   catheterOtherText?: string;
+
+  // --- Ostomy fields ---
+
+  /** Populated when category === 'Ostomy' — the specific ostomy type (e.g. "Colostomy", "Ileostomy"). */
+  ostomyType?: 'Colostomy' | 'Ileostomy' | 'Urostomy' | 'Other';
+  /** Free-text ostomy description used when ostomyType === 'Other'. */
+  ostomyOtherText?: string;
 
   /** Optional date the indication was first identified (YYYY-MM-DD). */
   dateIdentified?: string;

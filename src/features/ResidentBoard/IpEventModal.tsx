@@ -118,20 +118,35 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
   const deriveDeviceTypes = (inds: IPEventIndication[]): string[] => {
     const devices: string[] = [];
     inds.forEach(ind => {
-      const mapCatheterType = (ct: string | undefined, otherText: string | undefined): string => {
+      const mapCatheterType = (
+        cc: string | undefined,
+        ct: string | undefined,
+        otherText: string | undefined
+      ): string => {
+        // Feeding Tube category maps directly
+        if (cc === 'Feeding Tube') {
+          if (!ct || ct === 'Other') return otherText?.trim() || 'Feeding Tube';
+          return ct;
+        }
         if (!ct) return 'Other Catheter';
         if (ct === 'Other') return otherText?.trim() || 'Other Catheter';
-        if (/indwelling|urinary/i.test(ct)) return 'Urinary Catheter';
+        if (/indwelling|foley|urinary/i.test(ct)) return 'Urinary Catheter';
         if (/picc/i.test(ct)) return 'PICC';
         if (/central/i.test(ct)) return 'Central Line';
         if (/midline/i.test(ct)) return 'Midline';
         return ct;
       };
       if (ind.category === 'Catheter') {
-        devices.push(mapCatheterType(ind.catheterType, ind.catheterOtherText));
+        devices.push(mapCatheterType(ind.catheterCategory, ind.catheterType, ind.catheterOtherText));
       }
       if (ind.category === 'MDRO' && ind.catheterType) {
-        devices.push(mapCatheterType(ind.catheterType, ind.catheterOtherText));
+        devices.push(mapCatheterType(ind.catheterCategory, ind.catheterType, ind.catheterOtherText));
+      }
+      if (ind.category === 'Ostomy') {
+        const label = ind.ostomyType === 'Other'
+          ? ind.ostomyOtherText?.trim() || 'Ostomy'
+          : ind.ostomyType || 'Ostomy';
+        devices.push(label);
       }
     });
     return devices;
@@ -463,6 +478,7 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
               if (ind.category === 'Catheter') return 'Indwelling Catheter';
               if (ind.category === 'Wound') return 'Wound';
               if (ind.category === 'Respiratory') return 'Respiratory';
+              if (ind.category === 'Ostomy') return 'Ostomy';
               return 'Other';
             })))
           : isolationTypes;
@@ -687,12 +703,15 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                           value={ind.category}
                           onChange={e => updateIndication(ind.id, {
                             category: e.target.value as IndicationCategory,
+                            catheterCategory: undefined,
                             catheterType: undefined,
                             catheterOtherText: undefined,
                             woundSite: undefined,
                             woundType: undefined,
                             mdroType: undefined,
                             mdroOtherText: undefined,
+                            ostomyType: undefined,
+                            ostomyOtherText: undefined,
                           })}
                           className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                         >
@@ -700,37 +719,71 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                           <option value="Wound">Wound</option>
                           <option value="MDRO">MDRO</option>
                           <option value="Respiratory">Respiratory</option>
+                          <option value="Ostomy">Ostomy</option>
                           <option value="Other">Other</option>
                         </select>
                       </div>
 
-                      {/* Catheter Type */}
+                      {/* Catheter Category + Type */}
                       {ind.category === 'Catheter' && (
-                        <div>
-                          <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type</label>
-                          <select
-                            value={ind.catheterType ?? ''}
-                            onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
-                            className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                          >
-                            <option value="">Select type...</option>
-                            <option value="Indwelling">Indwelling</option>
-                            <option value="Suprapubic">Suprapubic</option>
-                            <option value="PICC Line">PICC Line</option>
-                            <option value="Central Line">Central Line</option>
-                            <option value="Midline">Midline</option>
-                            <option value="Other">Other</option>
-                          </select>
-                          {ind.catheterType === 'Other' && (
-                            <input
-                              type="text"
-                              value={ind.catheterOtherText ?? ''}
-                              onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
-                              placeholder="Specify catheter type..."
-                              className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
-                            />
-                          )}
-                        </div>
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Category</label>
+                            <select
+                              value={ind.catheterCategory ?? ''}
+                              onChange={e => updateIndication(ind.id, { catheterCategory: e.target.value || undefined, catheterType: undefined, catheterOtherText: undefined })}
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <option value="">Select category...</option>
+                              <option value="Urinary">Urinary</option>
+                              <option value="Feeding Tube">Feeding Tube</option>
+                              <option value="Vascular Access">Vascular Access</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">Catheter Type</label>
+                            <select
+                              value={ind.catheterType ?? ''}
+                              onChange={e => updateIndication(ind.id, { catheterType: e.target.value || undefined, catheterOtherText: undefined })}
+                              className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            >
+                              <option value="">Select type...</option>
+                              {(!ind.catheterCategory || ind.catheterCategory === 'Urinary') && (
+                                <>
+                                  <option value="Indwelling (Foley)">Indwelling (Foley)</option>
+                                  <option value="Suprapubic">Suprapubic</option>
+                                  <option value="Condom/External">Condom/External</option>
+                                </>
+                              )}
+                              {ind.catheterCategory === 'Feeding Tube' && (
+                                <>
+                                  <option value="NGT">NGT (Nasogastric Tube)</option>
+                                  <option value="PEG/G-Tube">PEG / G-Tube</option>
+                                  <option value="J-Tube">J-Tube (Jejunostomy)</option>
+                                </>
+                              )}
+                              {ind.catheterCategory === 'Vascular Access' && (
+                                <>
+                                  <option value="PICC Line">PICC Line</option>
+                                  <option value="Central Line">Central Line</option>
+                                  <option value="Midline">Midline</option>
+                                  <option value="PIV">PIV (Peripheral IV)</option>
+                                </>
+                              )}
+                              <option value="Other">Other</option>
+                            </select>
+                            {ind.catheterType === 'Other' && (
+                              <input
+                                type="text"
+                                value={ind.catheterOtherText ?? ''}
+                                onChange={e => updateIndication(ind.id, { catheterOtherText: e.target.value })}
+                                placeholder="Specify catheter type..."
+                                className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                              />
+                            )}
+                          </div>
+                        </>
                       )}
 
                       {/* Wound fields */}
@@ -795,10 +848,16 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                               className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
                             >
                               <option value="">None / Not applicable</option>
-                              <option value="Indwelling">Indwelling</option>
+                              <option value="Indwelling (Foley)">Indwelling (Foley)</option>
                               <option value="Suprapubic">Suprapubic</option>
+                              <option value="Condom/External">Condom/External</option>
                               <option value="PICC Line">PICC Line</option>
                               <option value="Central Line">Central Line</option>
+                              <option value="Midline">Midline</option>
+                              <option value="PIV">PIV (Peripheral IV)</option>
+                              <option value="NGT">NGT (Nasogastric Tube)</option>
+                              <option value="PEG/G-Tube">PEG / G-Tube</option>
+                              <option value="J-Tube">J-Tube (Jejunostomy)</option>
                               <option value="Other">Other</option>
                             </select>
                             {ind.catheterType === 'Other' && (
@@ -812,6 +871,33 @@ export const IpEventModal: React.FC<Props> = ({ residentId, existingIp, onClose 
                             )}
                           </div>
                         </>
+                      )}
+
+                      {/* Ostomy fields */}
+                      {ind.category === 'Ostomy' && (
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 mb-1">Ostomy Type</label>
+                          <select
+                            value={ind.ostomyType ?? ''}
+                            onChange={e => updateIndication(ind.id, { ostomyType: (e.target.value || undefined) as IPEventIndication['ostomyType'], ostomyOtherText: undefined })}
+                            className="w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                          >
+                            <option value="">Select ostomy type...</option>
+                            <option value="Colostomy">Colostomy</option>
+                            <option value="Ileostomy">Ileostomy</option>
+                            <option value="Urostomy">Urostomy</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          {ind.ostomyType === 'Other' && (
+                            <input
+                              type="text"
+                              value={ind.ostomyOtherText ?? ''}
+                              onChange={e => updateIndication(ind.id, { ostomyOtherText: e.target.value })}
+                              placeholder="Specify ostomy type..."
+                              className="mt-1.5 w-full border border-neutral-300 rounded-md p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                            />
+                          )}
+                        </div>
                       )}
 
                       {/* Date Identified */}
