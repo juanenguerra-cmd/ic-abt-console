@@ -4,6 +4,9 @@ import { SurveyPacket, SurveyPacketSection } from "../../domain/models";
 import { FileText, Calendar, CheckSquare } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
+// NOTE: This component is not currently wired to any route or parent component.
+// It writes to the store but has no UI entry point. Wire to a route or parent,
+// or remove if survey packet creation is no longer planned.
 export const PacketBuilder: React.FC = () => {
   const { updateDB } = useDatabase();
   

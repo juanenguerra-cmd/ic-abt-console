@@ -1,10 +1,25 @@
 import React, { useState, useRef } from 'react';
 import { Download, Upload, CheckCircle, AlertTriangle, XCircle, UserPlus, Link as LinkIcon } from 'lucide-react';
-import { downloadTemplate } from '../../utils/csvTemplates';
+import { getMigrationTemplate, MigrationDatasetType } from '../../lib/migration/csvTemplates';
 import { parseHistoricalCsv, StagingRow } from '../../parsers/historicalCsvParser';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { Resident, IPEvent, ABTCourse, VaxEvent } from '../../domain/models';
 import { v4 as uuidv4 } from 'uuid';
+
+// 'ABX' is the legacy UI label for antibiotic courses; the migration template system
+// uses 'ABT' as the canonical dataset type name.
+const downloadTemplate = (type: 'IP' | 'ABX' | 'VAX') => {
+  const datasetType: MigrationDatasetType = type === 'ABX' ? 'ABT' : type;
+  const { filename, csv } = getMigrationTemplate(datasetType);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+};
 
 export const HistoricalCsvUploader: React.FC = () => {
   const { store } = useFacilityData();
