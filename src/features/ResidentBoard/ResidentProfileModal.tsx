@@ -21,6 +21,7 @@ interface Props {
   onDeleteIp: (id: string) => void;
   onDeleteVax: (id: string) => void;
   onStartContactTrace?: (ref: { kind: 'ipEvent'; id: string } | { kind: 'symptom'; residentMrn: string; startISO: string }) => void;
+  onAddToLineList?: (opts: { symptomClass: import('../../domain/models').SymptomClass; onsetDate: string; sourceEventId: string }) => void;
 }
 
 export const ResidentProfileModal: React.FC<Props> = ({ 
@@ -36,6 +37,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
   onDeleteIp,
   onDeleteVax,
   onStartContactTrace,
+  onAddToLineList,
 }) => {
   const { updateDB } = useDatabase();
   const { activeFacilityId, store } = useFacilityData();
@@ -272,7 +274,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
         <div className="p-6 overflow-y-auto flex-1 space-y-8">
           {/* Clinical Snapshot */}
           {!isEditing && (
-            <ResidentClinicalSnapshot residentId={residentId} />
+            <ResidentClinicalSnapshot residentId={residentId} onAddToLineList={onAddToLineList} />
           )}
 
           {/* Clinical Alerts - Keep as secondary or remove if snapshot covers it. 

@@ -8,6 +8,9 @@ interface ManualAddLineListModalProps {
   symptomClass: SymptomClass;
   onClose: () => void;
   onSaved: (newEventId: string) => void;
+  prefillResidentId?: string;
+  prefillOnsetDate?: string;
+  prefillSourceEventId?: string;
 }
 
 const MS_96H = 96 * 60 * 60 * 1000;
@@ -16,12 +19,15 @@ export const ManualAddLineListModal: React.FC<ManualAddLineListModalProps> = ({
   symptomClass,
   onClose,
   onSaved,
+  prefillResidentId,
+  prefillOnsetDate,
+  prefillSourceEventId,
 }) => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
 
-  const [residentId, setResidentId] = useState('');
-  const [onsetDate, setOnsetDate] = useState(todayLocalDateInputValue());
+  const [residentId, setResidentId] = useState(prefillResidentId ?? '');
+  const [onsetDate, setOnsetDate] = useState(prefillOnsetDate ? prefillOnsetDate.split('T')[0] : todayLocalDateInputValue());
   const [checkedSymptoms, setCheckedSymptoms] = useState<SymptomTag[]>([]);
   const [fever, setFever] = useState<boolean | undefined>(undefined);
   const [isolationInitiated, setIsolationInitiated] = useState(false);
@@ -86,6 +92,7 @@ export const ManualAddLineListModal: React.FC<ManualAddLineListModalProps> = ({
       disposition: disposition || undefined,
       notes: notes || undefined,
       sourceNotificationId: undefined,
+      sourceEventId: prefillSourceEventId,
       createdAt: now,
       updatedAt: now,
     };
