@@ -7,6 +7,7 @@ import { EMPTY_CLINICAL_DEVICES, normalizeClinicalDevices, type ClinicalDevices 
 import { ResidentTimeline } from './ResidentTimeline';
 import { useResidentAlerts } from "../../hooks/useResidentAlerts";
 import { ResidentClinicalSnapshot } from "../../components/ResidentClinicalSnapshot";
+import { ResidentCoursePDFGenerator } from '../Reports/ResidentCoursePDFGenerator';
 
 interface Props {
   residentId: string;
@@ -531,6 +532,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
               <div className="flex justify-between items-center mb-4 border-b pb-1">
                 <h3 className="text-sm font-bold text-neutral-900">Clinical Timelines</h3>
                 <div className="flex gap-2">
+                  <ResidentCoursePDFGenerator residentId={residentId} />
                   {onStartContactTrace && (
                     <button 
                       onClick={() => {
