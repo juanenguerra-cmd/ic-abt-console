@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AdmissionScreeningRecord } from '../../domain/models';
-import { Search, Plus, Edit, Printer, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Plus, Edit, Printer, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 
 /** Maximum days from admission before a screening is considered late (72 hours). */
 const MAX_SCREENING_DAYS = 3;
@@ -9,11 +9,12 @@ interface Props {
   screenings: AdmissionScreeningRecord[];
   onNew: () => void;
   onOpen: (record: AdmissionScreeningRecord) => void;
+  onViewNote?: (record: AdmissionScreeningRecord) => void;
 }
 
 type SortField = 'screeningDate' | 'admitDate' | 'name';
 
-const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) => {
+const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen, onViewNote }) => {
   const [search, setSearch] = useState('');
   const [unitFilter, setUnitFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -191,6 +192,15 @@ const AdmissionScreeningList: React.FC<Props> = ({ screenings, onNew, onOpen }) 
                         >
                           <Edit className="w-4 h-4" />
                         </button>
+                        {r.screeningStatus === 'completed' && onViewNote && (
+                          <button
+                            onClick={() => onViewNote(r)}
+                            title="View generated note"
+                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => { onOpen(r); setTimeout(() => window.print(), 300); }}
                           title="Print"
