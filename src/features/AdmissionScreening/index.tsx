@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
-import { AdmissionScreeningRecord, Resident, ResidentNote } from '../../domain/models';
+import { AdmissionScreeningRecord, Resident, ResidentNote, VaxEvent } from '../../domain/models';
 import AdmissionScreeningList from './AdmissionScreeningList';
 import AdmissionScreeningForm from './AdmissionScreeningForm';
 import { ClipboardCheck } from 'lucide-react';
@@ -13,6 +13,9 @@ function generateId(): string {
 
 /** Prefix used for auto-generated ResidentNote IDs tied to screening records. */
 const SCREENING_NOTE_ID_PREFIX = 'asn_';
+
+/** Prefix used for auto-generated VaxEvent IDs tied to screening records (vaccination review). */
+const SCREENING_VAX_ID_PREFIX = 'vaxrv_';
 
 /** Normalize a raw / partial screening record from restored JSON */
 export function normalizeAdmissionScreening(raw: Partial<AdmissionScreeningRecord>): AdmissionScreeningRecord {
@@ -361,6 +364,29 @@ const AdmissionScreeningPage: React.FC = () => {
           updatedAt: now,
         };
         facilityData.notes[noteId] = screeningNote;
+
+        // 4. Record vaccination history review as a documented-historical VaxEvent.
+        //    Only written when the nurse confirmed the review was performed (vaccinationReviewed === true).
+        //    Keyed idempotently to the screening record to prevent duplicates on re-save.
+        if (draft.vaccinationReviewed === true) {
+          if (!facilityData.vaxEvents) {
+            facilityData.vaxEvents = {};
+          }
+          const vaxId = `${SCREENING_VAX_ID_PREFIX}${savedRecord.id}`;
+          const existingVax = facilityData.vaxEvents[vaxId];
+          const reviewEvent: VaxEvent = {
+            id: vaxId,
+            residentRef: { kind: 'mrn', id: draft.mrn },
+            vaccine: 'Vaccination History Review',
+            status: 'documented-historical',
+            source: 'in-app',
+            dateGiven: draft.screeningDate || now,   // screening date = when review was documented
+            ...(draft.vaccinationNotes ? { notes: draft.vaccinationNotes } : {}),
+            createdAt: existingVax?.createdAt ?? now,
+            updatedAt: now,
+          };
+          facilityData.vaxEvents[vaxId] = reviewEvent;
+        }
       }
     });
 
