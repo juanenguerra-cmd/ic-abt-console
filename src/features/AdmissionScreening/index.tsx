@@ -228,8 +228,8 @@ function buildNarrativeProgressNote(
   if (draft.recentHospitalization) {
     contextItems.push('a recent hospitalization within the prior 30 days was noted');
   }
-  if (draft.transferFromFacility?.trim()) {
-    contextItems.push(`transfer from ${draft.transferFromFacility.trim()} was documented prior to this admission`);
+  if (draft.transferFromFacility === true) {
+    contextItems.push('a transfer from another facility was documented prior to this admission');
   }
   if (contextItems.length > 0) {
     const first = contextItems[0]
