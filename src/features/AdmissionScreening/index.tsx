@@ -3,7 +3,7 @@ import { useDatabase, useFacilityData } from '../../app/providers';
 import { AdmissionScreeningRecord, Resident, ResidentNote, VaxEvent } from '../../domain/models';
 import AdmissionScreeningList from './AdmissionScreeningList';
 import AdmissionScreeningForm from './AdmissionScreeningForm';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck, X, FileText } from 'lucide-react';
 import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 
 /** Generate a simple unique ID */
@@ -322,6 +322,9 @@ const AdmissionScreeningPage: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<AdmissionScreeningRecord | null | undefined>(undefined);
   // undefined = list view, null = new (empty) form, record = edit / pending pre-fill
 
+  // null = modal closed; non-null = modal open, with note undefined if not yet generated
+  const [noteModal, setNoteModal] = useState<{ note: ResidentNote | undefined } | null>(null);
+
   /** All normalized, persisted screening records for the current facility. */
   const screenings = useMemo((): AdmissionScreeningRecord[] => {
     try {
@@ -378,6 +381,13 @@ const AdmissionScreeningPage: React.FC = () => {
   const handleOpen = (r: AdmissionScreeningRecord) => setEditingRecord(r);
 
   const handleClose = () => setEditingRecord(undefined);
+
+  /** Look up the auto-generated note for a completed screening and open the preview modal. */
+  const handleViewNote = (r: AdmissionScreeningRecord) => {
+    const noteId = `${SCREENING_NOTE_ID_PREFIX}${r.id}`;
+    const note = store.notes?.[noteId] as ResidentNote | undefined;
+    setNoteModal({ note });
+  };
 
   const handleSave = (draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -491,6 +501,7 @@ const AdmissionScreeningPage: React.FC = () => {
           screenings={allItems}
           onNew={handleNew}
           onOpen={handleOpen}
+          onViewNote={handleViewNote}
         />
       )}
 
@@ -501,6 +512,62 @@ const AdmissionScreeningPage: React.FC = () => {
           onSave={handleSave}
           onClose={handleClose}
         />
+      )}
+
+      {/* Note preview modal */}
+      {noteModal !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setNoteModal(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-base font-semibold text-neutral-900">
+                  {noteModal.note?.title ?? 'Admission Screening Note'}
+                </h2>
+              </div>
+              <button
+                onClick={() => setNoteModal(null)}
+                className="p-1 text-neutral-400 hover:text-neutral-700 rounded"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 overflow-y-auto flex-1 space-y-3">
+              {noteModal.note ? (
+                <>
+                  <p className="text-xs text-neutral-500">
+                    Generated: {new Date(noteModal.note.createdAt).toLocaleString()}
+                    {noteModal.note.updatedAt !== noteModal.note.createdAt && (
+                      <> &nbsp;·&nbsp; Updated: {new Date(noteModal.note.updatedAt).toLocaleString()}</>
+                    )}
+                  </p>
+                  <p className="text-sm text-neutral-800 leading-relaxed whitespace-pre-wrap">
+                    {noteModal.note.body}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-neutral-500 italic">
+                  No generated note found for this screening. The note is created automatically when a screening is saved as complete — try re-saving the screening if the note is missing.
+                </p>
+              )}
+            </div>
+            <div className="px-6 py-3 border-t border-neutral-200 flex justify-end">
+              <button
+                onClick={() => setNoteModal(null)}
+                className="px-4 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
