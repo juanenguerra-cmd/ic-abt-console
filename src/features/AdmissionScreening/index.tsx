@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useDatabase, useFacilityData } from '../../app/providers';
-import { AdmissionScreeningRecord, Resident } from '../../domain/models';
+import { AdmissionScreeningRecord, Resident, ResidentNote } from '../../domain/models';
 import AdmissionScreeningList from './AdmissionScreeningList';
 import AdmissionScreeningForm from './AdmissionScreeningForm';
 import { ClipboardCheck } from 'lucide-react';
@@ -10,6 +10,9 @@ import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 function generateId(): string {
   return `asrn_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
+
+/** Prefix used for auto-generated ResidentNote IDs tied to screening records. */
+const SCREENING_NOTE_ID_PREFIX = 'asn_';
 
 /** Normalize a raw / partial screening record from restored JSON */
 export function normalizeAdmissionScreening(raw: Partial<AdmissionScreeningRecord>): AdmissionScreeningRecord {
@@ -151,6 +154,86 @@ function applyDevicesToResident(resident: Resident, devicesPresent: string[], ad
   }
 }
 
+/**
+ * Build the plain-text body for the auto-generated ResidentNote that is
+ * created when a screening is finalized.  This note is what the detection
+ * pipeline, dashboard, and reports use to confirm that a screening was done.
+ */
+function buildScreeningNoteBody(
+  draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>
+): string {
+  const parts: string[] = [];
+
+  parts.push(
+    `IP Admission Screening completed on ${draft.screeningDate || 'unknown date'}.`
+  );
+
+  if (draft.completedBy) {
+    const title = draft.completedByTitle ? ` (${draft.completedByTitle})` : '';
+    parts.push(`Completed by: ${draft.completedBy}${title}.`);
+  }
+
+  if (draft.admissionSource) {
+    parts.push(`Admission source: ${draft.admissionSource}.`);
+  }
+
+  if (draft.recentHospitalization) {
+    parts.push('Recent hospitalization (≤30 days): Yes.');
+  }
+
+  const symptoms = draft.currentSymptoms ?? [];
+  if (symptoms.length > 0) {
+    parts.push(`Current symptoms: ${symptoms.join(', ')}.`);
+  } else {
+    parts.push('No active infection symptoms identified at time of screening.');
+  }
+
+  if (draft.currentDiagnosis?.trim()) {
+    parts.push(`Current diagnosis/condition: ${draft.currentDiagnosis.trim()}.`);
+  }
+
+  if (draft.isolationStatus) {
+    const precaution = draft.precautionType ? ` (${draft.precautionType})` : '';
+    parts.push(`Isolation status on admission: ${draft.isolationStatus}${precaution}.`);
+  }
+
+  if (draft.mdroHistory) {
+    const organism = draft.mdroOrganism ? ` — ${draft.mdroOrganism}` : '';
+    parts.push(`Known MDRO history: Yes${organism}.`);
+  }
+
+  if (draft.recentAntibiotics) {
+    const details = draft.antibioticDetails ? ` — ${draft.antibioticDetails}` : '';
+    parts.push(`Recent antibiotic exposure (≤90 days): Yes${details}.`);
+  }
+
+  const devices = draft.devicesPresent ?? [];
+  if (devices.length > 0) {
+    parts.push(`Devices present on admission: ${devices.join(', ')}.`);
+  }
+
+  if (draft.vaccinationReviewed !== null && draft.vaccinationReviewed !== undefined) {
+    const vaxNotes = draft.vaccinationNotes ? ` — ${draft.vaccinationNotes}` : '';
+    parts.push(
+      `Vaccination history reviewed: ${draft.vaccinationReviewed ? 'Yes' : 'No'}${vaxNotes}.`
+    );
+  }
+
+  if (draft.followUpActions?.trim()) {
+    parts.push(`Follow-up actions: ${draft.followUpActions.trim()}.`);
+  }
+
+  if (draft.recommendations?.trim()) {
+    parts.push(`IC recommendations: ${draft.recommendations.trim()}.`);
+  }
+
+  if (draft.notes?.trim()) {
+    parts.push(`Additional notes: ${draft.notes.trim()}.`);
+  }
+
+  return parts.join(' ');
+}
+
 const AdmissionScreeningPage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
@@ -255,6 +338,29 @@ const AdmissionScreeningPage: React.FC = () => {
           }
           resident.updatedAt = now;
         }
+
+        // 3. Create/update an Admission Screening note keyed to this screening record.
+        //    The detection pipeline, dashboard, and reports all look for a note with
+        //    noteType 'Admission Screening' to confirm the screening was completed.
+        //    Using the screening record's id as the note id makes this idempotent:
+        //    re-saving a completed screening updates the note rather than duplicating it.
+        if (!facilityData.notes) {
+          facilityData.notes = {};
+        }
+        const noteId = `${SCREENING_NOTE_ID_PREFIX}${savedRecord.id}`;
+        const existingNote = facilityData.notes[noteId] as ResidentNote | undefined;
+        const screeningNote: ResidentNote = {
+          id: noteId,
+          residentRef: { kind: 'mrn', id: draft.mrn },
+          noteType: 'Admission Screening',
+          title: 'IP Admission Screening',
+          body: buildScreeningNoteBody(draft),
+          derived: true,
+          generator: { name: 'AdmissionScreeningPage', version: '1' },
+          createdAt: existingNote?.createdAt ?? now,
+          updatedAt: now,
+        };
+        facilityData.notes[noteId] = screeningNote;
       }
     });
 
