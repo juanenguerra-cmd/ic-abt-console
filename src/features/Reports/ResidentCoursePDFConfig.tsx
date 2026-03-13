@@ -11,7 +11,7 @@ interface Props {
 
 const SECTIONS: { key: keyof ResidentCoursePDFConfig; label: string; description: string }[] = [
   { key: 'includeResidentInfo', label: 'Resident Demographics & Information', description: 'Name, MRN, DOB, unit/room, allergies, attending MD' },
-  { key: 'includeClinicalNarrative', label: 'Hospital Course / Clinical Narrative', description: 'Prose summary of infections, treatments, and outcomes' },
+  { key: 'includeClinicalNarrative', label: 'SNF/LTC Course / Clinical Narrative', description: 'Prose summary of infections, treatments, and outcomes' },
   { key: 'includeAntibioticTimeline', label: 'Antibiotic Therapy Timeline', description: 'Table of all antibiotic courses with dates, indications, organisms' },
   { key: 'includeInfectionEvents', label: 'Infection Prevention Events Log', description: 'All documented infections with syndromes, diagnostics, status' },
   { key: 'includeIsolationPrecautions', label: 'Isolation / EBP Precautions History', description: 'Contact, droplet, airborne and EBP precautions with dates' },
@@ -19,7 +19,7 @@ const SECTIONS: { key: keyof ResidentCoursePDFConfig; label: string; description
   { key: 'includeStewardshipAnalytics', label: 'Antibiotic Stewardship Analytics', description: 'DOT, LOT, culture rates, de-escalation metrics' },
   { key: 'includeStewardshipInterventions', label: 'Stewardship Interventions & Outcomes', description: 'Logged interventions with type and clinical details' },
   { key: 'includeMDROStatus', label: 'MDRO Status Summary', description: 'Current colonization status, clearance dates, precaution status' },
-  { key: 'includeRecommendations', label: 'Discharge / Transfer Recommendations', description: 'Clinical recommendations for ongoing care at receiving facility' },
+  { key: 'includeRecommendations', label: 'Plan of Care Continuity', description: 'Active treatment, current precautions, monitoring focus, and reassessment items' },
 ];
 
 const DEFAULT_CONFIG: ResidentCoursePDFConfig = {

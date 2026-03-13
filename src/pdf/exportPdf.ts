@@ -94,6 +94,7 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
   };
 
   const pageIds: number[] = [];
+  const contentIds: number[] = [];
   let currentLines: string[] = [];
   let currentY = topY;
   let pageNumber = 1;
@@ -131,6 +132,7 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
     const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
     const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R /F3 ${fontMonoId} 0 R >> >> /Contents ${contentId} 0 R >>`);
     pageIds.push(pageId);
+    contentIds.push(contentId);
     pageNumber++;
   };
 
@@ -259,7 +261,9 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
   const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
   pageIds.forEach((pageId) => {
     objects[pageId - 1] = objects[pageId - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
-    objects[pageId - 1] = objects[pageId - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
+  });
+  contentIds.forEach((contentId) => {
+    objects[contentId - 1] = objects[contentId - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
   });
 
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
