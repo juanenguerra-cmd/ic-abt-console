@@ -93,7 +93,7 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
     return `BT 0 g /${font} ${size} Tf 1 0 0 1 ${x} ${y} Tm (${safe}) Tj ET`;
   };
 
-  const pageIds: number[] = [];
+  const pageData: { pageId: number; contentId: number }[] = [];
   let currentLines: string[] = [];
   let currentY = topY;
   let pageNumber = 1;
@@ -122,15 +122,18 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
     currentY -= 20;
   };
 
+  // Placeholder for total pages — fixed width so stream length stays constant after replacement
+  const TOTAL_PAGES_PLACEHOLDER = 'TOTALPG';
+
   const finishPage = () => {
     // Footer Line
     currentLines.push(`0.5 G 0.5 w ${margin} ${footerY + 12} m ${width - margin} ${footerY + 12} l S`);
-    currentLines.push(drawText(margin, footerY, `Page ${pageNumber} of {TOTAL_PAGES}`, 8, 'F1'));
+    currentLines.push(drawText(margin, footerY, `Page ${pageNumber} of ${TOTAL_PAGES_PLACEHOLDER}`, 8, 'F1'));
     
     const contentStream = currentLines.join('\n');
     const contentId = addObject(`<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`);
     const pageId = addObject(`<< /Type /Page /Parent 0 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R /F3 ${fontMonoId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-    pageIds.push(pageId);
+    pageData.push({ pageId, contentId });
     pageNumber++;
   };
 
@@ -256,10 +259,13 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
 
   finishPage();
 
-  const pagesId = addObject(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`);
-  pageIds.forEach((pageId) => {
+  const totalPages = pageData.length;
+  const pagesId = addObject(`<< /Type /Pages /Kids [${pageData.map(({ pageId }) => `${pageId} 0 R`).join(' ')}] /Count ${totalPages} >>`);
+  pageData.forEach(({ pageId, contentId }) => {
+    // Fix parent reference in the page dictionary
     objects[pageId - 1] = objects[pageId - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
-    objects[pageId - 1] = objects[pageId - 1].replace('{TOTAL_PAGES}', String(pageIds.length));
+    // Replace the placeholder in the content stream so footer shows the real page total
+    objects[contentId - 1] = objects[contentId - 1].replace('TOTALPG', String(totalPages));
   });
 
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);

@@ -6,6 +6,7 @@ import { generateClinicalNarrative } from './pdfSections/generateNarrative';
 import { formatDate } from './pdfSections/formatters';
 import { getPrecautionLabel, getInfectionSourceLabel } from '../../utils/ipEventFormatters';
 import { todayLocalDateInputValue } from '../../lib/dateUtils';
+import { sanitizeNoteText } from './pdfSections/sanitizeNoteText';
 
 interface ResidentCourseData {
   resident: Resident;
@@ -14,23 +15,85 @@ interface ResidentCourseData {
   vaccinations: VaxEvent[];
 }
 
-const buildResidentInfoSection = (resident: Resident): PdfSection => ({
-  type: 'text',
-  title: 'Resident Demographics & Information',
-  lines: [
+const dash = '—';
+
+const isPlaceholderValue = (value: string | undefined | null): boolean => {
+  if (!value) return true;
+  const v = value.trim().toLowerCase();
+  return v === '' || v === 'unknown' || v === 'n/a' || v === 'none' || v === '—' || v === '-';
+};
+
+const isMdroEvent = (ip: IPEvent): boolean =>
+  ip.indications?.some(ind => ind.category === 'MDRO') ?? false;
+
+const buildResidentInfoSection = (resident: Resident): PdfSection => {
+  const lines: string[] = [
     `Name: ${resident.displayName}`,
     `MRN: ${resident.mrn}`,
-    `DOB: ${resident.dob ? formatDate(resident.dob) : 'Unknown'}`,
-    `Sex: ${resident.sex || 'Unknown'}`,
-    `Unit / Room: ${resident.currentUnit || 'Unassigned'} / ${resident.currentRoom || 'N/A'}`,
-    `Admission Date: ${resident.admissionDate ? formatDate(resident.admissionDate) : 'N/A'}`,
+    `DOB: ${resident.dob ? formatDate(resident.dob) : dash}`,
+    `Sex: ${resident.sex || dash}`,
+    `Unit / Room: ${resident.currentUnit || 'Unassigned'} / ${resident.currentRoom || dash}`,
+    `Admission Date: ${resident.admissionDate ? formatDate(resident.admissionDate) : dash}`,
     `Primary Diagnosis: ${resident.primaryDiagnosis || 'None recorded'}`,
     `Attending MD: ${resident.attendingMD || 'None recorded'}`,
     `Allergies: ${resident.allergies && resident.allergies.length > 0 ? resident.allergies.join(', ') : 'NKDA'}`,
-    `Cognitive Status: ${resident.cognitiveStatus || 'Not documented'}`,
-    `Status: ${resident.status || 'Active'}`,
-  ],
-});
+  ];
+
+  if (resident.cognitiveStatus) {
+    lines.push(`Cognitive Status: ${resident.cognitiveStatus}`);
+  }
+
+  lines.push(`Status: ${resident.status || 'Active'}`);
+
+  return { type: 'text', title: 'Resident Demographics & Information', lines };
+};
+
+const buildCurrentStatusSnapshot = (
+  abtCourses: ABTCourse[],
+  ipEvents: IPEvent[]
+): PdfSection | null => {
+  const activeCourses = abtCourses.filter(c => c.status === 'active');
+  const activeIp = ipEvents.filter(ip => ip.status === 'active');
+  const activePrecautions = activeIp.filter(ip => ip.isolationType || ip.ebp || ip.protocolType);
+  const mdroEvents = activeIp.filter(isMdroEvent);
+
+  const lines: string[] = [];
+
+  if (activeCourses.length > 0) {
+    lines.push(`Active Antibiotics: ${activeCourses.map(c => {
+      const dose = [c.dose, c.doseUnit, c.route, c.frequency].filter(Boolean).join(' ');
+      return `${c.medication}${dose ? ' ' + dose : ''}`;
+    }).join('; ')}`);
+  } else {
+    lines.push('Active Antibiotics: None');
+  }
+
+  if (activePrecautions.length > 0) {
+    lines.push(`Current Precautions: ${activePrecautions.map(ip => getPrecautionLabel(ip)).join(', ')}`);
+  }
+
+  const activeInfections = activeIp.filter(ip => {
+    const src = getInfectionSourceLabel(ip);
+    return !isPlaceholderValue(src);
+  });
+  if (activeInfections.length > 0) {
+    lines.push(`Active Infection/Issue: ${activeInfections.map(ip => getInfectionSourceLabel(ip)).join(', ')}`);
+  }
+
+  if (mdroEvents.length > 0) {
+    const mdroTypes = mdroEvents.map(ip => {
+      const mdroInd = ip.indications?.find(ind => ind.category === 'MDRO');
+      return mdroInd
+        ? (mdroInd.mdroType === 'Other' ? (mdroInd.mdroOtherText || 'MDRO') : (mdroInd.mdroType || 'MDRO'))
+        : ip.organism || 'MDRO';
+    });
+    lines.push(`MDRO Status: ${mdroTypes.join(', ')} — Active`);
+  }
+
+  if (lines.length === 0) return null;
+
+  return { type: 'text', title: 'Current Clinical Status Snapshot', lines };
+};
 
 const buildAntibioticTimelineSection = (abtCourses: ABTCourse[]): PdfSection => ({
   type: 'table',
@@ -39,12 +102,12 @@ const buildAntibioticTimelineSection = (abtCourses: ABTCourse[]): PdfSection => 
   rows: abtCourses.length > 0
     ? abtCourses.map(c => [
         c.medication,
-        [c.dose, c.doseUnit, c.route, c.frequency].filter(Boolean).join(' ') || '—',
-        c.startDate ? formatDate(c.startDate) : '—',
+        [c.dose, c.doseUnit, c.route, c.frequency].filter(Boolean).join(' ') || dash,
+        c.startDate ? formatDate(c.startDate) : dash,
         c.endDate ? formatDate(c.endDate) : 'Ongoing',
         c.status,
-        c.indication || '—',
-        c.organismIdentified || '—',
+        c.indication || dash,
+        c.organismIdentified || dash,
       ])
     : [['No antibiotic courses recorded', '', '', '', '', '', '']],
 });
@@ -52,16 +115,19 @@ const buildAntibioticTimelineSection = (abtCourses: ABTCourse[]): PdfSection => 
 const buildInfectionEventsSection = (ipEvents: IPEvent[]): PdfSection => ({
   type: 'table',
   title: 'Infection Prevention Events Log',
-  columns: ['Onset Date', 'Precaution / Type', 'Source / Indication', 'Organism', 'Status', 'Notes'],
+  columns: ['Onset Date', 'Precaution / Type', 'Source / Indication', 'Organism', 'Status', 'Clinical Note'],
   rows: ipEvents.length > 0
-    ? ipEvents.map(ip => [
-        ip.onsetDate ? formatDate(ip.onsetDate) : '—',
-        getPrecautionLabel(ip),
-        getInfectionSourceLabel(ip),
-        ip.organism || '—',
-        ip.status,
-        ip.notes || '—',
-      ])
+    ? ipEvents.map(ip => {
+        const note = sanitizeNoteText(ip.notes) ?? dash;
+        return [
+          ip.onsetDate ? formatDate(ip.onsetDate) : dash,
+          getPrecautionLabel(ip),
+          getInfectionSourceLabel(ip),
+          ip.organism || dash,
+          ip.status,
+          note,
+        ];
+      })
     : [['No infection events recorded', '', '', '', '', '']],
 });
 
@@ -73,10 +139,10 @@ const buildIsolationSection = (ipEvents: IPEvent[]): PdfSection => {
     columns: ['Onset Date', 'Precaution Type', 'Indication / Source', 'Organism', 'Resolved Date', 'Status'],
     rows: isolationEvents.length > 0
       ? isolationEvents.map(ip => [
-          ip.onsetDate ? formatDate(ip.onsetDate) : '—',
+          ip.onsetDate ? formatDate(ip.onsetDate) : dash,
           getPrecautionLabel(ip),
           getInfectionSourceLabel(ip),
-          ip.organism || '—',
+          ip.organism || dash,
           ip.resolvedAt ? formatDate(ip.resolvedAt) : 'Active',
           ip.status,
         ])
@@ -84,20 +150,24 @@ const buildIsolationSection = (ipEvents: IPEvent[]): PdfSection => {
   };
 };
 
+
 const buildVaccinationSection = (vaccinations: VaxEvent[]): PdfSection => ({
   type: 'table',
   title: 'Vaccination History',
-  columns: ['Vaccine', 'Date Given', 'Dose', 'Status', 'Lot #', 'Administered By', 'Notes'],
+  columns: ['Vaccine', 'Date Given', 'Dose', 'Status', 'Lot #', 'Administered By', 'Clinical Note'],
   rows: vaccinations.length > 0
-    ? vaccinations.map(v => [
-        v.vaccine,
-        formatDate(v.dateGiven ?? v.administeredDate),
-        v.dose || '—',
-        v.status,
-        v.lotNumber || '—',
-        v.administeredBy || '—',
-        v.notes || '—',
-      ])
+    ? vaccinations.map(v => {
+        const note = sanitizeNoteText(v.notes) ?? dash;
+        return [
+          v.vaccine,
+          formatDate(v.dateGiven ?? v.administeredDate),
+          isPlaceholderValue(v.dose) ? dash : v.dose,
+          v.status,
+          isPlaceholderValue(v.lotNumber) ? dash : v.lotNumber,
+          isPlaceholderValue(v.administeredBy) ? dash : v.administeredBy,
+          note,
+        ];
+      })
     : [['No vaccination records', '', '', '', '', '', '']],
 });
 
@@ -105,16 +175,11 @@ const buildStewardshipAnalyticsSection = (metrics: StewardshipMetrics): PdfSecti
   type: 'text',
   title: 'Antibiotic Stewardship Analytics',
   lines: [
-    `Total Antibiotic Courses: ${metrics.totalAntibioticCourses}`,
-    `  Completed: ${metrics.coursesCompleted}   Discontinued: ${metrics.coursesDiscontinued}`,
-    `Days of Therapy (DOT): ${metrics.daysOfTherapy}`,
-    `DOT per 1,000 Resident-Days: ${metrics.dotPer1000ResidentDays}`,
-    `Length of Therapy (LOT): ${metrics.lengthOfTherapy}`,
-    `LOT per 1,000 Resident-Days: ${metrics.lotPer1000ResidentDays}`,
+    `Total Antibiotic Courses: ${metrics.totalAntibioticCourses}  (Completed: ${metrics.coursesCompleted}  |  Discontinued: ${metrics.coursesDiscontinued})`,
+    `Days of Therapy (DOT): ${metrics.daysOfTherapy}  |  DOT per 1,000 Resident-Days: ${metrics.dotPer1000ResidentDays}`,
+    `Length of Therapy (LOT): ${metrics.lengthOfTherapy}  |  LOT per 1,000 Resident-Days: ${metrics.lotPer1000ResidentDays}`,
     `Broad-Spectrum Days: ${metrics.broadSpectrumDays} (${metrics.broadSpectrumPercentage}% of DOT)`,
-    `Culture Collection Rate: ${metrics.cultureCollectionRate}%`,
-    `De-escalation Rate: ${metrics.deEscalationRate}%`,
-    `Stewardship Review Rate: ${metrics.stewardshipReviewRate}%`,
+    `Culture Collection Rate: ${metrics.cultureCollectionRate}%  |  De-escalation Rate: ${metrics.deEscalationRate}%  |  Stewardship Review Rate: ${metrics.stewardshipReviewRate}%`,
     `Resident Days in Period: ${metrics.residentDays}`,
   ],
 });
@@ -124,41 +189,56 @@ const buildStewardshipInterventionsSection = (abtCourses: ABTCourse[]): PdfSecti
   abtCourses.forEach(course => {
     if (course.interventions && course.interventions.length > 0) {
       course.interventions.forEach(iv => {
+        const note = sanitizeNoteText(iv.note) ?? dash;
         rows.push([
           formatDate(iv.date),
           iv.type,
           course.medication,
-          iv.note,
-          iv.loggedBy,
+          note,
+          iv.loggedBy || dash,
         ]);
       });
     }
   });
 
+  if (rows.length === 0) {
+    return {
+      type: 'text',
+      title: 'Stewardship Interventions & Outcomes',
+      lines: ['No stewardship interventions documented during the report period.'],
+    };
+  }
+
   return {
     type: 'table',
     title: 'Stewardship Interventions & Outcomes',
     columns: ['Date', 'Type', 'Medication', 'Details', 'Logged By'],
-    rows: rows.length > 0 ? rows : [['No stewardship interventions recorded', '', '', '', '']],
+    rows,
   };
 };
 
 const buildMDROSection = (ipEvents: IPEvent[]): PdfSection => {
-  const mdroEvents = ipEvents.filter(ip =>
-    ip.indications?.some(ind => ind.category === 'MDRO') || ip.organism
-  );
+  const mdroEvents = ipEvents.filter(ip => isMdroEvent(ip) || ip.organism);
+
+  if (mdroEvents.length === 0) {
+    return {
+      type: 'text',
+      title: 'MDRO Status Summary',
+      lines: ['No MDRO events documented during the report period.'],
+    };
+  }
 
   const rows = mdroEvents.map(ip => {
     const mdroInd = ip.indications?.find(ind => ind.category === 'MDRO');
     const mdroType = mdroInd
-      ? (mdroInd.mdroType === 'Other' ? (mdroInd.mdroOtherText || 'Other') : (mdroInd.mdroType || '—'))
-      : '—';
+      ? (mdroInd.mdroType === 'Other' ? (mdroInd.mdroOtherText || 'Other') : (mdroInd.mdroType || dash))
+      : dash;
     return [
-      ip.onsetDate ? formatDate(ip.onsetDate) : '—',
+      ip.onsetDate ? formatDate(ip.onsetDate) : dash,
       mdroType,
-      ip.organism || '—',
+      ip.organism || dash,
       ip.resolvedAt ? 'Cleared' : 'Active',
-      ip.resolvedAt ? formatDate(ip.resolvedAt) : 'N/A',
+      ip.resolvedAt ? formatDate(ip.resolvedAt) : dash,
       getPrecautionLabel(ip),
     ];
   });
@@ -167,11 +247,11 @@ const buildMDROSection = (ipEvents: IPEvent[]): PdfSection => {
     type: 'table',
     title: 'MDRO Status Summary',
     columns: ['Detection Date', 'MDRO Type', 'Organism', 'Current Status', 'Cleared Date', 'Precaution Status'],
-    rows: rows.length > 0 ? rows : [['No MDRO events recorded', '', '', '', '', '']],
+    rows,
   };
 };
 
-const buildRecommendationsSection = (
+const buildPlanOfCareSection = (
   resident: Resident,
   abtCourses: ABTCourse[],
   ipEvents: IPEvent[]
@@ -179,37 +259,44 @@ const buildRecommendationsSection = (
   const lines: string[] = [];
   const activeCourses = abtCourses.filter(c => c.status === 'active');
   const activeIp = ipEvents.filter(ip => ip.status === 'active');
+  const activePrecautions = activeIp.filter(ip => ip.isolationType || ip.ebp || ip.protocolType);
+  const activeMdro = activeIp.filter(isMdroEvent);
 
   if (activeCourses.length > 0) {
-    lines.push(`Active antibiotic therapy: ${activeCourses.map(c => c.medication).join(', ')}`);
-    lines.push('  → Ensure continuation of therapy per current orders at receiving facility.');
+    const courseList = activeCourses.map(c => {
+      const dose = [c.dose, c.doseUnit, c.route, c.frequency].filter(Boolean).join(' ');
+      return `${c.medication}${dose ? ' ' + dose : ''}${c.endDate ? ' through ' + formatDate(c.endDate) : ''}`;
+    });
+    lines.push(`Active treatment to continue: ${courseList.join('; ')}.`);
+  } else {
+    lines.push('No active antibiotic therapy requiring continuation at time of report.');
   }
 
-  const activeMdro = activeIp.filter(ip =>
-    ip.indications?.some(ind => ind.category === 'MDRO')
-  );
+  if (activePrecautions.length > 0) {
+    lines.push(`Current precautions to maintain: ${activePrecautions.map(ip => getPrecautionLabel(ip)).join(', ')}.`);
+  }
+
   if (activeMdro.length > 0) {
-    lines.push('Active MDRO colonization detected. Isolation/EBP precautions required at receiving facility.');
-  }
-
-  const activeIsolation = activeIp.filter(ip => ip.isolationType || ip.ebp);
-  if (activeIsolation.length > 0) {
-    lines.push(`Isolation precautions in place: ${activeIsolation.map(ip => getPrecautionLabel(ip)).join(', ')}.`);
-    lines.push('  → Receiving facility to continue applicable precautions upon admission.');
-  }
-
-  if (lines.length === 0) {
-    lines.push('No active antibiotic therapy or isolation precautions at time of report.');
-    lines.push('Continue standard infection prevention practices per facility policy.');
+    lines.push('Active MDRO colonization documented. Continue applicable isolation/EBP precautions per policy.');
   }
 
   lines.push('');
+  lines.push('Key monitoring / reassessment focus:');
+  if (activeCourses.length > 0) {
+    lines.push('  - Monitor response to active antibiotic therapy and reassess per prescriber schedule.');
+  }
+  if (activePrecautions.length > 0) {
+    lines.push('  - Reassess precaution necessity at next clinical review.');
+  }
+  lines.push('  - Continue standard infection prevention practices per facility policy.');
+
+  lines.push('');
   lines.push(`Report generated: ${new Date().toLocaleString()}`);
-  lines.push(`Resident: ${resident.displayName} | MRN: ${resident.mrn}`);
+  lines.push(`Resident: ${resident.displayName}  |  MRN: ${resident.mrn}`);
 
   return {
     type: 'text',
-    title: 'Discharge / Transfer Recommendations',
+    title: 'Plan of Care Continuity',
     lines,
   };
 };
@@ -232,10 +319,16 @@ export const generateResidentCoursePDF = (
     sections.push(buildResidentInfoSection(resident));
   }
 
+  // Current clinical status snapshot — always inserted after demographics when data exists
+  if (config.includeResidentInfo || config.includeClinicalNarrative) {
+    const snapshot = buildCurrentStatusSnapshot(abtCourses, ipEvents);
+    if (snapshot) sections.push(snapshot);
+  }
+
   if (config.includeClinicalNarrative) {
     sections.push({
       type: 'text',
-      title: 'Hospital Course / Clinical Narrative',
+      title: 'SNF/LTC Course / Clinical Narrative',
       lines: narrativeLines,
     });
   }
@@ -269,7 +362,7 @@ export const generateResidentCoursePDF = (
   }
 
   if (config.includeRecommendations) {
-    sections.push(buildRecommendationsSection(resident, abtCourses, ipEvents));
+    sections.push(buildPlanOfCareSection(resident, abtCourses, ipEvents));
   }
 
   const dateRangeLabel = config.dateRange
@@ -283,8 +376,8 @@ export const generateResidentCoursePDF = (
     facilityName: facilityName ?? DEFAULT_FACILITY,
     filename: `treatment-course-${resident.mrn}-${today}`,
     subtitleLines: [
-      `Resident: ${resident.displayName} | MRN: ${resident.mrn}`,
-      `Admission: ${resident.admissionDate ? formatDate(resident.admissionDate) : 'N/A'} | Unit: ${resident.currentUnit || '—'} / ${resident.currentRoom || '—'}`,
+      `Resident: ${resident.displayName}  |  MRN: ${resident.mrn}`,
+      `Admission: ${resident.admissionDate ? formatDate(resident.admissionDate) : dash}  |  Unit: ${resident.currentUnit || dash} / ${resident.currentRoom || dash}`,
       `Report Period: ${dateRangeLabel}`,
       `Generated: ${new Date().toLocaleString()}`,
     ],
