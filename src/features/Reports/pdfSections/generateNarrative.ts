@@ -7,11 +7,12 @@ export const generateClinicalNarrative = (
   resident: Resident,
   abtCourses: ABTCourse[],
   ipEvents: IPEvent[],
-  _vaccinations: VaxEvent[]
+  _vaccinations: VaxEvent[],
+  facilityName?: string
 ): string[] => {
   const lines: string[] = [];
 
-  const facilityName = 'this facility';
+  const resolvedFacilityName = facilityName?.trim() || 'the facility';
   const admitDate = resident.admissionDate ? formatDate(resident.admissionDate) : null;
   const activeCourses = abtCourses.filter(c => c.status === 'active');
   const completedCourses = abtCourses.filter(c => c.status === 'completed' || c.status === 'discontinued');
@@ -22,8 +23,8 @@ export const generateClinicalNarrative = (
   const openingParts: string[] = [];
   openingParts.push(
     admitDate
-      ? `Resident admitted to ${facilityName} on ${admitDate}.`
-      : `Resident is currently admitted to ${facilityName}.`
+      ? `Resident admitted to ${resolvedFacilityName} on ${admitDate}.`
+      : `Resident is currently admitted to ${resolvedFacilityName}.`
   );
 
   if (resident.primaryDiagnosis) {

@@ -382,12 +382,27 @@ const AppShell = () => {
             <SidebarSection title="Management">
               {(can('write:outbreaks') || can('write:audits') || can('write:admissionscreening')) && (
                 <SidebarAccordion icon={FileBarChart} title="Reports & Audits">
-                  {can('write:outbreaks') && <SidebarLink to="/reports" icon={FileText} label="Reports" />}
-                  {can('write:outbreaks') && <SidebarLink to="/reports/devices" icon={Cpu} label="Device Reports" />}
-                  {can('write:outbreaks') && <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />}
-                  {can('write:admissionscreening') && <SidebarLink to="/admission-screening" icon={ClipboardList} label="Admission Screening" />}
-                  {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
-                  {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+                  {can('write:outbreaks') && (
+                    <div className="pt-1 pb-0.5">
+                      <span className="block px-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-0.5">Survey / Clinical</span>
+                      <SidebarLink to="/reports" icon={ShieldCheck} label="Reports Console" />
+                    </div>
+                  )}
+                  {can('write:outbreaks') && (
+                    <div className="pt-1 pb-0.5">
+                      <span className="block px-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-0.5">Stewardship</span>
+                      <SidebarLink to="/reports/antibiogram" icon={Activity} label="Antibiogram" />
+                      <SidebarLink to="/reports/devices" icon={Cpu} label="Device Reports" />
+                    </div>
+                  )}
+                  {(can('write:admissionscreening') || can('write:audits')) && (
+                    <div className="pt-1 pb-0.5">
+                      <span className="block px-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 mb-0.5">Compliance</span>
+                      {can('write:admissionscreening') && <SidebarLink to="/admission-screening" icon={ClipboardList} label="Admission Screening" />}
+                      {can('write:audits') && <SidebarLink to="/audit-center" icon={ClipboardCheck} label="Audit Center" />}
+                      {can('write:audits') && <SidebarLink to="/report-builder" icon={FileBarChart} label="Report Builder" />}
+                    </div>
+                  )}
                 </SidebarAccordion>
               )}
 

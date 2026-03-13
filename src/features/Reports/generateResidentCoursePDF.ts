@@ -301,6 +301,55 @@ const buildPlanOfCareSection = (
   };
 };
 
+const buildActionNeededSection = (
+  abtCourses: ABTCourse[],
+  ipEvents: IPEvent[]
+): PdfSection | null => {
+  const flags: string[] = [];
+
+  // ABT-level checks (active courses only)
+  abtCourses.filter(c => c.status === 'active').forEach(c => {
+    if (!c.indication) {
+      flags.push(`Action Needed: ${c.medication} — no clinical indication documented.`);
+    }
+    if (!c.cultureCollected) {
+      flags.push(`Follow-up: ${c.medication} — no culture collection documented.`);
+    }
+    if (!c.timeoutReviewDate) {
+      flags.push(`Follow-up: ${c.medication} — no antibiotic timeout/stewardship review documented.`);
+    }
+  });
+
+  // IP event checks (active events)
+  ipEvents.filter(ip => ip.status === 'active').forEach(ip => {
+    if (!ip.isolationType && !ip.ebp) {
+      const label = ip.infectionCategory || ip.organism || 'Infection event';
+      flags.push(`Action Needed: ${label} — active event has no documented precaution type.`);
+    }
+  });
+
+  // MDRO with no active precaution
+  const hasMdro = ipEvents.some(isMdroEvent);
+  const hasActivePrecaution = ipEvents.some(
+    ip => ip.status === 'active' && (ip.isolationType || ip.ebp)
+  );
+  if (hasMdro && !hasActivePrecaution) {
+    flags.push('Review Needed: MDRO documented but no active isolation or EBP precaution found.');
+  }
+
+  if (flags.length === 0) return null;
+
+  return {
+    type: 'text',
+    title: 'Action Needed / Compliance Flags',
+    lines: [
+      'The following items were identified as requiring follow-up or documentation review:',
+      '',
+      ...flags,
+    ],
+  };
+};
+
 export const generateResidentCoursePDF = (
   data: ResidentCourseData,
   config: ResidentCoursePDFConfig,
@@ -311,7 +360,7 @@ export const generateResidentCoursePDF = (
   const admissionDate = resident.admissionDate ?? today;
 
   const metrics = calculateStewardshipMetrics(abtCourses, admissionDate, config.dateRange?.endDate ?? today);
-  const narrativeLines = generateClinicalNarrative(resident, abtCourses, ipEvents, vaccinations);
+  const narrativeLines = generateClinicalNarrative(resident, abtCourses, ipEvents, vaccinations, facilityName);
 
   const sections: PdfSection[] = [];
 
@@ -323,6 +372,10 @@ export const generateResidentCoursePDF = (
   if (config.includeResidentInfo || config.includeClinicalNarrative) {
     const snapshot = buildCurrentStatusSnapshot(abtCourses, ipEvents);
     if (snapshot) sections.push(snapshot);
+
+    // Action Needed / compliance flags — derived display layer, shown when flags exist
+    const actionNeeded = buildActionNeededSection(abtCourses, ipEvents);
+    if (actionNeeded) sections.push(actionNeeded);
   }
 
   if (config.includeClinicalNarrative) {
