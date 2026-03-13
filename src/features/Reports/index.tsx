@@ -4,7 +4,7 @@ import { Resident, IPEvent, ABTCourse, VaxEvent, ResidentNote } from '../../doma
 import { IpEventModal } from '../ResidentBoard/IpEventModal';
 import { AbtCourseModal } from '../ResidentBoard/AbtCourseModal';
 import { VaxEventModal } from '../ResidentBoard/VaxEventModal';
-import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe } from 'lucide-react';
+import { Download, Link as LinkIcon, X, Edit, Trash2, Syringe, AlertTriangle } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { SymptomWatchReport } from './SymptomWatchReport';
 import { VaxReofferList } from './VaxReofferList';
@@ -34,6 +34,143 @@ import {
   normalizeVaxStatus,
 } from '../../lib/vaccineCoverage';
 
+
+/**
+ * ExceptionFlagsPanel — display-only derived compliance visibility.
+ *
+ * Surfaces actionable documentation gaps for active ABT courses and IP events.
+ * Does NOT modify stored data. Flags are purely computed from current state.
+ */
+interface ExceptionFlag {
+  level: 'action' | 'followup' | 'review';
+  message: string;
+  reason: string;
+}
+
+const deriveExceptionFlags = (
+  abts: Record<string, ABTCourse>,
+  infections: Record<string, IPEvent>,
+  residents: Record<string, Resident>
+): ExceptionFlag[] => {
+  const flags: ExceptionFlag[] = [];
+
+  getActiveABT(Object.values(abts) as ABTCourse[]).forEach(course => {
+    const res = course.residentRef.kind === 'mrn' ? residents[course.residentRef.id] : null;
+    const name = res?.displayName || course.residentRef.id;
+
+    if (!course.indication) {
+      flags.push({
+        level: 'action',
+        message: `${name} — ${course.medication}: No clinical indication documented.`,
+        reason: 'Resident appears because an active antibiotic course has no documented indication.',
+      });
+    }
+    if (!course.cultureCollected) {
+      flags.push({
+        level: 'followup',
+        message: `${name} — ${course.medication}: No culture collection documented.`,
+        reason: 'Resident appears because active antibiotic course has no documented culture collection status.',
+      });
+    }
+    if (!course.timeoutReviewDate) {
+      flags.push({
+        level: 'followup',
+        message: `${name} — ${course.medication}: No timeout/stewardship review documented.`,
+        reason: 'Resident appears because active antibiotic course has no documented antibiotic timeout review.',
+      });
+    }
+  });
+
+  (Object.values(infections) as IPEvent[]).filter(ip => ip.status === 'active').forEach(ip => {
+    if (!ip.isolationType && !ip.ebp) {
+      const res = ip.residentRef.kind === 'mrn' ? residents[ip.residentRef.id] : null;
+      const name = res?.displayName || ip.residentRef.id;
+      const label = ip.infectionCategory || ip.organism || 'Infection event';
+      flags.push({
+        level: 'action',
+        message: `${name} — ${label}: Active event with no documented precaution type.`,
+        reason: 'Resident appears because an active IP event has no isolation type or EBP precaution documented.',
+      });
+    }
+  });
+
+  return flags;
+};
+
+const FLAG_STYLES: Record<ExceptionFlag['level'], { bg: string; border: string; text: string; dot: string; badge: string }> = {
+  action: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-500', badge: 'bg-red-100 text-red-700' },
+  followup: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+  review: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-800', dot: 'bg-blue-500', badge: 'bg-blue-100 text-blue-700' },
+};
+
+const FLAG_LABELS: Record<ExceptionFlag['level'], string> = {
+  action: 'Action Needed',
+  followup: 'Follow-up Due',
+  review: 'Review',
+};
+
+const ExceptionFlagsPanel: React.FC<{ abts: Record<string, ABTCourse>; infections: Record<string, IPEvent>; residents: Record<string, Resident> }> = ({
+  abts,
+  infections,
+  residents,
+}) => {
+  const [expandedIdx, setExpandedIdx] = React.useState<number | null>(null);
+  const flags = React.useMemo(() => deriveExceptionFlags(abts, infections, residents), [abts, infections, residents]);
+
+  if (flags.length === 0) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 flex items-center gap-2 text-emerald-800 text-sm">
+        <span className="font-medium">No active documentation gaps detected.</span>
+        <span className="text-emerald-600">All active courses and IP events have required fields documented.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 overflow-hidden">
+      <div className="bg-amber-50 px-4 py-3 flex items-center gap-2 border-b border-amber-200">
+        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+        <span className="text-sm font-semibold text-amber-800">
+          Action Needed / Exceptions&nbsp;
+        </span>
+        <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold bg-amber-200 text-amber-800">
+          {flags.length}
+        </span>
+      </div>
+      <ul className="divide-y divide-amber-100 bg-white">
+        {flags.map((flag, i) => {
+          const s = FLAG_STYLES[flag.level];
+          const isOpen = expandedIdx === i;
+          return (
+            <li key={i} className="px-4 py-2">
+              <div className="flex items-start gap-2">
+                <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${s.dot}`} aria-hidden="true" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${s.badge}`}>
+                      {FLAG_LABELS[flag.level]}
+                    </span>
+                    <span className="text-sm text-neutral-800">{flag.message}</span>
+                  </div>
+                  {isOpen && (
+                    <p className="mt-1 text-xs text-neutral-500 italic">{flag.reason}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setExpandedIdx(isOpen ? null : i)}
+                  className="shrink-0 text-xs text-neutral-400 hover:text-neutral-600 ml-1 mt-0.5"
+                  aria-label={isOpen ? 'Hide reason' : 'Show reason'}
+                >
+                  {isOpen ? 'Hide' : 'Why?'}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
 
 const residentLabel = (res: any) => {
   if (!res?.displayName) return '—';
@@ -296,6 +433,13 @@ const SurveyPacketsReport: React.FC = () => {
       </div>
 
       <CombinedLineList />
+
+      {/* Inline exception/action-needed visibility — display layer only */}
+      <ExceptionFlagsPanel
+        abts={store.abts}
+        infections={store.infections}
+        residents={store.residents}
+      />
 
       <div className="space-y-6">
         <ReportViewer 
