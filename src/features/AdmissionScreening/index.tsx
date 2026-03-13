@@ -158,83 +158,161 @@ function applyDevicesToResident(resident: Resident, devicesPresent: string[], ad
 }
 
 /**
- * Build the plain-text body for the auto-generated ResidentNote that is
- * created when a screening is finalized.  This note is what the detection
- * pipeline, dashboard, and reports use to confirm that a screening was done.
+ * Format a YYYY-MM-DD or ISO date string as a human-readable date (e.g. "January 15, 2024").
+ * Returns null if the input is falsy or unparseable.
  */
-function buildScreeningNoteBody(
-  draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>
+function formatScreeningDate(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split('T')[0].split('-');
+  if (parts.length !== 3) return dateStr;
+  const [y, m, d] = parts;
+  const monthNum = parseInt(m, 10);
+  const dayNum = parseInt(d, 10);
+  if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) return dateStr;
+  if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return dateStr;
+  if (!y || isNaN(parseInt(y, 10))) return dateStr;
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const month = months[monthNum - 1];
+  return `${month} ${dayNum}, ${y}`;
+}
+
+/**
+ * Build a narrative paragraph-style progress note body for the auto-generated
+ * ResidentNote created when a screening is finalized.  Written in a professional
+ * nursing tone — clinically natural, not a raw field dump.
+ *
+ * This note is also what the detection pipeline, dashboard, and reports use to
+ * confirm that a screening was completed (they key on noteType 'Admission Screening').
+ */
+function buildNarrativeProgressNote(
+  draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  facilityName?: string | null,
 ): string {
-  const parts: string[] = [];
+  const sentences: string[] = [];
+  const facility = facilityName?.trim() || 'this facility';
 
-  parts.push(
-    `IP Admission Screening completed on ${draft.screeningDate || 'unknown date'}.`
-  );
+  const admitDateStr = formatScreeningDate(draft.admitDate);
+  const screeningDateStr = formatScreeningDate(draft.screeningDate);
 
-  if (draft.completedBy) {
-    const title = draft.completedByTitle ? ` (${draft.completedByTitle})` : '';
-    parts.push(`Completed by: ${draft.completedBy}${title}.`);
-  }
+  // ── Sentence 1: admission + screening context ──────────────────────────────
+  const completedByPart = draft.completedBy
+    ? `, completed by ${draft.completedBy}${draft.completedByTitle ? ` (${draft.completedByTitle})` : ''}`
+    : '';
 
-  if (draft.admissionSource) {
-    parts.push(`Admission source: ${draft.admissionSource}.`);
-  }
-
-  if (draft.recentHospitalization) {
-    parts.push('Recent hospitalization (≤30 days): Yes.');
-  }
-
-  const symptoms = draft.currentSymptoms ?? [];
-  if (symptoms.length > 0) {
-    parts.push(`Current symptoms: ${symptoms.join(', ')}.`);
+  if (admitDateStr && screeningDateStr && admitDateStr !== screeningDateStr) {
+    sentences.push(
+      `Resident was admitted to ${facility} on ${admitDateStr} and underwent infection prevention admission screening on ${screeningDateStr}${completedByPart}.`
+    );
+  } else if (admitDateStr) {
+    sentences.push(
+      `Resident was admitted to ${facility} on ${admitDateStr} and underwent infection prevention admission screening${completedByPart}.`
+    );
+  } else if (screeningDateStr) {
+    sentences.push(
+      `Resident underwent infection prevention admission screening at ${facility} on ${screeningDateStr}${completedByPart}.`
+    );
   } else {
-    parts.push('No active infection symptoms identified at time of screening.');
-  }
-
-  if (draft.currentDiagnosis?.trim()) {
-    parts.push(`Current diagnosis/condition: ${draft.currentDiagnosis.trim()}.`);
-  }
-
-  if (draft.isolationStatus) {
-    const precaution = draft.precautionType ? ` (${draft.precautionType})` : '';
-    parts.push(`Isolation status on admission: ${draft.isolationStatus}${precaution}.`);
-  }
-
-  if (draft.mdroHistory) {
-    const organism = draft.mdroOrganism ? ` — ${draft.mdroOrganism}` : '';
-    parts.push(`Known MDRO history: Yes${organism}.`);
-  }
-
-  if (draft.recentAntibiotics) {
-    const details = draft.antibioticDetails ? ` — ${draft.antibioticDetails}` : '';
-    parts.push(`Recent antibiotic exposure (≤90 days): Yes${details}.`);
-  }
-
-  const devices = draft.devicesPresent ?? [];
-  if (devices.length > 0) {
-    parts.push(`Devices present on admission: ${devices.join(', ')}.`);
-  }
-
-  if (draft.vaccinationReviewed !== null && draft.vaccinationReviewed !== undefined) {
-    const vaxNotes = draft.vaccinationNotes ? ` — ${draft.vaccinationNotes}` : '';
-    parts.push(
-      `Vaccination history reviewed: ${draft.vaccinationReviewed ? 'Yes' : 'No'}${vaxNotes}.`
+    sentences.push(
+      `Resident underwent infection prevention admission screening at ${facility}${completedByPart}.`
     );
   }
 
+  // ── Sentence 2: hospitalization / transfer context ─────────────────────────
+  const contextItems: string[] = [];
+  if (draft.admissionSource) {
+    contextItems.push(`admission source documented as ${draft.admissionSource}`);
+  }
+  if (draft.recentHospitalization) {
+    contextItems.push('a recent hospitalization within the prior 30 days was noted');
+  }
+  if (draft.transferFromFacility?.trim()) {
+    contextItems.push(`transfer from ${draft.transferFromFacility.trim()} was documented prior to this admission`);
+  }
+  if (contextItems.length > 0) {
+    const first = contextItems[0]
+      ? contextItems[0].charAt(0).toUpperCase() + contextItems[0].slice(1)
+      : '';
+    const rest = contextItems.slice(1);
+    const combined = [first, ...rest].filter(Boolean).join('; ');
+    sentences.push(`Review of admission history indicates: ${combined}.`);
+  }
+
+  // ── Sentence 3: symptom assessment ────────────────────────────────────────
+  const symptoms = draft.currentSymptoms ?? [];
+  if (symptoms.length > 0) {
+    sentences.push(
+      `Current assessment identified the following symptoms at the time of screening: ${symptoms.join(', ')}.`
+    );
+  } else {
+    sentences.push('No active infection symptoms were identified at the time of screening.');
+  }
+
+  // ── Sentence 4: current diagnosis ─────────────────────────────────────────
+  if (draft.currentDiagnosis?.trim()) {
+    sentences.push(`The primary diagnosis noted at admission was ${draft.currentDiagnosis.trim()}.`);
+  }
+
+  // ── Sentence 5: precaution / isolation status ──────────────────────────────
+  if (draft.isolationStatus) {
+    const precautionPart = draft.precautionType
+      ? ` with ${draft.precautionType} precautions in place`
+      : '';
+    sentences.push(
+      `Precaution status at the time of screening was ${draft.isolationStatus}${precautionPart}.`
+    );
+  }
+
+  // ── Sentence 6: MDRO history ───────────────────────────────────────────────
+  if (draft.mdroHistory) {
+    const orgPart = draft.mdroOrganism?.trim() ? ` for ${draft.mdroOrganism.trim()}` : '';
+    sentences.push(`MDRO history was positive${orgPart}.`);
+  }
+
+  // ── Sentence 7: recent antibiotic exposure ─────────────────────────────────
+  if (draft.recentAntibiotics) {
+    const detailPart = draft.antibioticDetails?.trim()
+      ? `; ${draft.antibioticDetails.trim()}`
+      : '';
+    sentences.push(`Recent antibiotic exposure within the prior 90 days was reported${detailPart}.`);
+  }
+
+  // ── Sentence 8: devices ────────────────────────────────────────────────────
+  const devices = draft.devicesPresent ?? [];
+  if (devices.length > 0) {
+    sentences.push(`Devices present on admission included: ${devices.join(', ')}.`);
+  }
+
+  // ── Sentence 9: vaccination history ───────────────────────────────────────
+  if (draft.vaccinationReviewed === true) {
+    const vaxNotePart = draft.vaccinationNotes?.trim()
+      ? `; ${draft.vaccinationNotes.trim()}`
+      : '';
+    sentences.push(`Vaccination history review was completed${vaxNotePart}.`);
+  } else if (draft.vaccinationReviewed === false) {
+    sentences.push('Vaccination history review was not completed at the time of screening.');
+  }
+
+  // ── Sentence 10: follow-up actions / recommendations ──────────────────────
+  const followUpParts: string[] = [];
   if (draft.followUpActions?.trim()) {
-    parts.push(`Follow-up actions: ${draft.followUpActions.trim()}.`);
+    followUpParts.push(draft.followUpActions.trim());
   }
-
   if (draft.recommendations?.trim()) {
-    parts.push(`IC recommendations: ${draft.recommendations.trim()}.`);
+    followUpParts.push(draft.recommendations.trim());
+  }
+  if (followUpParts.length > 0) {
+    sentences.push(`Follow-up actions and recommendations: ${followUpParts.join('; ')}.`);
   }
 
+  // ── Sentence 11: additional clinical notes ─────────────────────────────────
   if (draft.notes?.trim()) {
-    parts.push(`Additional notes: ${draft.notes.trim()}.`);
+    sentences.push(`Additional notes: ${draft.notes.trim()}.`);
   }
 
-  return parts.join(' ');
+  return sentences.join(' ');
 }
 
 const AdmissionScreeningPage: React.FC = () => {
@@ -317,6 +395,7 @@ const AdmissionScreeningPage: React.FC = () => {
 
     updateDB(db => {
       const facilityData = db.data.facilityData[activeFacilityId];
+      const facilityName: string | null = db.data.facilities?.byId?.[activeFacilityId]?.name ?? null;
       if (!facilityData.admissionScreenings) {
         facilityData.admissionScreenings = {};
       }
@@ -356,8 +435,8 @@ const AdmissionScreeningPage: React.FC = () => {
           id: noteId,
           residentRef: { kind: 'mrn', id: draft.mrn },
           noteType: 'Admission Screening',
-          title: 'IP Admission Screening',
-          body: buildScreeningNoteBody(draft),
+          title: 'Admission IP Screening',
+          body: buildNarrativeProgressNote(draft, facilityName),
           derived: true,
           generator: { name: 'AdmissionScreeningPage', version: '1' },
           createdAt: existingNote?.createdAt ?? now,
