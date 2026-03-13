@@ -48,8 +48,8 @@ interface ExceptionFlag {
 }
 
 const deriveExceptionFlags = (
-  abts: ABTCourse[],
-  infections: IPEvent[],
+  abts: Record<string, ABTCourse>,
+  infections: Record<string, IPEvent>,
   residents: Record<string, Resident>
 ): ExceptionFlag[] => {
   const flags: ExceptionFlag[] = [];
