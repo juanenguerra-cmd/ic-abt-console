@@ -1,4 +1,4 @@
-import { FacilityStore, ExportProfile, Resident } from "../domain/models";
+import { FacilityStore, ExportProfile, Resident, ResidentRef, QuarantineResident } from "../domain/models";
 
 // Helper to resolve dot notation paths
 const resolvePath = (obj: any, path: string): any => {
@@ -8,6 +8,46 @@ const resolvePath = (obj: any, path: string): any => {
 
 // PHI Fields that need redaction if includePHI is false
 const PHI_FIELDS = ["displayName", "firstName", "lastName", "dob", "mrn", "residentRef.id", "name"];
+
+/**
+ * Resolves a ResidentRef to the full resident or quarantine record.
+ * Use this instead of ad-hoc `residentRef.kind === 'mrn' ? store.residents[...] : store.quarantine[...]` lookups.
+ */
+export const resolveResident = (
+  store: FacilityStore,
+  ref: ResidentRef
+): Resident | QuarantineResident | undefined => {
+  if (ref.kind === 'mrn') return store.residents[ref.id];
+  return store.quarantine[ref.id];
+};
+
+/**
+ * Returns the canonical MRN for an mrn-type ResidentRef, or the tempId for a
+ * quarantine resident. Use wherever a single identifier string is needed.
+ */
+export const getResidentMrn = (store: FacilityStore, ref: ResidentRef): string | undefined => {
+  if (ref.kind === 'mrn') return ref.id;
+  return store.quarantine[ref.id]?.tempId;
+};
+
+/**
+ * Enriches a Resident record with a unified `location` field that falls back
+ * to the legacy `currentUnit`/`currentRoom` fields for backward compatibility.
+ */
+const withUnifiedLocation = (r: Resident): Resident & { location: { unit?: string; room?: string } } => ({
+  ...r,
+  location: {
+    unit: r.location?.unit ?? r.currentUnit,
+    room: r.location?.room ?? r.currentRoom,
+  },
+});
+
+/**
+ * Applies withUnifiedLocation only when the resolved record is a full Resident
+ * (i.e. resolved via MRN, not a quarantine placeholder).
+ */
+const withLocation = (r: Resident | QuarantineResident | undefined) =>
+  r && 'mrn' in r ? withUnifiedLocation(r as Resident) : r;
 
 export const generateCSV = (store: FacilityStore, profile: ExportProfile): string => {
   const data = getDataForProfile(store, profile);
@@ -46,25 +86,30 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
   let data: any[] = [];
   switch (profile.dataset) {
     case "residents":
-      data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly);
+      data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).map(withUnifiedLocation);
       break;
     case "abts":
       data = Object.values(store.abts).map(abt => {
-        const resident = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
-        return { ...abt, resident };
+        const resident = resolveResident(store, abt.residentRef);
+        return { ...abt, resident: withLocation(resident) };
       });
       break;
-    case "vaxEvents":
+    case "vaxEvents": // @deprecated alias — use "vax"
     case "vax":
       data = Object.values(store.vaxEvents).map(vax => {
-        const resident = vax.residentRef.kind === 'mrn' ? store.residents[vax.residentRef.id] : store.quarantine[vax.residentRef.id];
-        return { ...vax, resident, vax };
+        const resident = resolveResident(store, vax.residentRef);
+        return {
+          ...vax,
+          // Expose canonical date with backward-compatible fallback
+          canonicalDate: vax.dateGiven ?? vax.administeredDate,
+          resident: withLocation(resident),
+        };
       });
       break;
     case "infections":
       data = Object.values(store.infections).map(inf => {
-        const resident = inf.residentRef.kind === 'mrn' ? store.residents[inf.residentRef.id] : store.quarantine[inf.residentRef.id];
-        return { ...inf, resident };
+        const resident = resolveResident(store, inf.residentRef);
+        return { ...inf, resident: withLocation(resident) };
       });
       break;
     case "outbreaks":
@@ -72,8 +117,8 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
       break;
     case "outbreakCases":
       data = Object.values(store.outbreakCases).map(c => {
-        const resident = c.residentRef.kind === 'mrn' ? store.residents[c.residentRef.id] : store.quarantine[c.residentRef.id];
-        return { ...c, resident };
+        const resident = resolveResident(store, c.residentRef);
+        return { ...c, resident: withLocation(resident) };
       });
       break;
     case "custom": {
@@ -82,21 +127,28 @@ export const getDataForProfile = (store: FacilityStore, profile: ExportProfile):
       const hasVaxCols = profile.columns.some(c => c.fieldPath.startsWith('vax.'));
       if (hasAbtCols) {
         data = Object.values(store.abts).map(abt => {
-          const resident = abt.residentRef.kind === 'mrn' ? store.residents[abt.residentRef.id] : store.quarantine[abt.residentRef.id];
-          return { resident, abt };
+          const resident = resolveResident(store, abt.residentRef);
+          return { resident: withLocation(resident), abt };
         });
       } else if (hasIpCols) {
         data = Object.values(store.infections).map(inf => {
-          const resident = inf.residentRef.kind === 'mrn' ? store.residents[inf.residentRef.id] : store.quarantine[inf.residentRef.id];
-          return { resident, ip: inf };
+          const resident = resolveResident(store, inf.residentRef);
+          return { resident: withLocation(resident), ip: inf };
         });
       } else if (hasVaxCols) {
         data = Object.values(store.vaxEvents).map(vax => {
-          const resident = vax.residentRef.kind === 'mrn' ? store.residents[vax.residentRef.id] : store.quarantine[vax.residentRef.id];
-          return { resident, vax };
+          const resident = resolveResident(store, vax.residentRef);
+          return {
+            resident: withLocation(resident),
+            vax: {
+              ...vax,
+              // Expose canonical date with backward-compatible fallback
+              canonicalDate: vax.dateGiven ?? vax.administeredDate,
+            },
+          };
         });
       } else {
-        data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).map(r => ({ resident: r }));
+        data = (Object.values(store.residents) as Resident[]).filter(r => !r.isHistorical && !r.backOfficeOnly).map(r => ({ resident: withUnifiedLocation(r) }));
       }
       break;
     }

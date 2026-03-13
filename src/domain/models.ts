@@ -28,7 +28,14 @@ export interface Resident {
   sex?: string;
   admissionDate?: string;
   attendingMD?: string;
+  /**
+   * Unified current location. Supersedes the legacy `currentUnit` / `currentRoom` pair.
+   * Writers should populate this field. Readers should prefer `location.unit ?? currentUnit`.
+   */
+  location?: { unit?: string; room?: string };
+  /** @deprecated Use location.unit instead. */
   currentUnit?: string;
+  /** @deprecated Use location.room instead. */
   currentRoom?: string;
   status?: "Active" | "Discharged" | "Deceased";
   payor?: string;
@@ -44,7 +51,9 @@ export interface Resident {
   backOfficeOnly?: boolean;
   /** Superset union: 'csv-import' (hyphenated) was used in an early schema version. */
   historicalSource?: 'manual' | 'csv_import' | 'csv-import';
+  /** @deprecated Use location.unit (snapshot from deactivation). */
   lastKnownUnit?: string;
+  /** @deprecated Use location.room (snapshot from deactivation). */
   lastKnownRoom?: string;
   lastKnownAttendingMD?: string;
   dischargedAt?: ISO;
@@ -116,7 +125,14 @@ export interface QuarantineResident {
   tempId: string; // MUST be Q:<uuid>
   displayName?: string;
   dob?: string;
+  /**
+   * Unified location snapshot captured at the time of quarantine record creation.
+   * Supersedes the legacy `unitSnapshot` / `roomSnapshot` pair.
+   */
+  location?: { unit?: string; room?: string };
+  /** @deprecated Use location.unit instead. */
   unitSnapshot?: string;
+  /** @deprecated Use location.room instead. */
   roomSnapshot?: string;
   source: "legacy_import" | "census_missing_mrn" | "manual_entry";
   rawHint?: string;
