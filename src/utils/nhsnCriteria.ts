@@ -60,7 +60,14 @@ export function checkCauti(
   const criteria: NhsnCriterion[] = [];
 
   // Criterion 1: Urinary catheter ≥ 2 days before onset
+  // Prefer structured indications; fall back to legacy flat deviceTypes for older records.
+  const hasUrinaryCatheterFromIndications =
+    (ip.indications ?? []).some(ind =>
+      ind.category === 'Catheter' &&
+      (/urinary/i.test(ind.catheterCategory ?? '') || /urinary|foley|indwelling/i.test(ind.catheterType ?? ''))
+    );
   const hasUrinaryCatheter =
+    hasUrinaryCatheterFromIndications ||
     (ip.deviceTypes ?? []).some(d => /urinary.catheter/i.test(d)) ||
     /urinary.catheter/i.test(ip.isolationType ?? '');
 
