@@ -106,8 +106,8 @@ const buildAntibioticTimelineSection = (abtCourses: ABTCourse[]): PdfSection => 
         c.startDate ? formatDate(c.startDate) : dash,
         c.endDate ? formatDate(c.endDate) : 'Ongoing',
         c.status,
-        c.indication || dash,
-        c.organismIdentified || dash,
+        sanitizeNoteText(c.indication) ?? dash,
+        sanitizeNoteText(c.organismIdentified) ?? dash,
       ])
     : [['No antibiotic courses recorded', '', '', '', '', '', '']],
 });
@@ -123,7 +123,7 @@ const buildInfectionEventsSection = (ipEvents: IPEvent[]): PdfSection => ({
           ip.onsetDate ? formatDate(ip.onsetDate) : dash,
           getPrecautionLabel(ip),
           getInfectionSourceLabel(ip),
-          ip.organism || dash,
+          sanitizeNoteText(ip.organism) ?? dash,
           ip.status,
           note,
         ];
@@ -142,7 +142,7 @@ const buildIsolationSection = (ipEvents: IPEvent[]): PdfSection => {
           ip.onsetDate ? formatDate(ip.onsetDate) : dash,
           getPrecautionLabel(ip),
           getInfectionSourceLabel(ip),
-          ip.organism || dash,
+          sanitizeNoteText(ip.organism) ?? dash,
           ip.resolvedAt ? formatDate(ip.resolvedAt) : 'Active',
           ip.status,
         ])
@@ -231,12 +231,12 @@ const buildMDROSection = (ipEvents: IPEvent[]): PdfSection => {
   const rows = mdroEvents.map(ip => {
     const mdroInd = ip.indications?.find(ind => ind.category === 'MDRO');
     const mdroType = mdroInd
-      ? (mdroInd.mdroType === 'Other' ? (mdroInd.mdroOtherText || 'Other') : (mdroInd.mdroType || dash))
+      ? (mdroInd.mdroType === 'Other' ? (sanitizeNoteText(mdroInd.mdroOtherText) ?? 'Other') : (mdroInd.mdroType || dash))
       : dash;
     return [
       ip.onsetDate ? formatDate(ip.onsetDate) : dash,
       mdroType,
-      ip.organism || dash,
+      sanitizeNoteText(ip.organism) ?? dash,
       ip.resolvedAt ? 'Cleared' : 'Active',
       ip.resolvedAt ? formatDate(ip.resolvedAt) : dash,
       getPrecautionLabel(ip),
