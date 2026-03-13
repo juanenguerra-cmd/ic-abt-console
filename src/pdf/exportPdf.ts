@@ -264,8 +264,18 @@ const buildMultiPageGraphicalPdf = (spec: PdfSpec): Blob => {
   pageData.forEach(({ pageId, contentId }) => {
     // Fix parent reference in the page dictionary
     objects[pageId - 1] = objects[pageId - 1].replace('/Parent 0 0 R', `/Parent ${pagesId} 0 R`);
-    // Replace the placeholder in the content stream so footer shows the real page total
-    objects[contentId - 1] = objects[contentId - 1].replace('TOTALPG', String(totalPages));
+    // Replace the placeholder in the content stream so footer shows the real page total.
+    // TOTALPG is 7 chars; the replacement string may be shorter/longer, so we must also
+    // update the /Length field to keep the stream dictionary accurate for strict PDF readers.
+    const totalPagesStr = String(totalPages);
+    const lengthDelta = TOTAL_PAGES_PLACEHOLDER.length - totalPagesStr.length;
+    objects[contentId - 1] = objects[contentId - 1].replace(TOTAL_PAGES_PLACEHOLDER, totalPagesStr);
+    if (lengthDelta !== 0) {
+      objects[contentId - 1] = objects[contentId - 1].replace(
+        /\/Length (\d+)/,
+        (_, len) => `/Length ${Number(len) - lengthDelta}`
+      );
+    }
   });
 
   const catalogId = addObject(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
