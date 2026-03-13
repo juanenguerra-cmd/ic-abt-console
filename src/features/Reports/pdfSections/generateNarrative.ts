@@ -27,12 +27,20 @@ export const generateClinicalNarrative = (
       : `Resident is currently admitted to ${resolvedFacilityName}.`
   );
 
-  if (resident.primaryDiagnosis) {
-    openingParts.push(`Primary diagnosis: ${resident.primaryDiagnosis}.`);
+  const cleanDiagnosis = resident.primaryDiagnosis
+    ? sanitizeNoteText(resident.primaryDiagnosis)
+    : null;
+  if (cleanDiagnosis) {
+    openingParts.push(`Primary diagnosis: ${cleanDiagnosis}.`);
   }
 
   if (resident.allergies && resident.allergies.length > 0) {
-    openingParts.push(`Documented allergies: ${resident.allergies.join(', ')}.`);
+    const cleanAllergies = resident.allergies
+      .map(a => sanitizeNoteText(a))
+      .filter((a): a is string => a !== null);
+    if (cleanAllergies.length > 0) {
+      openingParts.push(`Documented allergies: ${cleanAllergies.join(', ')}.`);
+    }
   }
 
   lines.push(openingParts.join(' '), '');
