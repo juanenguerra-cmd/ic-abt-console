@@ -22,8 +22,16 @@ export const sanitizeNoteText = (raw: string | undefined | null): string | null 
     text = text.replace(/\[[^\[\]]*\]/g, '');
   }
 
-  // Remove &&&  placeholder junk
-  text = text.replace(/&&&+/g, '');
+  // Strip template/placeholder fragments: {{field}}, [PLACEHOLDER] (all-caps bracket tokens)
+  text = text.replace(/\{\{[^}]*\}\}/g, '');
+  text = text.replace(/\[[A-Z_\s]{3,}\]/g, '');
+
+  // Remove & sequences (&&, &&&, and standalone & tokens) — placeholder/junk artifacts
+  text = text.replace(/&{2,}/g, '');
+  text = text.replace(/(^|\s)&(\s|$)/g, ' ');
+
+  // Remove repeated question marks (e.g. "???", "??")
+  text = text.replace(/\?{2,}/g, '');
 
   // Remove repeated commas (e.g. ",,,", ", , ,")
   text = text.replace(/(?:,\s*){2,}/g, '');
@@ -32,8 +40,12 @@ export const sanitizeNoteText = (raw: string | undefined | null): string | null 
   text = text.replace(/"{2,}/g, '');
   text = text.replace(/'{2,}/g, '');
 
+  // Remove repeated exclamation marks
+  text = text.replace(/!{2,}/g, '');
+
   // Remove lone trailing/leading punctuation artifacts left after stripping
-  text = text.replace(/^[\s,;:|]+|[\s,;:|]+$/g, '');
+  // (includes ? and & to catch residual single-char junk at boundaries)
+  text = text.replace(/^[\s,;:|?&]+|[\s,;:|?&]+$/g, '');
 
   // Collapse repeated whitespace and newlines into single spaces
   text = text.replace(/\s{2,}/g, ' ').trim();
