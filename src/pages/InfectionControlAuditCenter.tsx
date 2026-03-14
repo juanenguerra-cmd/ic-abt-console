@@ -1,17 +1,18 @@
 import React, { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardCopy, FileDown, Trash2 } from "lucide-react";
+import { CheckCircle2, ClipboardCopy, FileDown, Trash2, PlusCircle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useDatabase, useFacilityData } from "../app/providers";
-import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession } from "../domain/models";
+import { InfectionControlAuditItem, InfectionControlAuditResponse, InfectionControlAuditSession, CustomAuditTemplate } from "../domain/models";
 import { AUDIT_CATEGORIES, infectionControlAuditTemplates, InfectionControlAuditCategory } from "../constants/infectionControlAuditTemplates";
 import { DrilldownHeader } from "../components/DrilldownHeader";
 import { ExportPdfButton } from "../components/ExportPdfButton";
+import { AuditTemplateBuilderModal } from "../components/AuditTemplateBuilderModal";
 import { todayLocalDateInputValue } from '../lib/dateUtils';
 
 const todayISO = () => todayLocalDateInputValue();
 const RESPONSE_OPTIONS: InfectionControlAuditResponse[] = ["COMPLIANT", "NON_COMPLIANT", "NA"];
 
-const CATEGORY_LABEL: Record<InfectionControlAuditCategory, string> = {
+const CATEGORY_LABEL: Record<string, string> = {
   HAND_HYGIENE: "Hand Hygiene",
   PPE: "PPE",
   ISOLATION: "Isolation",
@@ -40,7 +41,10 @@ const safeRun = (task: () => void, onError: (error: unknown) => void) => {
 
 const InfectionControlAuditCenter: React.FC = () => {
   const { activeFacilityId, store } = useFacilityData();
-  const { updateDB } = useDatabase();
+  const { db, updateDB } = useDatabase();
+
+  const facility = db.data.facilities.byId[activeFacilityId];
+  const customTemplates = facility?.customAuditTemplates || [];
 
   const sessions = useMemo(
     () => Object.values(store.infectionControlAuditSessions || {}).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -50,9 +54,10 @@ const InfectionControlAuditCenter: React.FC = () => {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string>(sessions[0]?.id || "");
   const [showMore, setShowMore] = useState(false);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [form, setForm] = useState({
-    auditType: "" as "" | InfectionControlAuditCategory,
+    auditType: "",
     auditDateISO: todayISO(),
     unit: "",
     shift: "",
@@ -111,7 +116,11 @@ const InfectionControlAuditCenter: React.FC = () => {
       facilityStore.infectionControlAuditItems ||= {};
       facilityStore.infectionControlAuditSessions[sessionId] = nextSession;
 
-      infectionControlAuditTemplates[auditType].forEach(question => {
+      const builtinTemplate = infectionControlAuditTemplates[auditType as InfectionControlAuditCategory];
+      const customTemplate = customTemplates.find(t => t.id === auditType);
+      const questions = builtinTemplate || customTemplate?.questions || [];
+
+      questions.forEach(question => {
         const itemId = uuidv4();
         facilityStore.infectionControlAuditItems[itemId] = {
           id: itemId,
@@ -131,6 +140,18 @@ const InfectionControlAuditCenter: React.FC = () => {
 
     setErrorMessage("");
     setSelectedSessionId(sessionId);
+  };
+
+  const handleSaveCustomTemplate = (template: CustomAuditTemplate) => {
+    updateDB(draft => {
+      const fac = draft.data.facilities.byId[activeFacilityId];
+      if (!fac.customAuditTemplates) {
+        fac.customAuditTemplates = [];
+      }
+      fac.customAuditTemplates.push(template);
+    });
+    setIsBuilderOpen(false);
+    setForm(prev => ({ ...prev, auditType: template.id }));
   };
 
   const updateItem = (itemId: string, patch: Partial<InfectionControlAuditItem>) => {
@@ -192,10 +213,16 @@ const InfectionControlAuditCenter: React.FC = () => {
     }, toastOnError);
   };
 
+  const getCategoryLabel = (type: string) => {
+    if (CATEGORY_LABEL[type]) return CATEGORY_LABEL[type];
+    const custom = customTemplates.find(t => t.id === type);
+    return custom ? custom.name : type;
+  };
+
   const handleCopySummary = async () => {
     if (!selectedSession) return;
     const summary = [
-      `Infection Control Audit (${selectedSession.auditType}) - ${selectedSession.auditDateISO}`,
+      `Infection Control Audit (${getCategoryLabel(selectedSession.auditType)}) - ${selectedSession.auditDateISO}`,
       `Unit: ${selectedSession.unit} | Shift: ${selectedSession.shift}`,
       `Auditor: ${selectedSession.auditorName}`,
       `Total: ${sessionMetrics.total} | Answered: ${sessionMetrics.answered}`,
@@ -220,7 +247,7 @@ const InfectionControlAuditCenter: React.FC = () => {
     if (!selectedItems.length) return;
     const header = ["Category", "Question", "Response", "CorrectiveAction", "DueDateISO", "Severity", "CompletedAt", "EvidenceNote"].join("\t");
     const rows = selectedItems.map(i =>
-      [i.category, i.questionText, i.response, i.correctiveAction, i.dueDateISO, i.severity, i.completedAt, i.evidenceNote]
+      [getCategoryLabel(i.category), i.questionText, i.response, i.correctiveAction, i.dueDateISO, i.severity, i.completedAt, i.evidenceNote]
         .map(v => (v || "").replace(/\t/g, " ").replace(/\n/g, " "))
         .join("\t")
     );
@@ -247,39 +274,57 @@ const InfectionControlAuditCenter: React.FC = () => {
             title="Infection Control Audit Center"
             subtitle="Create and manage audit sessions"
             right={
-              <ExportPdfButton
-                filename="audit-center-session"
-                buildSpec={() => ({
-                  title: `Audit Center — ${selectedSession ? selectedSession.auditDateISO : 'No Session Selected'}`,
-                  orientation: 'portrait',
-                  template: 'PORTRAIT_TEMPLATE_V1',
-                  subtitleLines: [
-                    `Session: ${selectedSession ? CATEGORY_LABEL[selectedSession.auditType] : 'None'}`,
-                    `Answered: ${sessionMetrics.answered}/${sessionMetrics.total}`,
-                    `Open Corrective: ${sessionMetrics.openCorrective}`,
-                  ],
-                  sections: selectedSession
-                    ? [{
-                        type: 'table',
-                        columns: ['Category', 'Question', 'Response', 'Severity', 'Corrective Action', 'Due Date', 'Completed At'],
-                        rows: selectedItems.map(i => [i.category, i.questionText, i.response, i.severity, i.correctiveAction || '—', i.dueDateISO || '—', i.completedAt || '—']),
-                      }]
-                    : [{ type: 'text', lines: ['No audit session selected.'] }],
-                })}
-              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsBuilderOpen(true)}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-neutral-300 text-sm hover:bg-neutral-50"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  New Template
+                </button>
+                <ExportPdfButton
+                  filename="audit-center-session"
+                  buildSpec={() => ({
+                    title: `Audit Center — ${selectedSession ? selectedSession.auditDateISO : 'No Session Selected'}`,
+                    orientation: 'portrait',
+                    template: 'PORTRAIT_TEMPLATE_V1',
+                    subtitleLines: [
+                      `Session: ${selectedSession ? getCategoryLabel(selectedSession.auditType) : 'None'}`,
+                      `Answered: ${sessionMetrics.answered}/${sessionMetrics.total}`,
+                      `Open Corrective: ${sessionMetrics.openCorrective}`,
+                    ],
+                    sections: selectedSession
+                      ? [{
+                          type: 'table',
+                          columns: ['Category', 'Question', 'Response', 'Severity', 'Corrective Action', 'Due Date', 'Completed At'],
+                          rows: selectedItems.map(i => [getCategoryLabel(i.category), i.questionText, i.response, i.severity, i.correctiveAction || '—', i.dueDateISO || '—', i.completedAt || '—']),
+                        }]
+                      : [{ type: 'text', lines: ['No audit session selected.'] }],
+                  })}
+                />
+              </div>
             }
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
           <select
             value={form.auditType}
-            onChange={e => setForm({ ...form, auditType: e.target.value as "" | InfectionControlAuditCategory })}
+            onChange={e => setForm({ ...form, auditType: e.target.value })}
             className="border border-neutral-300 rounded-md px-3 py-2 text-sm"
           >
             <option value="">Select Audit Type (required)</option>
-            {AUDIT_CATEGORIES.map(category => (
-              <option key={category} value={category}>{CATEGORY_LABEL[category]}</option>
-            ))}
+            <optgroup label="Built-in Templates">
+              {AUDIT_CATEGORIES.map(category => (
+                <option key={category} value={category}>{CATEGORY_LABEL[category]}</option>
+              ))}
+            </optgroup>
+            {customTemplates.length > 0 && (
+              <optgroup label="Custom Templates">
+                {customTemplates.map(template => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <input type="date" value={form.auditDateISO} onChange={e => setForm({ ...form, auditDateISO: e.target.value })} className="border border-neutral-300 rounded-md px-3 py-2 text-sm" />
           <input type="text" placeholder="Unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} className="border border-neutral-300 rounded-md px-3 py-2 text-sm" />
@@ -308,7 +353,7 @@ const InfectionControlAuditCenter: React.FC = () => {
             <option value="">Select audit session</option>
             {sessions.map(s => (
               <option key={s.id} value={s.id}>
-                {`${s.auditDateISO} • ${s.unit} • ${CATEGORY_LABEL[s.auditType]} • ${s.shift}${s.finalizedAt ? " • Finalized ✓" : ""}`}
+                {`${s.auditDateISO} • ${s.unit} • ${getCategoryLabel(s.auditType)} • ${s.shift}${s.finalizedAt ? " • Finalized ✓" : ""}`}
               </option>
             ))}
           </select>
@@ -355,7 +400,7 @@ const InfectionControlAuditCenter: React.FC = () => {
 
               <div className="border border-neutral-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200">
-                  <p className="font-semibold text-neutral-900">{CATEGORY_LABEL[selectedSession.auditType]}</p>
+                  <p className="font-semibold text-neutral-900">{getCategoryLabel(selectedSession.auditType)}</p>
                   <p className="text-xs text-neutral-500">{selectedSession.auditDateISO} • {selectedSession.unit} • {selectedSession.shift} • {selectedSession.auditorName}</p>
                 </div>
                 <div className="divide-y divide-neutral-100">
@@ -432,6 +477,13 @@ const InfectionControlAuditCenter: React.FC = () => {
           )}
         </div>
       </div>
+      
+      {isBuilderOpen && (
+        <AuditTemplateBuilderModal
+          onClose={() => setIsBuilderOpen(false)}
+          onSave={handleSaveCustomTemplate}
+        />
+      )}
     </div>
   );
 };

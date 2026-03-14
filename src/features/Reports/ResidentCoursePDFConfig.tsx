@@ -130,7 +130,7 @@ export const ResidentCoursePDFConfigModal: React.FC<Props> = ({
             </label>
 
             {dateRangeEnabled && (
-              <div className="mt-3 grid grid-cols-2 gap-4 pl-6">
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Start Date</label>
                   <input

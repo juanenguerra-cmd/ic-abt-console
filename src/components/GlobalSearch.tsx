@@ -158,7 +158,7 @@ export const GlobalSearch: React.FC = () => {
           onChange={e => { setQuery(e.target.value); setIsOpen(true); }}
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
-          className="pl-9 pr-8 py-1.5 w-48 sm:w-64 border border-neutral-300 rounded-md text-sm bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 focus:outline-none transition-all"
+          className="pl-9 pr-8 py-1.5 w-32 sm:w-64 border border-neutral-300 rounded-md text-sm bg-neutral-50 focus:bg-white focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 focus:outline-none transition-all"
         />
         {query && (
           <button

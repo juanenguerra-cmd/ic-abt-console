@@ -116,36 +116,38 @@ const CollisionReviewStep: React.FC<CollisionReviewStepProps> = ({ collisions, c
               </div>
             </div>
             {diffFields.length > 0 ? (
-              <table className="min-w-full divide-y divide-neutral-100 text-xs">
-                <thead className="bg-neutral-50">
-                  <tr>
-                    <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Field</th>
-                    <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Current Value</th>
-                    <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Imported Value</th>
-                    <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Result ({choices[mrn] || 'pending'})</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {diffFields.map(f => {
-                    const choice = choices[mrn];
-                    let result = f.current;
-                    if (choice === 'replace') {
-                      result = f.imported;
-                    } else if (choice === 'merge') {
-                      result = f.imported || f.current;
-                    }
-                    
-                    return (
-                      <tr key={f.field} className="bg-white">
-                        <td className="px-4 py-1.5 font-medium text-neutral-700">{f.field}</td>
-                        <td className="px-4 py-1.5 text-neutral-500">{f.current || <em className="text-neutral-400">empty</em>}</td>
-                        <td className="px-4 py-1.5 text-neutral-500">{f.imported || <em className="text-neutral-400">empty</em>}</td>
-                        <td className="px-4 py-1.5 font-medium text-indigo-700 bg-indigo-50/50">{result || <em className="text-neutral-400 font-normal">empty</em>}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-neutral-100 text-xs">
+                  <thead className="bg-neutral-50">
+                    <tr>
+                      <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Field</th>
+                      <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Current Value</th>
+                      <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Imported Value</th>
+                      <th className="px-4 py-1.5 text-left font-medium text-neutral-500">Result ({choices[mrn] || 'pending'})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {diffFields.map(f => {
+                      const choice = choices[mrn];
+                      let result = f.current;
+                      if (choice === 'replace') {
+                        result = f.imported;
+                      } else if (choice === 'merge') {
+                        result = f.imported || f.current;
+                      }
+                      
+                      return (
+                        <tr key={f.field} className="bg-white">
+                          <td className="px-4 py-1.5 font-medium text-neutral-700">{f.field}</td>
+                          <td className="px-4 py-1.5 text-neutral-500">{f.current || <em className="text-neutral-400">empty</em>}</td>
+                          <td className="px-4 py-1.5 text-neutral-500">{f.imported || <em className="text-neutral-400">empty</em>}</td>
+                          <td className="px-4 py-1.5 font-medium text-indigo-700 bg-indigo-50/50">{result || <em className="text-neutral-400 font-normal">empty</em>}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p className="px-4 py-2 text-xs text-neutral-500 italic">No field changes detected for this record.</p>
             )}

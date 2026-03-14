@@ -83,7 +83,7 @@ export const QuarantineLinkModal: React.FC<Props> = ({ quarantineId, onClose }) 
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
           <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
             <h3 className="font-bold text-rose-800 mb-2">Quarantine Record Details</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div><span className="text-neutral-500">Name:</span> <span className="font-medium">{qRes.displayName}</span></div>
               <div><span className="text-neutral-500">DOB:</span> <span className="font-medium">{qRes.dob || 'Unknown'}</span></div>
               <div><span className="text-neutral-500">Unit:</span> <span className="font-medium">{qRes.unitSnapshot || 'Unknown'}</span></div>

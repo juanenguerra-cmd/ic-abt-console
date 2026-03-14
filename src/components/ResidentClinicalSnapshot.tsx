@@ -170,7 +170,7 @@ export const ResidentClinicalSnapshot: React.FC<Props> = ({ residentId, classNam
 
       <div className="p-4 space-y-4">
         {/* Row 1: Isolation & Outbreak */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className={`p-3 rounded-lg border flex flex-col gap-1 ${isolation ? 'bg-red-50 border-red-100' : 'bg-neutral-50 border-neutral-100'}`}>
             <div className="flex items-center gap-2 text-neutral-500">
               <Shield className={`w-4 h-4 ${isolation ? 'text-red-600' : 'text-neutral-400'}`} />

@@ -6,7 +6,7 @@ interface ExportPdfButtonProps {
   buildSpec: () => PdfSpec;
   filename?: string;
   className?: string;
-  label?: string;
+  label?: React.ReactNode;
 }
 
 export const ExportPdfButton: React.FC<ExportPdfButtonProps> = ({

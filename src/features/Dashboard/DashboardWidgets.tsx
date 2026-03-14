@@ -550,7 +550,7 @@ export const FloorMapWidget: React.FC<WidgetProps> = ({ navigate, activeFacility
   }
   return (
     <div className="bg-white p-6 rounded-xl shadow-sm border border-neutral-200">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold text-neutral-900">Live Floor Map</h2>
           <button

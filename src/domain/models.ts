@@ -500,7 +500,7 @@ export type InfectionControlAuditSeverity = "LOW" | "MED" | "HIGH";
 
 export interface InfectionControlAuditSession {
   id: string;
-  auditType: "HAND_HYGIENE" | "PPE" | "ISOLATION" | "EBP" | "ENV_CLEANING" | "ANTIBIOTIC_STEWARDSHIP" | "VACCINATION" | "OUTBREAK_PREP";
+  auditType: string;
   auditDateISO: string;
   unit: string;
   shift: string;
@@ -514,7 +514,7 @@ export interface InfectionControlAuditSession {
 export interface InfectionControlAuditItem {
   id: string;
   sessionId: string;
-  category: "HAND_HYGIENE" | "PPE" | "ISOLATION" | "EBP" | "ENV_CLEANING" | "ANTIBIOTIC_STEWARDSHIP" | "VACCINATION" | "OUTBREAK_PREP";
+  category: string;
   questionId: string;
   questionText: string;
   response: InfectionControlAuditResponse;
@@ -551,6 +551,12 @@ export interface Unit {
   roomFormat?: string;
 }
 
+export interface CustomAuditTemplate {
+  id: string;
+  name: string;
+  questions: { id: string; text: string }[];
+}
+
 export interface Facility {
   id: string;
   name: string;
@@ -563,6 +569,7 @@ export interface Facility {
   floorLayouts?: FloorLayout[];
   hashtagCategories?: string[];
   customReports?: any[];
+  customAuditTemplates?: CustomAuditTemplate[];
   createdAt: ISO;
   updatedAt: ISO;
 }

@@ -494,43 +494,45 @@ export const ResidentBoard: React.FC = () => {
             />
           ) : (
             <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden shadow-sm">
-              <table className="w-full text-sm">
-                <thead className="bg-neutral-50 border-b border-neutral-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">MRN</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">DOB</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Unit</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Room</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Type</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100">
-                  {filteredHistorical.map(r => (
-                    <tr
-                      key={r.mrn}
-                      className="hover:bg-neutral-50 cursor-pointer"
-                      onClick={() => {
-                        setSelectedResidentId(r.mrn);
-                        setShowProfileModal(true);
-                      }}
-                    >
-                      <td className="px-4 py-3 font-medium text-neutral-900">{r.displayName}</td>
-                      <td className="px-4 py-3 text-neutral-500 font-mono">{r.mrn}</td>
-                      <td className="px-4 py-3 text-neutral-500">{r.dob || '—'}</td>
-                      <td className="px-4 py-3 text-neutral-500">{r.currentUnit || '—'}</td>
-                      <td className="px-4 py-3 text-neutral-500">{r.currentRoom || '—'}</td>
-                      <td className="px-4 py-3">
-                        {r.backOfficeOnly ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 uppercase tracking-wider">Back-Office</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-200 text-neutral-600 uppercase tracking-wider">Historical</span>
-                        )}
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-neutral-50 border-b border-neutral-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">MRN</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">DOB</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Unit</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Last Room</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Type</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {filteredHistorical.map(r => (
+                      <tr
+                        key={r.mrn}
+                        className="hover:bg-neutral-50 cursor-pointer"
+                        onClick={() => {
+                          setSelectedResidentId(r.mrn);
+                          setShowProfileModal(true);
+                        }}
+                      >
+                        <td className="px-4 py-3 font-medium text-neutral-900">{r.displayName}</td>
+                        <td className="px-4 py-3 text-neutral-500 font-mono">{r.mrn}</td>
+                        <td className="px-4 py-3 text-neutral-500">{r.dob || '—'}</td>
+                        <td className="px-4 py-3 text-neutral-500">{r.currentUnit || '—'}</td>
+                        <td className="px-4 py-3 text-neutral-500">{r.currentRoom || '—'}</td>
+                        <td className="px-4 py-3">
+                          {r.backOfficeOnly ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 uppercase tracking-wider">Back-Office</span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-200 text-neutral-600 uppercase tracking-wider">Historical</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -628,7 +630,7 @@ export const ResidentBoard: React.FC = () => {
       {/* Top Bar */}
       <div className="bg-white border-b border-neutral-200 px-6 py-3 flex flex-wrap items-center gap-3 shrink-0" role="toolbar" aria-label="Resident board controls">
         <h1 className="text-xl font-bold text-neutral-900 shrink-0">Resident Board</h1>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" aria-hidden="true" />
           <input 
             type="search"
@@ -636,7 +638,7 @@ export const ResidentBoard: React.FC = () => {
             placeholder="Search name, MRN, room..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-56"
+            className="pl-9 pr-4 py-1.5 border border-neutral-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 w-full sm:w-56"
           />
         </div>
 
@@ -785,14 +787,14 @@ export const ResidentBoard: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto shrink-0">
+        <div className="flex items-center gap-2 ml-auto shrink-0 flex-wrap sm:flex-nowrap">
           <button 
             onClick={() => setView('historicalLibrary')}
             aria-label="View historical resident library"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
             <Archive className="w-4 h-4" aria-hidden="true" />
-            Historical Library
+            <span className="hidden sm:inline">Historical Library</span>
           </button>
           <button 
             onClick={() => setShowCensusModal(true)}
@@ -800,7 +802,7 @@ export const ResidentBoard: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md text-sm font-medium hover:bg-indigo-100 transition-colors"
           >
             <Upload className="w-4 h-4" aria-hidden="true" />
-            Census
+            <span className="hidden sm:inline">Census</span>
           </button>
           <button 
             onClick={() => setView('quarantine')}
@@ -808,7 +810,7 @@ export const ResidentBoard: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-sm font-medium hover:bg-rose-100 transition-colors"
           >
             <Inbox className="w-4 h-4" aria-hidden="true" />
-            Quarantine
+            <span className="hidden sm:inline">Quarantine</span>
           </button>
           <button 
             onClick={() => setView('report')}
@@ -816,11 +818,11 @@ export const ResidentBoard: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           >
             <FileText className="w-4 h-4" aria-hidden="true" />
-            Shift Report
+            <span className="hidden sm:inline">Shift Report</span>
           </button>
           <ExportPdfButton 
             buildSpec={buildResidentBoardSpec}
-            label="Board PDF"
+            label={<span className="hidden sm:inline">Board PDF</span>}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200 rounded-md text-sm font-medium hover:bg-neutral-200 transition-colors"
           />
           <button 

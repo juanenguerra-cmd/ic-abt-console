@@ -1,10 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useDatabase, useFacilityData } from '../../app/providers';
 import { AdmissionScreeningRecord, Resident, ResidentNote, VaxEvent } from '../../domain/models';
 import AdmissionScreeningList from './AdmissionScreeningList';
 import AdmissionScreeningForm from './AdmissionScreeningForm';
-import { ClipboardCheck, X, FileText, ExternalLink } from 'lucide-react';
+import { ClipboardCheck, X, FileText } from 'lucide-react';
 import { isActiveCensusResident } from '../../utils/countCardDataHelpers';
 
 /** Generate a simple unique ID */
@@ -319,13 +318,12 @@ function buildNarrativeProgressNote(
 const AdmissionScreeningPage: React.FC = () => {
   const { store, activeFacilityId } = useFacilityData();
   const { updateDB } = useDatabase();
-  const navigate = useNavigate();
 
   const [editingRecord, setEditingRecord] = useState<AdmissionScreeningRecord | null | undefined>(undefined);
   // undefined = list view, null = new (empty) form, record = edit / pending pre-fill
 
   // null = modal closed; non-null = modal open, with note undefined if not yet generated
-  const [noteModal, setNoteModal] = useState<{ note: ResidentNote | undefined; mrn?: string; residentName?: string } | null>(null);
+  const [noteModal, setNoteModal] = useState<{ note: ResidentNote | undefined } | null>(null);
 
   /** All normalized, persisted screening records for the current facility. */
   const screenings = useMemo((): AdmissionScreeningRecord[] => {
@@ -388,7 +386,7 @@ const AdmissionScreeningPage: React.FC = () => {
   const handleViewNote = (r: AdmissionScreeningRecord) => {
     const noteId = `${SCREENING_NOTE_ID_PREFIX}${r.id}`;
     const note = store.notes?.[noteId] as ResidentNote | undefined;
-    setNoteModal({ note, mrn: r.mrn, residentName: r.name });
+    setNoteModal({ note });
   };
 
   const handleSave = (draft: Omit<AdmissionScreeningRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -560,34 +558,13 @@ const AdmissionScreeningPage: React.FC = () => {
                 </p>
               )}
             </div>
-            <div className="px-6 py-3 border-t border-neutral-200 flex items-center justify-between gap-4">
-              <p className="text-xs text-neutral-500 flex items-center gap-1">
-                <FileText className="w-3.5 h-3.5 shrink-0" />
-                Also visible in{' '}
-                <span className="font-medium text-neutral-700">Residents → Resident Board</span>
-                {' '}under the resident's profile timeline.
-              </p>
-              <div className="flex items-center gap-2 shrink-0">
-                {noteModal.mrn && (
-                  <button
-                    onClick={() => {
-                      setNoteModal(null);
-                      navigate('/resident-board', { state: { selectedResidentId: noteModal.mrn, openProfile: true } });
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md"
-                    title="Open resident profile in Resident Board"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Resident Board
-                  </button>
-                )}
-                <button
-                  onClick={() => setNoteModal(null)}
-                  className="px-4 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md"
-                >
-                  Close
-                </button>
-              </div>
+            <div className="px-6 py-3 border-t border-neutral-200 flex justify-end">
+              <button
+                onClick={() => setNoteModal(null)}
+                className="px-4 py-1.5 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-md"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

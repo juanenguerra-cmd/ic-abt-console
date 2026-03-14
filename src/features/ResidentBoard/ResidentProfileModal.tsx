@@ -222,8 +222,8 @@ export const ResidentProfileModal: React.FC<Props> = ({
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="px-6 py-4 border-b border-neutral-200 flex justify-between items-center bg-neutral-50 shrink-0">
-          <h2 className="text-xl font-bold text-neutral-900 flex items-center gap-2">
+        <div className="px-6 py-4 border-b border-neutral-200 flex flex-col sm:flex-row sm:justify-between items-start sm:items-center gap-4 sm:gap-0 bg-neutral-50 shrink-0">
+          <h2 className="text-xl font-bold text-neutral-900 flex flex-wrap items-center gap-2">
             <User className="w-5 h-5 text-indigo-600" />
             Resident Profile
             {resident.status === "Discharged" && !isEditing && (
@@ -247,7 +247,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 </button>
             )}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {!isEditing ? (
               <>
                 <ResidentCoursePDFGenerator residentId={residentId} />
@@ -256,7 +256,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                   className="flex items-center gap-1 px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-50 text-sm font-medium"
                 >
                   <Edit2 className="w-4 h-4" />
-                  Edit
+                  <span className="hidden sm:inline">Edit</span>
                 </button>
               </>
             ) : (
@@ -266,10 +266,10 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                {isSaving ? "Saving..." : "Save"}
+                <span className="hidden sm:inline">{isSaving ? "Saving..." : "Save"}</span>
               </button>
             )}
-            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700 ml-2">
+            <button onClick={onClose} className="text-neutral-500 hover:text-neutral-700 ml-auto sm:ml-2">
               <X className="w-6 h-6" />
             </button>
           </div>
@@ -346,7 +346,7 @@ export const ResidentProfileModal: React.FC<Props> = ({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoItem label="Name" value={resident.displayName} />
                 <InfoItem label="MRN" value={<span className="font-mono">{resident.mrn}</span>} />
                 <InfoItem label="DOB / Age" value={`${resident.dob || "Unknown"} (${getAge(resident.dob)} yrs)`} />
@@ -447,38 +447,60 @@ export const ResidentProfileModal: React.FC<Props> = ({
                         Continuous
                       </label>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 pt-2">
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={urinaryCatheter} onChange={e => { const checked = e.target.checked; setUrinaryCatheter(checked); if (!checked) setUrinaryCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Urinary Catheter</label>
-                      {urinaryCatheter && <input type="date" value={urinaryCatheterInsertedDate} onChange={e => setUrinaryCatheterInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={urinaryCatheter} onChange={e => { const checked = e.target.checked; setUrinaryCatheter(checked); if (!checked) setUrinaryCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Urinary Catheter</label>
+                        {urinaryCatheter && <input type="date" value={urinaryCatheterInsertedDate} onChange={e => setUrinaryCatheterInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={indwellingCatheter} onChange={e => { const checked = e.target.checked; setIndwellingCatheter(checked); if (!checked) setIndwellingCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Indwelling Catheter</label>
-                      {indwellingCatheter && <input type="date" value={indwellingCatheterInsertedDate} onChange={e => setIndwellingCatheterInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={indwellingCatheter} onChange={e => { const checked = e.target.checked; setIndwellingCatheter(checked); if (!checked) setIndwellingCatheterInsertedDate(""); }} className="rounded border-neutral-300" />Indwelling Catheter</label>
+                        {indwellingCatheter && <input type="date" value={indwellingCatheterInsertedDate} onChange={e => setIndwellingCatheterInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={midline} onChange={e => { const checked = e.target.checked; setMidline(checked); if (!checked) setMidlineInsertedDate(""); }} className="rounded border-neutral-300" />Midline</label>
-                      {midline && <input type="date" value={midlineInsertedDate} onChange={e => setMidlineInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={midline} onChange={e => { const checked = e.target.checked; setMidline(checked); if (!checked) setMidlineInsertedDate(""); }} className="rounded border-neutral-300" />Midline</label>
+                        {midline && <input type="date" value={midlineInsertedDate} onChange={e => setMidlineInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={picc} onChange={e => { const checked = e.target.checked; setPicc(checked); if (!checked) setPiccInsertedDate(""); }} className="rounded border-neutral-300" />PICC Line</label>
-                      {picc && <input type="date" value={piccInsertedDate} onChange={e => setPiccInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={picc} onChange={e => { const checked = e.target.checked; setPicc(checked); if (!checked) setPiccInsertedDate(""); }} className="rounded border-neutral-300" />PICC Line</label>
+                        {picc && <input type="date" value={piccInsertedDate} onChange={e => setPiccInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={piv} onChange={e => { const checked = e.target.checked; setPiv(checked); if (!checked) setPivInsertedDate(""); }} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
-                      {piv && <input type="date" value={pivInsertedDate} onChange={e => setPivInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={piv} onChange={e => { const checked = e.target.checked; setPiv(checked); if (!checked) setPivInsertedDate(""); }} className="rounded border-neutral-300" />Peripheral IV (PIV)</label>
+                        {piv && <input type="date" value={pivInsertedDate} onChange={e => setPivInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={centralLine} onChange={e => { const checked = e.target.checked; setCentralLine(checked); if (!checked) setCentralLineInsertedDate(""); }} className="rounded border-neutral-300" />Central Line</label>
-                      {centralLine && <input type="date" value={centralLineInsertedDate} onChange={e => setCentralLineInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={centralLine} onChange={e => { const checked = e.target.checked; setCentralLine(checked); if (!checked) setCentralLineInsertedDate(""); }} className="rounded border-neutral-300" />Central Line</label>
+                        {centralLine && <input type="date" value={centralLineInsertedDate} onChange={e => setCentralLineInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={trach} onChange={e => { const checked = e.target.checked; setTrach(checked); if (!checked) setTrachInsertedDate(""); }} className="rounded border-neutral-300" />Tracheostomy</label>
-                      {trach && <input type="date" value={trachInsertedDate} onChange={e => setTrachInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={trach} onChange={e => { const checked = e.target.checked; setTrach(checked); if (!checked) setTrachInsertedDate(""); }} className="rounded border-neutral-300" />Tracheostomy</label>
+                        {trach && <input type="date" value={trachInsertedDate} onChange={e => setTrachInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={peg} onChange={e => { const checked = e.target.checked; setPeg(checked); if (!checked) setPegInsertedDate(""); }} className="rounded border-neutral-300" />PEG / Feeding Tube</label>
-                      {peg && <input type="date" value={pegInsertedDate} onChange={e => setPegInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={peg} onChange={e => { const checked = e.target.checked; setPeg(checked); if (!checked) setPegInsertedDate(""); }} className="rounded border-neutral-300" />PEG / Feeding Tube</label>
+                        {peg && <input type="date" value={pegInsertedDate} onChange={e => setPegInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={woundVac} onChange={e => { const checked = e.target.checked; setWoundVac(checked); if (!checked) setWoundVacInsertedDate(""); }} className="rounded border-neutral-300" />Wound Vac</label>
-                      {woundVac && <input type="date" value={woundVacInsertedDate} onChange={e => setWoundVacInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={woundVac} onChange={e => { const checked = e.target.checked; setWoundVac(checked); if (!checked) setWoundVacInsertedDate(""); }} className="rounded border-neutral-300" />Wound Vac</label>
+                        {woundVac && <input type="date" value={woundVacInsertedDate} onChange={e => setWoundVacInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={dialysisAccess} onChange={e => { const checked = e.target.checked; setDialysisAccess(checked); if (!checked) setDialysisAccessInsertedDate(""); }} className="rounded border-neutral-300" />Dialysis Access</label>
-                      {dialysisAccess && <input type="date" value={dialysisAccessInsertedDate} onChange={e => setDialysisAccessInsertedDate(e.target.value)} className="ml-6 max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={dialysisAccess} onChange={e => { const checked = e.target.checked; setDialysisAccess(checked); if (!checked) setDialysisAccessInsertedDate(""); }} className="rounded border-neutral-300" />Dialysis Access</label>
+                        {dialysisAccess && <input type="date" value={dialysisAccessInsertedDate} onChange={e => setDialysisAccessInsertedDate(e.target.value)} className="ml-6 mt-1 block w-full max-w-xs border border-neutral-300 rounded-md p-2 text-sm" />}
+                      </div>
 
-                      <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={ostomy} onChange={e => setOstomy(e.target.checked)} className="rounded border-neutral-300" />Ostomy (Colostomy / Ileostomy)</label>
+                      <div>
+                        <label className="inline-flex items-center gap-2 text-sm text-neutral-800"><input type="checkbox" checked={ostomy} onChange={e => setOstomy(e.target.checked)} className="rounded border-neutral-300" />Ostomy (Colostomy / Ileostomy)</label>
+                      </div>
                     </div>
                   </div>
                 </div>

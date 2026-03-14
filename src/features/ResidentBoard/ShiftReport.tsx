@@ -47,14 +47,14 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-neutral-100">
-      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-white border-b border-neutral-200 px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between shrink-0 gap-4">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-1.5 text-neutral-600 hover:bg-neutral-100 rounded-md">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-xl font-bold text-neutral-900">Shift Report by Category</h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
           <div className="flex items-center gap-2">
             <DatePicker
               selected={startDate}
@@ -62,7 +62,7 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
               selectsStart
               startDate={startDate}
               endDate={endDate}
-              className="w-32 border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-24 sm:w-32 border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
             />
             <span className="text-neutral-500">to</span>
             <DatePicker
@@ -72,7 +72,7 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
               startDate={startDate}
               endDate={endDate}
               minDate={startDate}
-              className="w-32 border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-24 sm:w-32 border border-neutral-300 rounded-md p-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
           <div className="flex items-center rounded-md border border-neutral-300 bg-white">
@@ -112,24 +112,26 @@ export const ShiftReport: React.FC<Props> = ({ onBack }) => {
                 {category.substring(1)}
               </h2>
               <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-                <table className="min-w-full divide-y divide-neutral-200">
-                  <thead className="bg-neutral-50">
-                    <tr>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/4">Resident</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/4">Date/Time</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/2">Note</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-neutral-200">
-                    {notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(note => (
-                      <tr key={note.id}>
-                        <td className="px-4 py-3 text-sm font-medium text-neutral-900 align-top">{note.residentName}</td>
-                        <td className="px-4 py-3 text-sm text-neutral-600 align-top whitespace-nowrap">{new Date(note.createdAt).toLocaleString()}</td>
-                        <td className="px-4 py-3 text-sm text-neutral-700 align-top whitespace-pre-wrap">{note.body}</td>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-neutral-200">
+                    <thead className="bg-neutral-50">
+                      <tr>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/4">Resident</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/4">Date/Time</th>
+                        <th scope="col" className="px-4 py-2 text-left text-xs font-bold text-neutral-600 uppercase tracking-wider w-1/2">Note</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-neutral-200">
+                      {notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(note => (
+                        <tr key={note.id}>
+                          <td className="px-4 py-3 text-sm font-medium text-neutral-900 align-top">{note.residentName}</td>
+                          <td className="px-4 py-3 text-sm text-neutral-600 align-top whitespace-nowrap">{new Date(note.createdAt).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-sm text-neutral-700 align-top whitespace-pre-wrap">{note.body}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           ))

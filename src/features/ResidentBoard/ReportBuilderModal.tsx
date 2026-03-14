@@ -116,7 +116,7 @@ export const ReportBuilderModal: React.FC<Props> = ({ onClose, onSave }) => {
             <X className="w-6 h-6" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-2 gap-6">
+        <div className="p-6 overflow-y-auto flex-1 grid grid-cols-1 sm:grid-cols-2 gap-6">
           {/* Left Panel: Configuration */}
           <div className="flex flex-col gap-4">
             <div>

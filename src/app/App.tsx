@@ -61,10 +61,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
-const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge }: { to: string, icon: React.ElementType, label: string, badge?: number, alertBadge?: boolean }) => {
+const SidebarLink = ({ to, icon: Icon, label, badge, alertBadge, onClick }: { to: string, icon: React.ElementType, label: string, badge?: number, alertBadge?: boolean, onClick?: () => void }) => {
   return (
     <NavLink 
       to={to}
+      onClick={onClick}
       data-testid={`sidebar-link-${label.toLowerCase().replace(/\s+/g, '-')}`}
       aria-label={badge && badge > 0 ? `${label} (${badge} unread)` : label}
       className={({ isActive }) => `
@@ -283,7 +284,7 @@ const AppShell = () => {
               onClick={() => setIsFacilitySwitcherOpen(prev => !prev)}
               className="flex items-center gap-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 px-3 py-1.5 rounded-md hover:bg-neutral-50 border border-transparent hover:border-neutral-200 transition-all active:scale-95"
             >
-              <span>{activeFacility?.name || "Select Facility"}</span>
+              <span className="hidden sm:inline-block">{activeFacility?.name || "Select Facility"}</span>
               <Building2 className="w-4 h-4 text-neutral-400" aria-hidden="true" />
             </button>
             
@@ -337,23 +338,40 @@ const AppShell = () => {
             <span>{activeFacility?.auditorName
               ? activeFacility.auditorName.trim().split(/\s+/).filter(w => w.length > 0).slice(0, 2).map(w => w[0].toUpperCase()).join("")
               : "?"}</span>
-            <span className="text-neutral-500">·</span>
-            <span className="text-indigo-700 font-semibold">{role}</span>
+            <span className="hidden sm:inline-block text-neutral-500">·</span>
+            <span className="hidden sm:inline-block text-indigo-700 font-semibold">{role}</span>
           </div>
         </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* Mobile menu overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/20 z-10 lg:hidden mt-16"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Sidebar Navigation */}
         <aside
           id="sidebar-nav"
           aria-label="Main navigation"
           className={`
-            fixed inset-y-0 left-0 z-20 w-64 bg-white border-r border-neutral-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static lg:h-[calc(100vh-4rem)]
+            fixed inset-y-0 left-0 z-20 w-64 bg-white border-r border-neutral-200 transform transition-transform duration-200 ease-in-out lg:translate-x-0 lg:static h-[calc(100dvh-4rem)] lg:h-full overflow-y-auto
             ${isMobileMenuOpen ? "translate-x-0 mt-16" : "-translate-x-full lg:mt-0"}
           `}
         >
-          <nav className="p-4 space-y-4" aria-label="App sections">
+          <nav 
+            className="p-4 space-y-4" 
+            aria-label="App sections"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest('a')) {
+                setIsMobileMenuOpen(false);
+              }
+            }}
+          >
             <SidebarSection title="Overview">
               <SidebarLink to="/home" icon={Home} label="Home" />
               <SidebarLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />

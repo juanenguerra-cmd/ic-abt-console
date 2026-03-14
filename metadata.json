@@ -1,4 +1,5 @@
 {
-  "name": "ICN Console",
-  "description": "Developed and built by Juan Enguerra"
+  "name": "ICN Console 3.13",
+  "description": "Developed and built by Juan Enguerra",
+  "requestFramePermissions": []
 }
